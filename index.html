@@ -490,14 +490,39 @@ async function doLogin(){
   err.textContent='';
   if(!u||!p){err.textContent='Kullanıcı adı ve şifre gerekli';return}
   btn.disabled=true;btn.textContent='Bağlanıyor...';
-  const email=u.includes('@')?u:`${u}@ucel.com`;
-  const {data,error}=await sb.auth.signInWithPassword({email,password:p});
-  btn.disabled=false;btn.textContent='🔐 Giriş Yap';
-  if(error){err.textContent='Giriş başarısız: '+error.message;return}
-  await loadMe();
-  document.getElementById('login').classList.add('hidden');
-  document.getElementById('app').classList.add('show');
-  await initApp();
+  try {
+    const email=u.includes('@')?u:`${u}@ucel.com`;
+    const {data,error}=await sb.auth.signInWithPassword({email,password:p});
+    if(error)throw new Error(error.message);
+    const profile = await loadMe();
+    if(!profile)throw new Error('Profil bulunamadı. SQL Editor\'da `SELECT * FROM profiles WHERE id=auth.uid()` çalıştırın.');
+    document.getElementById('login').classList.add('hidden');
+    document.getElementById('app').classList.add('show');
+    await initApp();
+  } catch(e) {
+    console.error('Login error:',e);
+    err.textContent='⚠️ '+(e.message||e);
+  } finally {
+    btn.disabled=false;btn.textContent='🔐 Giriş Yap';
+  }
+}
+
+function withTimeout(promise, ms, name) {
+  return Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error(`${name} timeout (${ms}ms)`)), ms))
+  ]);
+}
+
+function showError(msg) {
+  let el = document.getElementById('errorBanner');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'errorBanner';
+    el.style.cssText = 'position:fixed;top:60px;left:14px;right:14px;background:#fef2f2;color:#991b1b;padding:14px;border-radius:8px;border-left:4px solid #e74c3c;font-size:13px;z-index:5000;box-shadow:0 4px 14px rgba(0,0,0,0.15);max-width:900px;margin:0 auto';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '⚠️ '+msg+' <button onclick="this.parentElement.remove()" style="float:right;background:transparent;border:none;cursor:pointer;font-size:16px;color:#991b1b">×</button>';
 }
 
 async function doLogout(){
@@ -512,69 +537,97 @@ async function doLogout(){
 }
 
 async function loadMe(){
-  const {data:{user}}=await sb.auth.getUser();
-  if(!user)return null;
-  const {data:profile,error}=await sb.from('profiles').select('*').eq('id',user.id).single();
-  if(error){console.error('Profile yüklenemedi:',error);return null}
-  me={...profile,email:user.email};
-  return me;
+  try {
+    const {data:{user}}=await sb.auth.getUser();
+    if(!user){console.error('getUser: kullanıcı yok');return null}
+    const {data:profile,error}=await sb.from('profiles').select('*').eq('id',user.id).single();
+    if(error){console.error('Profile fetch error:',error);return null}
+    if(!profile){console.error('Profile bulunamadı, id:',user.id);return null}
+    me={...profile,email:user.email};
+    return me;
+  } catch(e) {
+    console.error('loadMe exception:',e);
+    return null;
+  }
 }
 
 /* ============ INIT & DATA LOAD ============ */
 async function initApp(){
   showLoader('Veriler yükleniyor...');
-  document.getElementById('aNameTxt').textContent=me.full_name;
-  document.getElementById('aSub').textContent=me.label;
-  const sa=document.querySelector('.auth-strip .left');
-  let av=document.querySelector('.auth-strip .av');
-  if(!av){av=document.createElement('div');av.className='av';sa.insertBefore(av,sa.querySelector('div:last-child'))}
-  av.style.background=me.color;av.textContent=me.initials;
-  document.getElementById('dateInfo').textContent=new Date().toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  try {
+    if(!me){throw new Error('Profil yok')}
+    document.getElementById('aNameTxt').textContent=me.full_name||'?';
+    document.getElementById('aSub').textContent=me.label||'';
+    const sa=document.querySelector('.auth-strip .left');
+    let av=document.querySelector('.auth-strip .av');
+    if(!av){av=document.createElement('div');av.className='av';sa.insertBefore(av,sa.querySelector('div:last-child'))}
+    av.style.background=me.color||'#1f4e8c';av.textContent=me.initials||'?';
+    document.getElementById('dateInfo').textContent=new Date().toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
-  await Promise.all([loadProfiles(),loadProjects(),loadTasks(),loadNotifs()]);
-  applyPerms();
-  renderAll();
-  subscribeRealtime();
-  hideLoader();
-  const def=me.role==='yonetici'?'overview':(me.perms[0]==='*'?'overview':'d-'+(me.perms[0]||me.role));
-  goto(def);
+    const TIMEOUT=8000;
+    const results = await Promise.allSettled([
+      withTimeout(loadProfiles(),TIMEOUT,'profiles'),
+      withTimeout(loadProjects(),TIMEOUT,'projects'),
+      withTimeout(loadTasks(),TIMEOUT,'tasks'),
+      withTimeout(loadNotifs(),TIMEOUT,'notifs')
+    ]);
+    const failed=results.filter(r=>r.status==='rejected');
+    if(failed.length>0){
+      const msgs=failed.map(r=>r.reason?.message||r.reason).join(' · ');
+      showError('Bazı veriler yüklenemedi: '+msgs+'. Devam ediyor.');
+      console.error('Failed loads:',failed);
+    }
+    applyPerms();
+    renderAll();
+    try { subscribeRealtime(); } catch(e) { console.error('Realtime hatası:', e); }
+    const perms=me.perms||[];
+    const def=me.role==='yonetici'?'overview':(perms[0]==='*'?'overview':'d-'+(perms[0]||me.role||'mytasks'));
+    goto(def);
+  } catch(e) {
+    console.error('initApp error:',e);
+    showError('Sayfa yüklenirken hata: '+(e.message||e));
+  } finally {
+    hideLoader();
+  }
 }
 
 async function loadProfiles(){
   const {data,error}=await sb.from('profiles').select('*');
-  if(error){console.error(error);return}
-  allProfiles={};data.forEach(p=>{allProfiles[p.id]=p});
+  if(error){console.error('profiles:',error);throw error}
+  allProfiles={};(data||[]).forEach(p=>{allProfiles[p.id]=p});
 }
 async function loadProjects(){
   const {data,error}=await sb.from('projects').select('*').order('created_at',{ascending:false});
-  if(error){console.error(error);return}
+  if(error){console.error('projects:',error);throw error}
   projects=data||[];
 }
 async function loadTasks(){
   const {data,error}=await sb.from('tasks').select('*').order('created_at',{ascending:false});
-  if(error){console.error(error);return}
+  if(error){console.error('tasks:',error);throw error}
   tasks=data||[];
 }
 async function loadNotifs(){
   const {data,error}=await sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(50);
-  if(error){console.error(error);return}
+  if(error){console.error('notifications:',error);throw error}
   notifs=data||[];
 }
 
 /* ============ REALTIME (canlı senkron) ============ */
 function subscribeRealtime(){
-  chans.push(sb.channel('projects-ch').on('postgres_changes',{event:'*',schema:'public',table:'projects'},async(p)=>{
-    await loadProjects();renderAll();
-  }).subscribe());
-
-  chans.push(sb.channel('tasks-ch').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},async()=>{
-    await loadTasks();renderAll();
-  }).subscribe());
-
-  chans.push(sb.channel('notifs-ch').on('postgres_changes',{event:'INSERT',schema:'public',table:'notifications'},async(p)=>{
-    notifs.unshift(p.new);if(notifs.length>50)notifs=notifs.slice(0,50);renderNotifs();
-    if(p.new.actor_id!==me.id)toast('🔔 '+(p.new.text||'Yeni bildirim'),'info');
-  }).subscribe());
+  try {
+    chans.push(sb.channel('projects-ch').on('postgres_changes',{event:'*',schema:'public',table:'projects'},async(p)=>{
+      try { await loadProjects();renderAll(); } catch(e){console.error('rt projects:',e)}
+    }).subscribe());
+    chans.push(sb.channel('tasks-ch').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},async()=>{
+      try { await loadTasks();renderAll(); } catch(e){console.error('rt tasks:',e)}
+    }).subscribe());
+    chans.push(sb.channel('notifs-ch').on('postgres_changes',{event:'INSERT',schema:'public',table:'notifications'},async(p)=>{
+      try {
+        notifs.unshift(p.new);if(notifs.length>50)notifs=notifs.slice(0,50);renderNotifs();
+        if(p.new.actor_id!==me.id)toast('🔔 '+(p.new.text||'Yeni bildirim'),'info');
+      } catch(e){console.error('rt notif:',e)}
+    }).subscribe());
+  } catch(e){console.error('Realtime subscribe error:',e)}
 }
 
 /* ============ ROUTING ============ */
@@ -935,15 +988,22 @@ document.getElementById('lu').addEventListener('keydown',e=>{if(e.key==='Enter')
 
 // Auto-resume session
 window.addEventListener('DOMContentLoaded',async()=>{
-  const {data:{session}}=await sb.auth.getSession();
-  if(session){
-    await loadMe();
-    if(me){
-      document.getElementById('login').classList.add('hidden');
-      document.getElementById('app').classList.add('show');
-      await initApp();
+  try {
+    const {data:{session}}=await sb.auth.getSession();
+    if(session){
+      await loadMe();
+      if(me){
+        document.getElementById('login').classList.add('hidden');
+        document.getElementById('app').classList.add('show');
+        await initApp();
+      } else {
+        // Session var ama profile yok, oturumu kapat
+        await sb.auth.signOut();
+        const err=document.getElementById('le');
+        if(err)err.textContent='⚠️ Profil eksik. Yeniden giriş yapın.';
+      }
     }
-  }
+  } catch(e){console.error('Auto-resume error:',e)}
 });
 </script>
 </body>
