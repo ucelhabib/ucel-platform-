@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <meta name="theme-color" content="#1f4e8c">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ÜÇEL">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Üçel Yapısal Çelik - Yönetim Platformu</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -323,6 +330,7 @@ tr.click{cursor:pointer}
       <div class="sidebar-item" data-page="d-muhasebe" data-perm="yonetici,muhasebe" onclick="goto('d-muhasebe')"><span class="ico">💰</span> Muhasebe</div>
       <div class="sidebar-section">Yönetim</div>
       <div class="sidebar-item" data-page="team" data-perm="yonetici" onclick="goto('team')"><span class="ico">👥</span> Ekip</div>
+      <div class="sidebar-item" data-page="settings" data-perm="yonetici" onclick="goto('settings')"><span class="ico">⚙️</span> Ayarlar</div>
       <div class="sidebar-foot" id="storeInfo">🌐 Canlı: Supabase</div>
     </aside>
 
@@ -371,7 +379,79 @@ tr.click{cursor:pointer}
         <div class="page-h"><div><div class="page-title">👥 Ekip</div><div class="page-sub">Tüm çalışanlar</div></div></div>
         <div class="dept-grid" id="teamGrid"></div>
       </div>
+
+      <div class="page" id="page-settings">
+        <div class="page-h">
+          <div><div class="page-title">⚙️ Ayarlar</div><div class="page-sub">Kullanıcı isim/rol/etiket düzenleme ve atamalar</div></div>
+          <div><button class="btn sec" onclick="renderSettings()">↻ Yenile</button></div>
+        </div>
+        <div id="settingsBox" style="background:#fff;padding:0;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);overflow:hidden">
+          <div style="padding:14px 18px;border-bottom:1px solid var(--bd);background:#fafbfd;font-weight:700;color:var(--p)">
+            👥 Kullanıcılar (yalnız yönetici düzenler)
+          </div>
+          <div id="settingsList" style="padding:8px 0"></div>
+        </div>
+        <div style="background:#fff;margin-top:16px;padding:18px;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+          <div style="font-weight:700;color:var(--p);margin-bottom:10px">🔔 Genel</div>
+          <label style="display:flex;gap:8px;align-items:center;cursor:pointer;user-select:none">
+            <input type="checkbox" id="setSound" checked onchange="localStorage.setItem('ucelSound', this.checked ? '1' : '0')">
+            <span>Yeni bildirimlerde ses çal</span>
+          </label>
+        </div>
+      </div>
     </main>
+  </div>
+</div>
+
+<div class="modal-bg" id="userEditModal">
+  <div class="modal">
+    <div class="modal-h"><h3>👤 Kullanıcı Düzenle</h3><button class="x" onclick="closeUserEdit()">✕</button></div>
+    <div class="modal-b">
+      <input type="hidden" id="ue-id">
+      <div class="fgrid">
+        <div class="frow"><label>Kullanıcı Adı (login)</label><input id="ue-username" placeholder="kullanici"></div>
+        <div class="frow"><label>Tam İsim</label><input id="ue-fullname" placeholder="Adı Soyadı"></div>
+      </div>
+      <div class="fgrid">
+        <div class="frow"><label>Rol</label><select id="ue-role">
+          <option value="yonetici">👑 Yönetici</option>
+          <option value="teklifproje">📐 Teklif & Projelendirme</option>
+          <option value="satinalma">🛒 Satın Alma</option>
+          <option value="stok">📦 Stok</option>
+          <option value="uretim">🔧 Üretim</option>
+          <option value="sevk">🚚 Sevkiyat</option>
+          <option value="montaj">🏗️ Saha Montajı</option>
+          <option value="muhasebe">💰 Muhasebe</option>
+        </select></div>
+        <div class="frow"><label>Etiket</label><input id="ue-label" placeholder="Birim Sorumlusu"></div>
+      </div>
+      <div class="fgrid">
+        <div class="frow"><label>Baş Harf</label><input id="ue-initials" maxlength="3" placeholder="Hİ"></div>
+        <div class="frow"><label>Renk</label><input id="ue-color" type="color" value="#1f4e8c"></div>
+      </div>
+    </div>
+    <div class="modal-f">
+      <button class="btn sec" onclick="closeUserEdit()">Vazgeç</button>
+      <button class="btn ok" onclick="saveUserEdit()">💾 Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="filesModal">
+  <div class="modal">
+    <div class="modal-h"><h3 id="fmTitle">📎 Proje Dosyaları</h3><button class="x" onclick="closeFiles()">✕</button></div>
+    <div class="modal-b">
+      <div id="filesList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px"></div>
+      <div style="border-top:1px solid var(--bd);padding-top:14px">
+        <label style="display:block;font-size:12px;color:var(--m);margin-bottom:6px">Yeni dosya / resim ekle (maks 50MB)</label>
+        <input type="file" id="fmInput" multiple style="font-size:13px">
+        <div id="fmStatus" style="font-size:12px;color:var(--m);margin-top:8px"></div>
+      </div>
+    </div>
+    <div class="modal-f">
+      <button class="btn sec" onclick="closeFiles()">Kapat</button>
+      <button class="btn ok" onclick="uploadFiles()">⬆ Yükle</button>
+    </div>
   </div>
 </div>
 
@@ -412,6 +492,7 @@ tr.click{cursor:pointer}
     </div>
     <div class="modal-f">
       <button class="btn err" id="pfDel" style="margin-right:auto;display:none" onclick="delProj()">🗑 Sil</button>
+      <button class="btn sec" id="pfFiles" style="display:none" onclick="if(editP)openFiles(editP)">📎 Dosyalar</button>
       <button class="btn sec" onclick="closeProj()">Vazgeç</button>
       <button class="btn ok" onclick="saveProj()">💾 Kaydet</button>
     </div>
@@ -623,7 +704,7 @@ function subscribeRealtime(){
     }).subscribe());
     chans.push(sb.channel('notifs-ch').on('postgres_changes',{event:'INSERT',schema:'public',table:'notifications'},async(p)=>{
       try {
-        notifs.unshift(p.new);if(notifs.length>50)notifs=notifs.slice(0,50);renderNotifs();
+        notifs.unshift(p.new);if(notifs.length>50)notifs=notifs.slice(0,50);renderNotifs();playNotifSound();
         if(p.new.actor_id!==me.id)toast('🔔 '+(p.new.text||'Yeni bildirim'),'info');
       } catch(e){console.error('rt notif:',e)}
     }).subscribe());
@@ -652,6 +733,7 @@ function goto(id){
   if(id==='projects')renderProjects();
   if(id==='mytasks')renderMyTasks();
   if(id==='team')renderTeam();
+  if(id==='settings')renderSettings();
   if(id.startsWith('d-'))renderDept(id.substring(2));
   window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -715,9 +797,9 @@ function renderProjects(){
       <td><span class="pill ${SP[p.stage]||'pl-gray'}">${DI[p.stage]||''} ${DN[p.stage]||p.stage}</span></td>
       <td>${p.tonnage} t</td><td>${p.amount?(p.amount/1000).toFixed(0)+'K':'-'}</td>
       <td ${lt}>${p.shipdate||'-'}</td>
-      <td><div class="progress"><div class="pbar" style="width:${p.progress}%"></div></div></td>
+      <td><div style="display:flex;align-items:center;gap:8px"><div class="progress" style="flex:1"><div class="pbar" style="width:${p.progress}%"></div></div><span style="font-size:12px;font-weight:700;color:var(--p);min-width:38px;text-align:right">%${p.progress||0}</span></div></td>
       <td><span class="av-mini" style="background:${o.color}">${o.initials}</span></td>
-      <td><button class="icon-btn" onclick="event.stopPropagation();openProj('${p.id}')">✏️</button></td>
+      <td><button class="icon-btn" onclick="event.stopPropagation();openFiles('${p.id}')" title="Dosyalar">📎</button><button class="icon-btn" onclick="event.stopPropagation();openProj('${p.id}')">✏️</button></td>
     </tr>`;
   }).join('');
   document.getElementById('pCount').textContent=projects.length;
@@ -846,6 +928,7 @@ function openProj(id){
     document.getElementById('pf-prog').value=p.progress;
     document.getElementById('pf-notes').value=p.notes||'';
     document.getElementById('pfDel').style.display=me.role==='yonetici'?'inline-flex':'none';
+    document.getElementById('pfFiles').style.display='inline-flex';
   } else {
     document.getElementById('pmTitle').textContent='Yeni Proje';
     ['pf-no','pf-cust','pf-title','pf-loc','pf-amt','pf-ton','pf-ship','pf-notes'].forEach(x=>document.getElementById(x).value='');
@@ -854,6 +937,7 @@ function openProj(id){
     document.getElementById('pf-prog').value='0';
     document.getElementById('pf-own').value=me.id;
     document.getElementById('pfDel').style.display='none';
+    document.getElementById('pfFiles').style.display='none';
   }
   document.getElementById('pModal').classList.add('show');
 }
@@ -1004,6 +1088,203 @@ window.addEventListener('DOMContentLoaded',async()=>{
       }
     }
   } catch(e){console.error('Auto-resume error:',e)}
+});
+
+/* ============================================================
+   ÜÇEL eklemeleri: PWA, sesli bildirim, ayarlar, dosya yükleme
+   ============================================================ */
+
+// --- Service Worker register ---
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('service-worker.js')
+      .then(()=>console.log('[SW] registered'))
+      .catch(e=>console.warn('[SW] failed', e));
+  });
+}
+
+// --- Sesli bildirim (Web Audio API ile beep) ---
+let _audioCtx = null;
+function _getAudioCtx(){
+  if(_audioCtx) return _audioCtx;
+  try{ _audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+  return _audioCtx;
+}
+// İlk kullanıcı etkileşiminde AudioContext'i unlock et (mobil tarayıcı gereği)
+['click','touchstart','keydown'].forEach(ev=>{
+  document.addEventListener(ev, function _unlock(){
+    const c = _getAudioCtx();
+    if(c && c.state==='suspended') c.resume();
+    document.removeEventListener(ev, _unlock);
+  }, {once:true});
+});
+function playNotifSound(){
+  if(localStorage.getItem('ucelSound')==='0') return;
+  const ctx = _getAudioCtx(); if(!ctx) return;
+  try{
+    const now = ctx.currentTime;
+    [880, 1180].forEach((freq, i)=>{
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type='sine'; o.frequency.value=freq;
+      g.gain.setValueAtTime(0.0001, now+i*0.18);
+      g.gain.exponentialRampToValueAtTime(0.25, now+i*0.18+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now+i*0.18+0.17);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(now+i*0.18); o.stop(now+i*0.18+0.18);
+    });
+  }catch(e){console.warn('sound:',e)}
+}
+
+// --- Ayarlar (kullanıcı listesi düzenleme) ---
+function renderSettings(){
+  if(me.role!=='yonetici'){
+    document.getElementById('settingsList').innerHTML='<div style="padding:18px;color:var(--err)">Sadece yöneticiler düzenleyebilir.</div>';
+    return;
+  }
+  // Ses tercihini yükle
+  const s = document.getElementById('setSound');
+  if(s) s.checked = localStorage.getItem('ucelSound')!=='0';
+
+  const ROLE_LBL = {
+    yonetici:'👑 Yönetici', teklifproje:'📐 Teklif & Projelendirme',
+    satinalma:'🛒 Satın Alma', stok:'📦 Stok', uretim:'🔧 Üretim',
+    sevk:'🚚 Sevkiyat', montaj:'🏗️ Saha Montajı', muhasebe:'💰 Muhasebe'
+  };
+  const taskCount = (uid)=> tasks.filter(t=>t.assignee_id===uid && !t.done).length;
+  const projCount = (uid)=> projects.filter(p=>p.owner_id===uid).length;
+
+  const rows = Object.values(allProfiles).sort((a,b)=>a.full_name.localeCompare(b.full_name,'tr')).map(u=>{
+    return `<div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--bd)">
+      <div style="width:42px;height:42px;border-radius:50%;background:${u.color||'#1f4e8c'};color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center">${esc(u.initials||'?')}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700">${esc(u.full_name)} <span style="color:var(--m);font-weight:400;font-size:11px">@${esc(u.username)}</span></div>
+        <div style="font-size:12px;color:var(--m)">${ROLE_LBL[u.role]||esc(u.role)} · ${esc(u.label||'')} · ${projCount(u.id)} proje · ${taskCount(u.id)} açık görev</div>
+      </div>
+      <button class="btn sec sm" onclick="openUserEdit('${u.id}')">✏️ Düzenle</button>
+    </div>`;
+  }).join('');
+  document.getElementById('settingsList').innerHTML = rows || '<div style="padding:18px;color:var(--m)">Kullanıcı yok.</div>';
+}
+function openUserEdit(uid){
+  const u = allProfiles[uid]; if(!u){toast('Kullanıcı yok','err');return}
+  document.getElementById('ue-id').value = u.id;
+  document.getElementById('ue-username').value = u.username||'';
+  document.getElementById('ue-fullname').value = u.full_name||'';
+  document.getElementById('ue-role').value = u.role||'uretim';
+  document.getElementById('ue-label').value = u.label||'';
+  document.getElementById('ue-initials').value = u.initials||'';
+  document.getElementById('ue-color').value = u.color||'#1f4e8c';
+  document.getElementById('userEditModal').classList.add('show');
+}
+function closeUserEdit(){document.getElementById('userEditModal').classList.remove('show')}
+async function saveUserEdit(){
+  const id = document.getElementById('ue-id').value;
+  const d = {
+    username:  document.getElementById('ue-username').value.trim(),
+    full_name: document.getElementById('ue-fullname').value.trim(),
+    role:      document.getElementById('ue-role').value,
+    label:     document.getElementById('ue-label').value.trim(),
+    initials:  document.getElementById('ue-initials').value.trim().toUpperCase(),
+    color:     document.getElementById('ue-color').value
+  };
+  if(!d.username || !d.full_name || !d.initials){toast('Kullanıcı adı, isim ve baş harf zorunlu','err');return}
+  const {error} = await sb.from('profiles').update(d).eq('id', id);
+  if(error){toast('Hata: '+error.message,'err');return}
+  // Yerel cache'i de güncelle
+  if(allProfiles[id]) Object.assign(allProfiles[id], d);
+  if(id===me.id) Object.assign(me, d);
+  toast('Kullanıcı güncellendi','info');
+  closeUserEdit();
+  renderSettings();
+  if(typeof renderTeam==='function') renderTeam();
+  if(typeof renderProjects==='function') renderProjects();
+}
+
+// --- Proje dosyaları (Supabase Storage + attachments tablosu) ---
+let _filesCtx = null; // {projectId} veya {taskId}
+async function openFiles(projectId, taskId){
+  _filesCtx = {projectId: projectId||null, taskId: taskId||null};
+  document.getElementById('fmTitle').textContent = taskId ? '📎 Görev Dosyaları' : '📎 Proje Dosyaları';
+  document.getElementById('fmInput').value = '';
+  document.getElementById('fmStatus').textContent = '';
+  await loadFiles();
+  document.getElementById('filesModal').classList.add('show');
+}
+function closeFiles(){document.getElementById('filesModal').classList.remove('show'); _filesCtx=null}
+async function loadFiles(){
+  if(!_filesCtx) return;
+  let q = sb.from('attachments').select('*').order('created_at',{ascending:false});
+  if(_filesCtx.projectId) q = q.eq('project_id', _filesCtx.projectId);
+  if(_filesCtx.taskId)    q = q.eq('task_id',    _filesCtx.taskId);
+  const {data, error} = await q;
+  const list = document.getElementById('filesList');
+  if(error){list.innerHTML = '<div style="color:var(--err)">'+esc(error.message)+'</div>';return}
+  if(!data || !data.length){list.innerHTML='<div style="color:var(--m);font-size:12px">Henüz dosya yok.</div>';return}
+  list.innerHTML = data.map(f=>{
+    const isImg = (f.mime_type||'').startsWith('image/');
+    const url = sb.storage.from('project-files').getPublicUrl(f.file_path).data.publicUrl;
+    const sz = f.size_bytes ? (f.size_bytes>1048576 ? (f.size_bytes/1048576).toFixed(1)+' MB' : Math.round(f.size_bytes/1024)+' KB') : '';
+    const who = (allProfiles[f.uploaded_by]||{}).full_name||'?';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--bd);border-radius:8px">
+      ${isImg ? `<img src="${url}" style="width:48px;height:48px;object-fit:cover;border-radius:6px">` : `<div style="width:48px;height:48px;background:#f1f4f8;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px">📄</div>`}
+      <div style="flex:1;min-width:0">
+        <a href="${url}" target="_blank" style="color:var(--p);text-decoration:none;font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.file_name)}</a>
+        <div style="font-size:11px;color:var(--m)">${sz} · ${esc(who)} · ${new Date(f.created_at).toLocaleString('tr-TR')}</div>
+      </div>
+      <a href="${url}" target="_blank" class="btn sec sm" style="text-decoration:none">⬇</a>
+      ${me.role==='yonetici' ? `<button class="btn err sm" onclick="delFile('${f.id}','${f.file_path}')">🗑</button>` : ''}
+    </div>`;
+  }).join('');
+}
+async function uploadFiles(){
+  if(!_filesCtx) return;
+  const inp = document.getElementById('fmInput');
+  if(!inp.files || !inp.files.length){toast('Dosya seçin','err');return}
+  const status = document.getElementById('fmStatus');
+  let okN=0, failN=0;
+  for(const file of inp.files){
+    status.textContent = 'Yükleniyor: '+file.name;
+    const ts = Date.now();
+    const safe = file.name.replace(/[^\w.\-]/g,'_');
+    const folder = _filesCtx.projectId ? ('projects/'+_filesCtx.projectId) : ('tasks/'+_filesCtx.taskId);
+    const path = folder + '/' + ts + '_' + safe;
+    const up = await sb.storage.from('project-files').upload(path, file, {contentType:file.type||'application/octet-stream'});
+    if(up.error){failN++; console.error(up.error); continue}
+    const ins = await sb.from('attachments').insert({
+      project_id: _filesCtx.projectId,
+      task_id:    _filesCtx.taskId,
+      uploaded_by: me.id,
+      file_name:  file.name,
+      file_path:  path,
+      mime_type:  file.type||null,
+      size_bytes: file.size
+    });
+    if(ins.error){failN++; console.error(ins.error)} else {okN++}
+  }
+  status.textContent = okN+' yüklendi'+(failN?' · '+failN+' başarısız':'');
+  toast(okN+' dosya yüklendi',okN?'info':'err');
+  inp.value='';
+  await loadFiles();
+}
+async function delFile(id, path){
+  if(!confirm('Bu dosyayı silmek istediğinden emin misin?')) return;
+  const {error:e1} = await sb.from('attachments').delete().eq('id', id);
+  if(e1){toast('Hata: '+e1.message,'err');return}
+  await sb.storage.from('project-files').remove([path]);
+  toast('Silindi','info');
+  await loadFiles();
+}
+
+// userEditModal & filesModal click-out kapatma
+document.addEventListener('DOMContentLoaded', function(){
+  const u = document.getElementById('userEditModal');
+  if(u) u.addEventListener('click', e=>{if(e.target.id==='userEditModal') closeUserEdit()});
+  const f = document.getElementById('filesModal');
+  if(f) f.addEventListener('click', e=>{if(e.target.id==='filesModal') closeFiles()});
+  // Ses açık/kapalı tercihini yükle
+  const s = document.getElementById('setSound');
+  if(s) s.checked = localStorage.getItem('ucelSound')!=='0';
 });
 </script>
 </body>
