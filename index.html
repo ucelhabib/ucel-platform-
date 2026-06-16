@@ -2356,7 +2356,7 @@ async function _deductFromStock(cat, miktar, projectId){
 async function saveProcCatalog(){
   if(_procSelected.size === 0){toast('Hiç kalem seçilmedi','err');return}
   const rows = [];
-  const stockMatches = [];  // {cat, miktar, avail}
+  const stockMatches = [];  // {cat, miktar, avail, row}  ← row referansı tutar
   let sira = procItems.length;
   for(const id of _procSelected){
     const cat = stockItems.find(x=>x.id===id); if(!cat) continue;
@@ -2364,19 +2364,20 @@ async function saveProcCatalog(){
     if(miktar <= 0) continue;
     const pickedBirim = _procPickedBirim.get(id) || cat.birim || 'm';
     const fb = (cat.kg_per_meter && cat.kg_per_meter > 0) ? 'kg' : 'birim';
-    rows.push({
+    const row = {
       project_id: _procProjectId, sira: sira++,
       malzeme: cat.urun, miktar, birim: pickedBirim,
       birim_fiyat: 0, kdv_orani: 20,
       fiyat_birimi: fb,
       catalog_id: id, kg_per_meter: cat.kg_per_meter || 0,
       created_by: me.id
-    });
+    };
+    rows.push(row);
     // Stok kontrolü — sadece picked birim cat.birim ile aynı olduğunda anlamlı
     if(pickedBirim === cat.birim){
       const avail = _stockAvailable(cat);
       if(avail > 0){
-        stockMatches.push({cat, miktar, avail, birim: cat.birim});
+        stockMatches.push({cat, miktar, avail, birim: cat.birim, row});
       }
     }
   }
@@ -2384,25 +2385,31 @@ async function saveProcCatalog(){
 
   // Stoktan düş onayı
   let deducted = 0;
+  let totalTaken = 0;
   if(stockMatches.length > 0){
     const lines = stockMatches.map(d=>{
       const fmt = v=>(+v).toLocaleString('tr-TR',{maximumFractionDigits:2});
-      const eksik = d.miktar > d.avail ? ` (eksik: ${fmt(d.miktar - d.avail)} ${d.birim})` : '';
-      return `  • ${d.cat.urun}: stokta ${fmt(d.avail)} ${d.birim} · talep ${fmt(d.miktar)} ${d.birim}${eksik}`;
+      const take = Math.min(d.miktar, d.avail);
+      const kalan = d.miktar - take;
+      const kalanTxt = kalan > 0 ? ` → satın al: ${fmt(kalan)} ${d.birim}` : ' → satın alma listesine eklenmez (stoktan karşılandı)';
+      return `  • ${d.cat.urun}: talep ${fmt(d.miktar)} ${d.birim} · stokta ${fmt(d.avail)} ${d.birim} · düşülecek: ${fmt(take)} ${d.birim}${kalanTxt}`;
     });
     const ok = confirm(
       '⚠️ STOKTA MEVCUT MALZEMELER VAR\n\n' +
-      lines.join('\n') + '\n\n' +
-      'Stoktan otomatik düşülsün mü?\n' +
-      '   • TAMAM → mevcut miktar kadar düş, kalanı satın alma listesinde kalsın\n' +
-      '   • İPTAL → düşme, hepsini satın al'
+      lines.join('\n\n') + '\n\n' +
+      'Stoktan otomatik düşülsün ve talep formundan da o miktar çıkarılsın mı?\n' +
+      '   • TAMAM → stoktan düş + talep formuna sadece eksik kısmı ekle\n' +
+      '   • İPTAL → stoktan düşme, tüm miktarı satın al'
     );
     if(ok){
       for(const d of stockMatches){
         const take = Math.min(d.miktar, d.avail);
         try {
           await _deductFromStock(d.cat, take, _procProjectId);
+          // Talep formundaki miktarı, stoktan düşülen kadar AZALT
+          d.row.miktar = Math.max(0, +(d.row.miktar - take).toFixed(3));
           deducted++;
+          totalTaken += take;
         } catch(e){ console.error('deduct fail',d.cat.urun,e); }
       }
       await loadStockItems();
@@ -2413,13 +2420,30 @@ async function saveProcCatalog(){
     }
   }
 
-  const {error} = await sb.from('procurement_items').insert(rows);
-  if(error){toast('Hata: '+error.message,'err');return}
-  toast(`${rows.length} kalem eklendi${deducted>0?` · ${deducted} stoktan düşüldü`:''}`,'ok');
+  // miktar = 0 olan satırlar → stoktan tam karşılandı, talep formuna eklenmez
+  const finalRows = rows.filter(r => r.miktar > 0);
+  const dropped = rows.length - finalRows.length;
+
+  let insertedCount = 0;
+  if(finalRows.length > 0){
+    const {error} = await sb.from('procurement_items').insert(finalRows);
+    if(error){toast('Hata: '+error.message,'err');return}
+    insertedCount = finalRows.length;
+  }
+
+  // Özet bildirim
+  const parts = [];
+  if(insertedCount > 0) parts.push(`${insertedCount} kalem talep formuna eklendi`);
+  if(deducted > 0) parts.push(`${deducted} kalemde stoktan düşüm`);
+  if(dropped > 0) parts.push(`${dropped} kalem tamamen stoktan karşılandı`);
+  toast(parts.join(' · ') || 'Ekleme yapılmadı', (insertedCount>0 || deducted>0) ? 'ok' : 'info');
+
   closeProcCatalog();
   _procSelected.clear(); _procPicked.clear();
   await loadProcurement(_procProjectId);
-  try { const proj = projects.find(p=>p.id===_procProjectId); await notify(`🛒 ${me.full_name} "${proj?.no} ${proj?.customer}" projesine ${rows.length} satın alma kalemi ekledi`, '🛒', 'satinalma', 'project', _procProjectId); } catch(e){}
+  if(insertedCount > 0){
+    try { const proj = projects.find(p=>p.id===_procProjectId); await notify(`🛒 ${me.full_name} "${proj?.no} ${proj?.customer}" projesine ${insertedCount} satın alma kalemi ekledi`, '🛒', 'satinalma', 'project', _procProjectId); } catch(e){}
+  }
 }
 
 async function deleteProcItem(itemId){
@@ -2492,6 +2516,101 @@ async function addProcDelivery(){
     await notify(`🚚 ${me.full_name} "${proj?.no} ${proj?.customer}" projesi için ${it.malzeme} teslimatı kaydetti: ${d.miktar} ${it.birim}${d.irsaliye_no?` (irs: ${d.irsaliye_no})`:''}${d.tedarikci?` · ${d.tedarikci}`:''}`, '🚚', 'yonetici', 'project', _procProjectId);
   } catch(e){}
 }
+// Ortak PDF şablonu — kurumsal kimlik (logo, sertifika rozetleri, iletişim bilgileri)
+function _pdfStyle(){
+  return `
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0}
+    body{font-family:'Calibri','Segoe UI',Arial,sans-serif;font-size:11pt;color:#222;line-height:1.4}
+    .page{min-height:297mm;padding:18mm 14mm 22mm;position:relative;display:flex;flex-direction:column}
+    .hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1f4e8c;padding-bottom:10px;margin-bottom:14px}
+    .logo-wrap{display:flex;align-items:center;gap:8px}
+    .logo-globe{width:62px;height:62px;flex-shrink:0}
+    .logo-txt{font-family:'Arial Black',Arial,sans-serif}
+    .logo-txt .brand{font-size:34pt;font-weight:900;color:#ff7a00;letter-spacing:1px;line-height:0.95;-webkit-text-stroke:1.5px #1f4e8c;text-shadow:1px 1px 0 #1f4e8c}
+    .logo-txt .tag{font-size:9pt;font-weight:700;color:#1f4e8c;letter-spacing:2px;margin-top:2px;text-align:center;border-top:1.5px solid #1f4e8c;padding-top:1px}
+    .doc-title{text-align:right;font-weight:900;color:#444;line-height:1.05}
+    .doc-title .t1{font-size:22pt}
+    .doc-title .t2{font-size:22pt}
+    .meta{display:flex;justify-content:space-between;margin:6px 0 8px;font-size:12pt;font-weight:800;color:#1a1a1a}
+    .desc{font-size:11pt;color:#333;margin:4px 0 10px}
+    table.frm{width:100%;border-collapse:collapse;font-size:11pt}
+    table.frm th{background:#1f4e8c;color:#fff;padding:8px 6px;border:1px solid #1f4e8c;text-align:center;font-weight:800;letter-spacing:0.5px}
+    table.frm td{padding:7px 8px;border:1px solid #d4d8de;text-align:center;vertical-align:middle}
+    table.frm td.lft{text-align:left}
+    table.frm td.no{font-weight:800;width:40px}
+    .footer{margin-top:auto;padding-top:14px;border-top:1px solid #eee}
+    .certs{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .cert-row{display:flex;gap:14px;align-items:center}
+    .cert{display:flex;flex-direction:column;align-items:center;font-size:7pt;font-weight:700;color:#1a1a1a}
+    .cert .bg{display:inline-flex;align-items:center;justify-content:center;background:#1a1a1a;color:#fff;padding:6px 10px;border-radius:50%;font-weight:900;font-size:10pt;min-width:38px;height:38px}
+    .ce{background:#1a1a1a !important;border-radius:8px !important;padding:4px 10px !important}
+    .contact{font-size:9.5pt;color:#1a1a1a;text-align:right;line-height:1.4}
+    .contact .num{color:#1f4e8c;font-weight:800}
+    .contact a{color:#1f4e8c;text-decoration:none;font-weight:700}
+    .addr-bar{background:#1f4e8c;color:#fff;padding:7px 14px;font-size:9pt;margin:8px -14mm 0;display:flex;justify-content:space-between;align-items:center}
+    .addr-bar a{color:#fff;text-decoration:none;font-weight:700}
+    tfoot td{background:#fff8e1;font-weight:700}
+    @media print { body{margin:0} @page{size:A4 portrait;margin:0} .page{min-height:auto} }
+  `;
+}
+function _pdfLogo(){
+  // Inline SVG — ÜÇEL logosu (kavisli dünya ikonu + ÜCEL text + STEEL CONSTRUCTION)
+  return `
+    <div class="logo-wrap">
+      <svg class="logo-globe" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="g1" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#3a7fc4"/>
+            <stop offset="100%" stop-color="#1f4e8c"/>
+          </radialGradient>
+        </defs>
+        <!-- turuncu kavisli dış halka (kısmen açık) -->
+        <path d="M 14 50 A 36 36 0 1 1 86 50" stroke="#ff7a00" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+        <path d="M 86 50 A 36 36 0 0 1 70 78" stroke="#ff7a00" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+        <!-- mavi dünya küresi -->
+        <circle cx="50" cy="50" r="28" fill="url(#g1)"/>
+        <!-- meridyenler -->
+        <ellipse cx="50" cy="50" rx="28" ry="11" fill="none" stroke="#fff" stroke-width="1.2" opacity="0.85"/>
+        <ellipse cx="50" cy="50" rx="11" ry="28" fill="none" stroke="#fff" stroke-width="1.2" opacity="0.85"/>
+        <ellipse cx="50" cy="50" rx="28" ry="20" fill="none" stroke="#fff" stroke-width="0.9" opacity="0.55"/>
+        <ellipse cx="50" cy="50" rx="20" ry="28" fill="none" stroke="#fff" stroke-width="0.9" opacity="0.55"/>
+        <!-- kıta hatları (Avrupa/Türkiye stilize) -->
+        <path d="M 38 42 Q 48 38 56 44 T 64 50" stroke="#ff7a00" stroke-width="1.6" fill="none" opacity="0.9"/>
+        <path d="M 36 56 Q 44 60 54 58" stroke="#ff7a00" stroke-width="1.4" fill="none" opacity="0.9"/>
+      </svg>
+      <div class="logo-txt">
+        <div class="brand">ÜCEL<sup style="font-size:0.4em;color:#1f4e8c;-webkit-text-stroke:0;text-shadow:none">®</sup></div>
+        <div class="tag">STEEL CONSTRUCTION</div>
+      </div>
+    </div>`;
+}
+function _pdfFooter(){
+  return `
+    <div class="footer">
+      <div class="certs">
+        <div class="cert-row">
+          <div class="cert"><span class="bg ce">CE</span></div>
+          <div class="cert"><span class="bg">IAF</span></div>
+          <div class="cert"><span class="bg">ISO</span><div style="font-size:6pt;color:#888;margin-top:1px">9001</div></div>
+          <div class="cert"><span class="bg">ISO</span><div style="font-size:6pt;color:#888;margin-top:1px">3834-2</div></div>
+          <div class="cert"><span class="bg">TÜV</span><div style="font-size:6pt;color:#888;margin-top:1px">AUSTRIA</div></div>
+        </div>
+        <div class="contact">
+          Tel: + (90) 332 <span class="num">345 15 99</span><br>
+          E-posta: <a href="mailto:bilgi@ucelmetal.net">bilgi@ucelmetal.net</a>
+        </div>
+      </div>
+      <div class="addr-bar">
+        <span>Fevzi Çakmak Mah. Loras Cad. No:5/I-J-K (Zümer-1 Sanayi Sitesi) Karatay/KONYA</span>
+        <a href="https://www.ucelmetal.net">www.ucelmetal.net</a>
+      </div>
+    </div>`;
+}
+function _pdfHeader(title1, title2){
+  return `<div class="hdr">${_pdfLogo()}<div class="doc-title"><div class="t1">${esc(title1)}</div><div class="t2">${esc(title2)}</div></div></div>`;
+}
+
 function printProcurement(){
   if(!_procProjectId || procItems.length === 0){toast('Önce proje seç ve kalem ekle','err');return}
   const proj = projects.find(p=>p.id===_procProjectId);
@@ -2505,61 +2624,71 @@ function printProcurement(){
       dl.map(d=>`<div style="font-size:11px;padding:2px 0">📦 <b>${d.tarih}</b> · ${parseFloat(d.miktar).toLocaleString('tr-TR')} ${esc(it.birim)}${d.gercek_kg?` (${parseFloat(d.gercek_kg).toLocaleString('tr-TR')} kg)`:''}${d.irsaliye_no?` · İrs: <b>${esc(d.irsaliye_no)}</b>`:''}${d.fatura_no?` · Fat: <b>${esc(d.fatura_no)}</b>`:''}${d.tedarikci?` · ${esc(d.tedarikci)}`:''}${d.fatura_tutari?` · ${parseFloat(d.fatura_tutari).toLocaleString('tr-TR')} ₺`:''}${d.not_text?` · <i>${esc(d.not_text)}</i>`:''}</div>`).join('');
     const stat = c.durum==='tamamlandi'?'🟢 Tamam':(c.durum==='kismi'?`🟡 %${Math.round(c.gelen/parseFloat(it.miktar)*100)}`:'🔴 Bekliyor');
     return `<tr>
-      <td style="text-align:center">${i+1}</td>
-      <td><b>${esc(it.malzeme)}</b>${it.ebat?` <small>(${esc(it.ebat)})</small>`:''}</td>
-      <td style="text-align:right">${parseFloat(it.miktar).toLocaleString('tr-TR')} ${esc(it.birim)}${c.toplamKg>0?`<br><small>${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`:''}</td>
-      <td style="text-align:right">${parseFloat(it.birim_fiyat).toLocaleString('tr-TR')} ₺/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</td>
-      <td style="text-align:right">${c.tutar.toLocaleString('tr-TR',{maximumFractionDigits:2})} ₺</td>
-      <td style="text-align:right">%${it.kdv_orani}<br>${c.kdv.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
-      <td style="text-align:right">−${c.tevkifat.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
-      <td style="text-align:right"><b>${c.net.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</b></td>
-      <td style="text-align:right">${c.gelen.toLocaleString('tr-TR')} ${esc(it.birim)}</td>
-      <td style="text-align:center">${stat}</td>
-      <td>${dStr}</td>
+      <td class="ctr">${i+1}</td>
+      <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <small>(${esc(it.ebat)})</small>`:''}</td>
+      <td>${parseFloat(it.miktar).toLocaleString('tr-TR')} ${esc(it.birim)}${c.toplamKg>0?`<br><small>${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`:''}</td>
+      <td>${parseFloat(it.birim_fiyat).toLocaleString('tr-TR')} ₺/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</td>
+      <td>${c.tutar.toLocaleString('tr-TR',{maximumFractionDigits:2})} ₺</td>
+      <td>%${it.kdv_orani}<br>${c.kdv.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
+      <td>−${c.tevkifat.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
+      <td><b>${c.net.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</b></td>
+      <td>${c.gelen.toLocaleString('tr-TR')} ${esc(it.birim)}</td>
+      <td class="ctr">${stat}</td>
+      <td class="lft">${dStr}</td>
     </tr>`;
   }).join('');
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>ÜÇEL Satın Alma — ${proj?.no||''}</title>
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Satın Alma Takip — ${proj?.no||''}</title>
     <style>
-      body{font-family:Arial,sans-serif;font-size:11px;margin:14mm 8mm;color:#222}
-      h1{font-size:18px;color:#1f4e8c;margin:0 0 4px}
-      .meta{font-size:11px;color:#666;margin-bottom:10px}
-      table{width:100%;border-collapse:collapse;font-size:10.5px}
-      th{background:#1f4e8c;color:#fff;padding:5px 6px;text-align:left;border:1px solid #1f4e8c;font-size:10px}
-      td{padding:4px 6px;border:1px solid #ddd;vertical-align:top}
+      ${_pdfStyle()}
+      /* Yatay sayfa için özelleştirme */
+      @media print { @page{size:A4 landscape;margin:0} }
+      .page{padding:12mm 10mm 18mm;min-height:200mm}
+      .addr-bar{margin:8px -10mm 0}
+      table.frm{font-size:9.5pt}
+      table.frm th{padding:6px 4px;font-size:9pt}
+      table.frm td{padding:5px 6px;font-size:9pt;text-align:right}
+      table.frm td.lft{text-align:left}
+      table.frm td.ctr{text-align:center}
       tr:nth-child(even) td{background:#fafbfd}
-      tfoot td{background:#fff8e1;font-weight:700;border-top:2px solid #1f4e8c;font-size:12px}
-      @media print { body{margin:0} @page{size:A4 landscape;margin:10mm 6mm} }
+      tfoot td{background:#fff8e1;font-weight:800;border-top:2px solid #1f4e8c}
     </style></head><body>
-    <h1>🛒 ÜÇEL Satın Alma Raporu</h1>
-    <div class="meta"><b>Proje:</b> ${esc(proj?.no||'')} · ${esc(proj?.customer||'')}${proj?.title?' — '+esc(proj.title):''} &nbsp;|&nbsp; <b>Tarih:</b> ${dt} &nbsp;|&nbsp; <b>${procItems.length} kalem</b></div>
-    <table>
-      <thead><tr>
-        <th style="width:24px">#</th>
-        <th>Malzeme</th>
-        <th style="text-align:right">Sipariş</th>
-        <th style="text-align:right">Br. Fiyat</th>
-        <th style="text-align:right">Tutar</th>
-        <th style="text-align:right">KDV</th>
-        <th style="text-align:right">Tevkifat</th>
-        <th style="text-align:right">NET</th>
-        <th style="text-align:right">Gelen</th>
-        <th style="text-align:center">Durum</th>
-        <th>Teslimatlar</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-      <tfoot><tr>
-        <td colspan="4" style="text-align:right">TOPLAM</td>
-        <td style="text-align:right">${totT.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
-        <td style="text-align:right">${totK.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
-        <td style="text-align:right">−${totTv.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
-        <td style="text-align:right">${totN.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
-        <td colspan="3"></td>
-      </tr>
-      ${totKg>0?`<tr><td colspan="4" style="text-align:right">TOPLAM AĞIRLIK</td><td colspan="7" style="text-align:right">${totKg.toLocaleString('tr-TR',{maximumFractionDigits:0})} kg</td></tr>`:''}
-      </tfoot>
-    </table>
-    <div style="margin-top:10px;font-size:10px;color:#888">ÜÇEL Steel Construction · Yapısal Çelik · İş Akışı Yönetim Platformu</div>
-    <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),300)}<\/script>
+    <div class="page">
+      ${_pdfHeader('SATIN ALMA', 'TAKİP RAPORU')}
+      <div class="meta">
+        <span>PROJE NO: ${esc(proj?.no||'')}${proj?.customer?` · ${esc(proj.customer)}`:''}</span>
+        <span>TARİH: ${dt}</span>
+      </div>
+      <div class="desc">${procItems.length} kalem malzeme takibi · Sipariş, teslimat ve fatura durumu aşağıdadır.</div>
+      <table class="frm">
+        <thead><tr>
+          <th style="width:28px">#</th>
+          <th style="width:18%">Malzeme</th>
+          <th>Sipariş</th>
+          <th>Br. Fiyat</th>
+          <th>Tutar</th>
+          <th>KDV</th>
+          <th>Tevkifat</th>
+          <th>NET</th>
+          <th>Gelen</th>
+          <th class="ctr">Durum</th>
+          <th class="lft">Teslimatlar</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr>
+          <td colspan="4" style="text-align:right">TOPLAM</td>
+          <td>${totT.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
+          <td>${totK.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
+          <td>−${totTv.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
+          <td>${totN.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
+          <td colspan="3"></td>
+        </tr>
+        ${totKg>0?`<tr><td colspan="4" style="text-align:right">TOPLAM AĞIRLIK</td><td colspan="7" class="lft">${totKg.toLocaleString('tr-TR',{maximumFractionDigits:0})} kg</td></tr>`:''}
+        </tfoot>
+      </table>
+      <div style="flex:1"></div>
+      ${_pdfFooter()}
+    </div>
+    <script>window.onload=()=>{setTimeout(()=>{window.print();setTimeout(()=>window.close(),400)},250)}<\/script>
     </body></html>`;
   const w = window.open('','_blank');
   if(!w){toast('Popup engellendi, izin ver','err');return}
@@ -2571,52 +2700,36 @@ function exportProcTalepFormu(){
   const today = new Date().toLocaleDateString('tr-TR');
   const rows = procItems.map((it,i)=>`
     <tr>
-      <td style="text-align:center;width:32px">${i+1}.</td>
-      <td>${esc(it.malzeme)}</td>
-      <td style="text-align:center;width:80px">${parseFloat(it.miktar).toLocaleString('tr-TR')}</td>
-      <td style="text-align:center;width:60px">${esc(it.birim||'mt')}</td>
-      <td>${esc(it.not_text||'')}</td>
+      <td class="no">${i+1}.</td>
+      <td class="lft"><b>${esc(it.malzeme)}</b></td>
+      <td>${parseFloat(it.miktar).toLocaleString('tr-TR')}</td>
+      <td>${esc(it.birim||'mt')}</td>
+      <td class="lft">${esc(it.not_text||'')}</td>
     </tr>`).join('');
   const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Talep Formu - ${esc(proj?.no||'')}</title>
-    <style>
-      *{box-sizing:border-box}
-      body{font-family:'Calibri','Segoe UI',Arial,sans-serif;font-size:11pt;color:#000;margin:18mm 14mm;line-height:1.4}
-      .header{text-align:center;margin-bottom:18px}
-      .header h1{font-size:28pt;font-weight:bold;color:#1f4e8c;margin:0;letter-spacing:1px}
-      .header h2{font-size:20pt;font-weight:bold;color:#1f4e8c;margin:4px 0 0;letter-spacing:1px}
-      .meta{display:flex;justify-content:space-between;margin:22px 0 14px;font-size:11pt;font-weight:bold}
-      .meta div{padding:0}
-      .desc{margin:14px 0 16px;font-size:11pt;color:#333}
-      table{width:100%;border-collapse:collapse;font-size:11pt}
-      th{background:#1f4e8c;color:#fff;padding:8px 6px;border:1px solid #1f4e8c;text-align:center;font-weight:bold}
-      td{padding:7px 8px;border:1px solid #333;vertical-align:middle}
-      .footer{margin-top:30px;font-size:9pt;color:#888;text-align:center;border-top:1px solid #ddd;padding-top:8px}
-      @media print { body{margin:14mm 12mm} @page{size:A4 portrait;margin:0} }
-    </style></head><body>
-    <div class="header">
-      <h1>TEKLİF</h1>
-      <h2>TALEP FORMU</h2>
+    <style>${_pdfStyle()}</style></head><body>
+    <div class="page">
+      ${_pdfHeader('TEKLİF', 'TALEP FORMU')}
+      <div class="meta">
+        <span>PROJE NO: ${esc(proj?.no||'')}</span>
+        <span>TARİH: ${today}</span>
+      </div>
+      ${proj?.customer ? `<div style="font-size:11pt;font-weight:700;margin-bottom:6px">MÜŞTERİ: ${esc(proj.customer)}</div>` : ''}
+      <div class="desc">Aşağıda belirtilen malzeme listesi için fiyat teklifinizi ve termin sürenizi bekliyoruz.</div>
+      <table class="frm">
+        <thead><tr>
+          <th style="width:48px">NO</th>
+          <th style="width:32%">MALZEME</th>
+          <th style="width:110px">MİKTAR</th>
+          <th style="width:80px">BİRİM</th>
+          <th>NOT</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="flex:1"></div>
+      ${_pdfFooter()}
     </div>
-    <div class="meta">
-      <div>PROJE NO: ${esc(proj?.no||'')}</div>
-      <div>TARİH: ${today}</div>
-    </div>
-    ${proj?.customer ? `<div style="font-size:11pt;font-weight:bold;margin-bottom:8px">MÜŞTERİ: ${esc(proj.customer)}</div>` : ''}
-    <div class="desc">Aşağıda belirtilen malzeme listesi için fiyat teklifinizi ve termin sürenizi bekliyoruz.</div>
-    <table>
-      <thead><tr>
-        <th style="width:32px">NO</th>
-        <th>MALZEME</th>
-        <th style="width:80px">MİKTAR</th>
-        <th style="width:60px">BİRİM</th>
-        <th>NOT</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div class="footer">ÜÇEL Steel Construction · Yapısal Çelik · İş Akışı Yönetim Platformu</div>
-    <script>
-      window.onload = () => { setTimeout(() => { window.print(); }, 200); };
-    <\/script>
+    <script>window.onload = () => { setTimeout(() => { window.print(); }, 250); };<\/script>
     </body></html>`;
   const w = window.open('','_blank');
   if(!w){toast('Popup engellendi, izin ver','err');return}
