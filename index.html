@@ -2528,8 +2528,57 @@ async function saveProcCatalog(){
   _procSelected.clear(); _procPicked.clear(); _procPickedEbat.clear();
   await loadProcurement(_procProjectId);
   if(insertedCount > 0){
-    try { const proj = projects.find(p=>p.id===_procProjectId); await notify(`🛒 ${me.full_name} "${proj?.no} ${proj?.customer}" projesine ${insertedCount} satın alma kalemi ekledi`, '🛒', 'satinalma', 'project', _procProjectId); } catch(e){}
+    const proj = projects.find(p=>p.id===_procProjectId);
+    try { await notify(`🛒 ${me.full_name} "${proj?.no} ${proj?.customer}" projesine ${insertedCount} satın alma kalemi ekledi`, '🛒', 'satinalma', 'project', _procProjectId); } catch(e){}
+    // OTOMATIK GÖREVLENDİRME — Satın Alma (Ahmet) + Muhasebe (Ali Osman)
+    try { await _autoAssignProcurementTasks(_procProjectId, insertedCount); } catch(e){ console.warn('auto-assign fail:', e); }
   }
+}
+
+// Talep formuna kalem eklenince Satın Alma ve Muhasebe birimlerine otomatik görev aç
+async function _autoAssignProcurementTasks(projectId, kalemSayisi){
+  const proj = projects.find(p=>p.id===projectId);
+  if(!proj) return;
+  const profilesArr = Object.values(allProfiles || {});
+  const findOwner = role => profilesArr.find(u => u.role === role);
+  const satinUser = findOwner('satinalma');
+  const muhUser = findOwner('muhasebe');
+  // Bu proje için aynı tipte açık görev varsa tekrar açma
+  async function hasOpen(dept){
+    const { data } = await sb.from('tasks')
+      .select('id').eq('project_id', projectId).eq('dept', dept)
+      .eq('done', false).ilike('title', '%talep formu%').limit(1);
+    return data && data.length > 0;
+  }
+  const due = new Date(); due.setDate(due.getDate() + 7);
+  const dueStr = due.toISOString().slice(0,10);
+  const rows = [];
+  if(satinUser && !(await hasOpen('satinalma'))){
+    rows.push({
+      title: `🛒 Yeni talep formu — sipariş ver (${proj.no})`,
+      dept: 'satinalma', project_id: projectId,
+      assignee_id: satinUser.id, due: dueStr, priority: 'high',
+      description: `Ömer ${kalemSayisi} kalem malzeme için yeni bir talep formu açtı.\nTedarikçiye PDF gönder, sipariş ver, teslimatları kayda al.\n\nProje: ${proj.no} · ${proj.customer||''}`,
+      created_by: me.id, done: false
+    });
+  }
+  if(muhUser && !(await hasOpen('muhasebe'))){
+    rows.push({
+      title: `💰 Satın alma takibi — fatura ve ödeme (${proj.no})`,
+      dept: 'muhasebe', project_id: projectId,
+      assignee_id: muhUser.id, due: dueStr, priority: 'medium',
+      description: `Bu proje için satın alma başladı. Gelen faturaları kayda al, tedarikçi ödemelerini takip et.\n\nProje: ${proj.no} · ${proj.customer||''} · ${kalemSayisi} kalem`,
+      created_by: me.id, done: false
+    });
+  }
+  if(rows.length === 0) return;
+  const { error } = await sb.from('tasks').insert(rows);
+  if(error){ console.warn('auto task insert error:', error); return; }
+  // Atanan kişilere bildirim
+  for(const r of rows){
+    try { await notify(`📋 Sana görev atandı: ${r.title}`, '📋', r.dept, 'project', projectId); } catch(e){}
+  }
+  if(typeof toast === 'function') toast(`✅ Otomatik görev: ${rows.length} birime atandı`, 'ok');
 }
 
 async function deleteProcItem(itemId){
