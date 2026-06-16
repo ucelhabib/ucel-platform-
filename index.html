@@ -2070,7 +2070,7 @@ function renderProcList(){
     return `<div style="border-bottom:1px solid #eef0f5">
       <div style="display:grid;grid-template-columns:30px 1fr 100px 90px 80px 120px 100px 100px;gap:6px;align-items:center;padding:8px 10px;cursor:pointer;font-size:13px" onclick="toggleProcExpand('${it.id}')">
         <div style="text-align:center;color:#888;font-size:12px">${expanded?'▼':'▶'}<br><small style="font-weight:700">${i+1}</small></div>
-        <div style="font-weight:600;font-size:13px">${esc(it.malzeme)}${it.ebat?` <span style="font-size:11px;color:#888">(${esc(it.ebat)})</span>`:''}</div>
+        <div style="font-weight:600;font-size:13px">${esc(it.malzeme)}${it.ebat?` <span style="font-size:11px;color:#888">(${esc(it.ebat)})</span>`:''}${(+it.stok_dusum>0)?`<div style="display:inline-block;margin-left:6px;font-size:10px;color:#0a7;background:#e8f5e9;padding:1px 8px;border-radius:10px;font-weight:600">📦 Stoktan ${(+it.stok_dusum).toLocaleString('tr-TR',{maximumFractionDigits:2})} ${esc(it.birim)} düşüldü</div>`:''}</div>
         <div style="text-align:right;font-size:13px">${parseFloat(it.miktar).toLocaleString('tr-TR')} ${esc(it.birim)}${c.fiyatBirimi==='kg' && c.toplamKg>0?`<br><small style="color:#888;font-size:11px">${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`:''}</div>
         <div style="text-align:right;color:#444;font-size:13px">${parseFloat(it.birim_fiyat).toLocaleString('tr-TR')} ₺<br><small style="color:#888;font-size:11px">/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</small></div>
         <div style="text-align:right;color:#666;font-size:12px">%${it.kdv_orani}</div>
@@ -2198,16 +2198,27 @@ function renderProcCatalog(){
     if(cat && it.kategori !== cat) return false;
     if(q && !normSearch(it.kategori+' '+it.urun).includes(q)) return false;
     return true;
-  });
+  }).sort(_byCatOrder);
   const canMod = me?.role === 'yonetici' || me?.role === 'satinalma' || me?.role === 'teklifproje';
   const html = list.map(it=>{
     const sel = _procSelected.has(it.id);
     const defBirim = _procPickedBirim.get(it.id) || it.birim || 'm';
+    const isSac = (it.kategori || '').toUpperCase().startsWith('SAÇ') || (it.kategori || '').toUpperCase().startsWith('SAC');
+    const en = _procPickedEbat.get(it.id)?.en || '';
+    const boy = _procPickedEbat.get(it.id)?.boy || '';
+    const sacInput = isSac && sel ? `
+      <div style="grid-column:3 / -1;display:flex;align-items:center;gap:6px;padding:4px 0 6px;font-size:12px;color:#555">
+        📐 Ebat (mm):
+        <input type="number" min="0" step="1" placeholder="en"  value="${en}"  oninput="setProcCatEbat('${it.id}','en', this.value)"  style="width:90px;padding:3px 6px;border:1px solid #cdd;border-radius:4px;font-size:12px">
+        <span style="color:#888">×</span>
+        <input type="number" min="0" step="1" placeholder="boy" value="${boy}" oninput="setProcCatEbat('${it.id}','boy',this.value)" style="width:90px;padding:3px 6px;border:1px solid #cdd;border-radius:4px;font-size:12px">
+        <small style="color:#888">en × boy</small>
+      </div>` : '';
     return `<div style="display:grid;grid-template-columns:26px 110px 1fr 100px 70px ${canMod?'56px':'0px'};gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid #f0f2f5;background:${sel?'#eef6ff':'#fff'}">
       <input type="checkbox" ${sel?'checked':''} onchange="toggleProcCatPick('${it.id}',this.checked)">
       <div style="font-size:11px;color:#666">${esc(it.kategori)}</div>
       <div style="font-weight:600;font-size:13px">${esc(it.urun)}${it.kg_per_meter?` <small style="color:#888">(${it.kg_per_meter} kg/m)</small>`:''}</div>
-      <input type="number" min="0" step="0.01" placeholder="miktar" id="pc-miktar-${it.id}" oninput="setProcCatMiktar('${it.id}',this.value)" style="padding:3px 6px;border:1px solid #cdd;border-radius:4px;font-size:12px" ${sel?'':'disabled'}>
+      <input type="number" min="0" step="0.01" placeholder="${isSac?'adet':'miktar'}" id="pc-miktar-${it.id}" oninput="setProcCatMiktar('${it.id}',this.value)" style="padding:3px 6px;border:1px solid #cdd;border-radius:4px;font-size:12px" ${sel?'':'disabled'}>
       <select id="pc-birim-${it.id}" onchange="setProcCatBirim('${it.id}',this.value)" style="padding:3px 4px;border:1px solid #cdd;border-radius:4px;font-size:12px" ${sel?'':'disabled'}>
         <option value="m" ${defBirim==='m'?'selected':''}>m</option>
         <option value="kg" ${defBirim==='kg'?'selected':''}>kg</option>
@@ -2216,6 +2227,7 @@ function renderProcCatalog(){
         <option value="m²" ${defBirim==='m²'?'selected':''}>m²</option>
       </select>
       ${canMod ? `<div style="display:flex;gap:2px"><button class="icon-btn" title="Düzenle" onclick="editCatalogItem('${it.id}')" style="padding:2px 4px;font-size:11px">✏️</button><button class="icon-btn" title="Sil" onclick="deleteCatalogItem('${it.id}')" style="padding:2px 4px;font-size:11px">🗑</button></div>` : ''}
+      ${sacInput}
     </div>`;
   }).join('');
   document.getElementById('pc-list').innerHTML = html || '<div style="padding:20px;text-align:center;color:#888">Eşleşen kalem yok</div>';
@@ -2223,6 +2235,7 @@ function renderProcCatalog(){
 }
 const _procPicked = new Map();
 const _procPickedBirim = new Map();
+const _procPickedEbat = new Map();   // SAÇ vb. için {en, boy} (mm)
 function toggleProcCatPick(itemId, checked){
   if(checked){
     _procSelected.add(itemId);
@@ -2234,11 +2247,17 @@ function toggleProcCatPick(itemId, checked){
     _procSelected.delete(itemId);
     _procPicked.delete(itemId);
     _procPickedBirim.delete(itemId);
+    _procPickedEbat.delete(itemId);
   }
   renderProcCatalog();
 }
 function setProcCatMiktar(itemId, val){ _procPicked.set(itemId, parseFloat(val)||0); }
 function setProcCatBirim(itemId, val){ _procPickedBirim.set(itemId, val); }
+function setProcCatEbat(itemId, key, val){
+  const cur = _procPickedEbat.get(itemId) || {en:'', boy:''};
+  cur[key] = val;
+  _procPickedEbat.set(itemId, cur);
+}
 
 async function editCatalogItem(itemId){
   const it = stockItems.find(x=>x.id===itemId); if(!it) return;
@@ -2269,6 +2288,21 @@ async function deleteCatalogItem(itemId){
   await loadStockItems();
   renderProcCatalog();
 }
+// Kategori sıralaması: HEA, HEB, IPE, UNP, KUTU PROFİL, BORU, SAÇ önce, diğerleri sona
+const CAT_ORDER = ['HEA','HEB','IPE','UNP','KUTU PROFİL','BORU','SAÇ'];
+function _catOrderIdx(catName){
+  const k = (catName || '').toUpperCase().trim().replace(/Ç/g,'Ç');
+  const idx = CAT_ORDER.findIndex(c => c.toUpperCase() === k);
+  return idx === -1 ? 999 : idx;
+}
+function _byCatOrder(a, b){
+  const ka = _catOrderIdx(a.kategori);
+  const kb = _catOrderIdx(b.kategori);
+  if(ka !== kb) return ka - kb;
+  // aynı kategori → urun adına göre
+  return (a.urun || a.malzeme || '').localeCompare(b.urun || b.malzeme || '', 'tr');
+}
+
 // Toplam mevcut stok miktarı (cat.birim cinsinden)
 function _stockAvailable(cat){
   if(cat.birim === 'adet'){
@@ -2364,12 +2398,24 @@ async function saveProcCatalog(){
     if(miktar <= 0) continue;
     const pickedBirim = _procPickedBirim.get(id) || cat.birim || 'm';
     const fb = (cat.kg_per_meter && cat.kg_per_meter > 0) ? 'kg' : 'birim';
+    // SAÇ vb. için en × boy ebatı
+    const isSac = (cat.kategori || '').toUpperCase().startsWith('SAÇ') || (cat.kategori || '').toUpperCase().startsWith('SAC');
+    const eb = _procPickedEbat.get(id);
+    let ebat = '';
+    if(isSac && eb && (eb.en || eb.boy)){
+      const en = parseInt(eb.en) || 0;
+      const boy = parseInt(eb.boy) || 0;
+      if(en > 0 && boy > 0) ebat = `${en}×${boy} mm`;
+      else if(en > 0) ebat = `${en} mm`;
+      else if(boy > 0) ebat = `${boy} mm`;
+    }
     const row = {
       project_id: _procProjectId, sira: sira++,
       malzeme: cat.urun, miktar, birim: pickedBirim,
       birim_fiyat: 0, kdv_orani: 20,
       fiyat_birimi: fb,
       catalog_id: id, kg_per_meter: cat.kg_per_meter || 0,
+      ebat: ebat || null,
       created_by: me.id
     };
     rows.push(row);
@@ -2408,6 +2454,7 @@ async function saveProcCatalog(){
           await _deductFromStock(d.cat, take, _procProjectId);
           // Talep formundaki miktarı, stoktan düşülen kadar AZALT
           d.row.miktar = Math.max(0, +(d.row.miktar - take).toFixed(3));
+          d.row.stok_dusum = take;   // takip formunda görünsün
           deducted++;
           totalTaken += take;
         } catch(e){ console.error('deduct fail',d.cat.urun,e); }
@@ -2420,9 +2467,44 @@ async function saveProcCatalog(){
     }
   }
 
+  // Standart boy yuvarlaması:
+  //  - IPE / HEA / HEB / UNP profilleri 12 metre boylarda satılır
+  //  - KUTU PROFİL ve BORU 6 metre boylarda satılır
+  // Talep formundaki miktar bu boyların katlarına yukarı yuvarlanır
+  const STD_BOY = {
+    'IPE': 12, 'HEA': 12, 'HEB': 12, 'UNP': 12,
+    'KUTUPROFIL': 6, 'KUTUPROFİL': 6, 'KUTU': 6,
+    'BORU': 6
+  };
+  let roundedCount = 0;
+  const roundedDetail = [];
+  for(const r of rows){
+    if(r.birim !== 'm' || !(r.miktar > 0)) continue;
+    const cat = stockItems.find(x => x.id === r.catalog_id);
+    const tag = (cat?.kategori || '').toUpperCase().replace(/\s+/g,'');
+    const urunPrefix = (cat?.urun || r.malzeme || '').toUpperCase().replace(/\s+/g,'').slice(0,3);
+    const boy = STD_BOY[tag] || STD_BOY[urunPrefix];
+    if(!boy) continue;
+    const yeni = Math.ceil(r.miktar / boy) * boy;
+    if(yeni > r.miktar){
+      roundedDetail.push(`${r.malzeme}: ${r.miktar} → ${yeni} m (${boy}m boy)`);
+      r.miktar = yeni;
+      roundedCount++;
+    }
+  }
+
   // miktar = 0 olan satırlar → stoktan tam karşılandı, talep formuna eklenmez
   const finalRows = rows.filter(r => r.miktar > 0);
   const dropped = rows.length - finalRows.length;
+
+  // Kategoriye göre sırala (HEA, HEB, IPE, UNP, KUTU PROFİL, BORU, SAÇ) ve sira'yı yeniden ata
+  finalRows.sort((a,b) => {
+    const ca = stockItems.find(x=>x.id===a.catalog_id) || {kategori:'', urun:a.malzeme};
+    const cb = stockItems.find(x=>x.id===b.catalog_id) || {kategori:'', urun:b.malzeme};
+    return _byCatOrder(ca, cb);
+  });
+  let baseSira = procItems.length;
+  finalRows.forEach((r,i) => { r.sira = baseSira + i; });
 
   let insertedCount = 0;
   if(finalRows.length > 0){
@@ -2436,10 +2518,14 @@ async function saveProcCatalog(){
   if(insertedCount > 0) parts.push(`${insertedCount} kalem talep formuna eklendi`);
   if(deducted > 0) parts.push(`${deducted} kalemde stoktan düşüm`);
   if(dropped > 0) parts.push(`${dropped} kalem tamamen stoktan karşılandı`);
+  if(roundedCount > 0) parts.push(`${roundedCount} profil standart boya yuvarlandı`);
   toast(parts.join(' · ') || 'Ekleme yapılmadı', (insertedCount>0 || deducted>0) ? 'ok' : 'info');
+  if(roundedCount > 0){
+    setTimeout(()=>alert('ℹ️ Standart satış boyu uygulandı (IPE/HEA/HEB/UNP = 12m · KUTU PROFİL/BORU = 6m):\n\n' + roundedDetail.join('\n')), 400);
+  }
 
   closeProcCatalog();
-  _procSelected.clear(); _procPicked.clear();
+  _procSelected.clear(); _procPicked.clear(); _procPickedEbat.clear();
   await loadProcurement(_procProjectId);
   if(insertedCount > 0){
     try { const proj = projects.find(p=>p.id===_procProjectId); await notify(`🛒 ${me.full_name} "${proj?.no} ${proj?.customer}" projesine ${insertedCount} satın alma kalemi ekledi`, '🛒', 'satinalma', 'project', _procProjectId); } catch(e){}
@@ -2625,7 +2711,7 @@ function printProcurement(){
     const stat = c.durum==='tamamlandi'?'🟢 Tamam':(c.durum==='kismi'?`🟡 %${Math.round(c.gelen/parseFloat(it.miktar)*100)}`:'🔴 Bekliyor');
     return `<tr>
       <td class="ctr">${i+1}</td>
-      <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <small>(${esc(it.ebat)})</small>`:''}</td>
+      <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <small>(${esc(it.ebat)})</small>`:''}${(+it.stok_dusum>0)?`<br><span style="font-size:8.5pt;color:#0a7;background:#e8f5e9;padding:1px 6px;border-radius:8px">📦 Stoktan ${(+it.stok_dusum).toLocaleString('tr-TR',{maximumFractionDigits:2})} ${esc(it.birim)}</span>`:''}</td>
       <td>${parseFloat(it.miktar).toLocaleString('tr-TR')} ${esc(it.birim)}${c.toplamKg>0?`<br><small>${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`:''}</td>
       <td>${parseFloat(it.birim_fiyat).toLocaleString('tr-TR')} ₺/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</td>
       <td>${c.tutar.toLocaleString('tr-TR',{maximumFractionDigits:2})} ₺</td>
@@ -2701,7 +2787,7 @@ function exportProcTalepFormu(){
   const rows = procItems.map((it,i)=>`
     <tr>
       <td class="no">${i+1}.</td>
-      <td class="lft"><b>${esc(it.malzeme)}</b></td>
+      <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <span style="font-size:9pt;color:#1f4e8c">— ${esc(it.ebat)}</span>`:''}</td>
       <td>${parseFloat(it.miktar).toLocaleString('tr-TR')}</td>
       <td>${esc(it.birim||'mt')}</td>
       <td class="lft">${esc(it.not_text||'')}</td>
