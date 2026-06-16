@@ -2,14 +2,15 @@
 // Strateji: HTML/JS için NETWORK-FIRST → her zaman taze sürüm, offline ise cache.
 // Görseller için CACHE-FIRST (statik).
 
-const CACHE_NAME = 'ucel-v55';
+const CACHE_NAME = 'ucel-v56';
 const STATIC_ASSETS = [
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
   './apple-touch-icon.png',
   './favicon-32.png',
-  './ucel-logo.png'
+  './ucel-logo.png',
+  './ucel-footer.png'
 ];
 
 self.addEventListener('install', (event) => {

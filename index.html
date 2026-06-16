@@ -2696,26 +2696,10 @@ function _pdfLogo(){
   return `<img src="${url}" alt="ÜÇEL Steel Construction" style="height:64px;width:auto;display:block">`;
 }
 function _pdfFooter(){
-  return `
-    <div class="footer">
-      <div class="certs">
-        <div class="cert-row">
-          <div class="cert"><span class="bg ce">CE</span></div>
-          <div class="cert"><span class="bg">IAF</span></div>
-          <div class="cert"><span class="bg">ISO</span><div style="font-size:6pt;color:#888;margin-top:1px">9001</div></div>
-          <div class="cert"><span class="bg">ISO</span><div style="font-size:6pt;color:#888;margin-top:1px">3834-2</div></div>
-          <div class="cert"><span class="bg">TÜV</span><div style="font-size:6pt;color:#888;margin-top:1px">AUSTRIA</div></div>
-        </div>
-        <div class="contact">
-          Tel: + (90) 332 <span class="num">345 15 99</span><br>
-          E-posta: <a href="mailto:bilgi@ucelmetal.net">bilgi@ucelmetal.net</a>
-        </div>
-      </div>
-      <div class="addr-bar">
-        <span>Fevzi Çakmak Mah. Loras Cad. No:5/I-J-K (Zümer-1 Sanayi Sitesi) Karatay/KONYA</span>
-        <a href="https://www.ucelmetal.net">www.ucelmetal.net</a>
-      </div>
-    </div>`;
+  // Kurumsal kimlik kılavuzundan alınmış resmi alt bant
+  const base = window.location.href.replace(/[^/]*$/, '');
+  const url = base + 'ucel-footer.png';
+  return `<div class="footer"><img src="${url}" alt="ÜÇEL Sertifikalar ve İletişim" style="width:100%;display:block"></div>`;
 }
 function _pdfHeader(title1, title2){
   return `<div class="hdr">${_pdfLogo()}<div class="doc-title"><div class="t1">${esc(title1)}</div><div class="t2">${esc(title2)}</div></div></div>`;
@@ -2824,7 +2808,6 @@ function exportProcTalepFormu(){
         <span>PROJE NO: ${esc(proj?.no||'')}</span>
         <span>TARİH: ${today}</span>
       </div>
-      ${proj?.customer ? `<div style="font-size:11pt;font-weight:700;margin-bottom:6px">MÜŞTERİ: ${esc(proj.customer)}</div>` : ''}
       <div class="desc">Aşağıda belirtilen malzeme listesi için fiyat teklifinizi ve termin sürenizi bekliyoruz.</div>
       <table class="frm">
         <thead><tr>
