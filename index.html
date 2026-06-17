@@ -224,6 +224,9 @@ tr.click{cursor:pointer}
   .topbar-refresh-txt{display:none !important}
   #topbarRefreshBtn{padding:6px 8px !important}
 }
+/* Rol bazlı görünürlük — Yetki kontrolü */
+body:not(.role-admin) .admin-only{display:none !important}
+body:not(.role-admin):not(.role-teklifproje) .proj-edit-only{display:none !important}
 /* Takip formu tam ekran modu */
 #procureBox.fullscreen{position:fixed !important;top:0;left:0;right:0;bottom:0;z-index:9000;border-radius:0 !important;margin:0 !important;max-width:100vw;max-height:100vh;display:flex !important;flex-direction:column}
 #procureBox.fullscreen #procList{flex:1;max-height:none !important}
@@ -423,7 +426,7 @@ body.proc-fullscreen{overflow:hidden}
       <div class="page" id="page-mytasks">
         <div class="page-h">
           <div><div class="page-title">Görevlerim</div><div class="page-sub" id="mtSub">-</div></div>
-          <div><button class="btn" onclick="openTask()">+ Yeni Görev</button></div>
+          <div><button class="btn admin-only" onclick="openTask()">+ Yeni Görev</button></div>
         </div>
         <div id="myList"></div>
       </div>
@@ -440,7 +443,7 @@ body.proc-fullscreen{overflow:hidden}
         <div id="d-teklifproje"></div>
       </div>
       <div class="page" id="page-d-satinalma">
-        <div class="page-h"><div><div class="page-title">🛒 Satın Alma</div><div class="page-sub">Sipariş ve tedarikçi — projeler üzerinden takip et</div></div><div><button class="btn" onclick="openTask('satinalma')">+ Yeni Görev</button></div></div>
+        <div class="page-h"><div><div class="page-title">🛒 Satın Alma</div><div class="page-sub">Sipariş ve tedarikçi — projeler üzerinden takip et</div></div><div><button class="btn admin-only" onclick="openTask('satinalma')">+ Yeni Görev</button></div></div>
         <div class="banner warn" id="b-satinalma"></div>
         <div class="kpi-grid" id="dk-satinalma"></div>
         <div style="background:#eef6ff;border:1px solid #b9d7f5;padding:14px 18px;border-radius:10px;margin:14px 0;font-size:13px;color:#1f4e8c">
@@ -450,7 +453,7 @@ body.proc-fullscreen{overflow:hidden}
         <div class="section-h"><h2>Görevler</h2></div>
         <div id="d-satinalma"></div>
       </div>
-      <div class="page" id="page-d-stok"><div class="page-h"><div><div class="page-title">📦 Stok</div><div class="page-sub">Hammadde ve ara mamul</div></div><div><button class="btn" onclick="openTask('stok')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-stok"></div><div class="kpi-grid" id="dk-stok"></div>
+      <div class="page" id="page-d-stok"><div class="page-h"><div><div class="page-title">📦 Stok</div><div class="page-sub">Hammadde ve ara mamul</div></div><div><button class="btn admin-only" onclick="openTask('stok')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-stok"></div><div class="kpi-grid" id="dk-stok"></div>
 
         <div id="stockListBox" style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);overflow:hidden;margin:14px 0">
           <div onclick="toggleStockList()" style="padding:12px 16px;background:#fafbfd;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;cursor:pointer;user-select:none" title="Tıkla: aç/kapat">
@@ -481,10 +484,10 @@ body.proc-fullscreen{overflow:hidden}
           <div id="stockFilesList" style="padding:6px"></div>
         </div>
         <div class="section-h"><h2>Görevler</h2></div><div id="d-stok"></div></div>
-      <div class="page" id="page-d-uretim"><div class="page-h"><div><div class="page-title">🔧 Üretim</div><div class="page-sub">Atölye ve emirler</div></div><div><button class="btn" onclick="openTask('uretim')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-uretim"></div><div class="kpi-grid" id="dk-uretim"></div><div class="section-h"><h2>Görevler</h2></div><div id="d-uretim"></div></div>
-      <div class="page" id="page-d-sevk"><div class="page-h"><div><div class="page-title">🚚 Sevkiyat</div><div class="page-sub">Sevk planı ve lojistik</div></div><div><button class="btn" onclick="openTask('sevk')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-sevk"></div><div class="kpi-grid" id="dk-sevk"></div><div class="section-h"><h2>Görevler</h2></div><div id="d-sevk"></div></div>
-      <div class="page" id="page-d-montaj"><div class="page-h"><div><div class="page-title">🏗️ Saha Montajı</div><div class="page-sub">Şantiye ve günlük rapor</div></div><div><button class="btn" onclick="openTask('montaj')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-montaj"></div><div class="kpi-grid" id="dk-montaj"></div><div class="section-h"><h2>Görevler</h2></div><div id="d-montaj"></div></div>
-      <div class="page" id="page-d-muhasebe"><div class="page-h"><div><div class="page-title">💰 Muhasebe</div><div class="page-sub">Fatura ve tahsilat</div></div><div><button class="btn" onclick="openTask('muhasebe')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-muhasebe"></div><div class="kpi-grid" id="dk-muhasebe"></div><div class="section-h"><h2>Görevler</h2></div><div id="d-muhasebe"></div></div>
+      <div class="page" id="page-d-uretim"><div class="page-h"><div><div class="page-title">🔧 Üretim</div><div class="page-sub">Atölye ve emirler</div></div><div><button class="btn admin-only" onclick="openTask('uretim')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-uretim"></div><div class="kpi-grid" id="dk-uretim"></div><div class="section-h"><h2>Görevler</h2></div><div id="d-uretim"></div></div>
+      <div class="page" id="page-d-sevk"><div class="page-h"><div><div class="page-title">🚚 Sevkiyat</div><div class="page-sub">Sevk planı ve lojistik</div></div><div><button class="btn admin-only" onclick="openTask('sevk')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-sevk"></div><div class="kpi-grid" id="dk-sevk"></div><div class="section-h"><h2>Görevler</h2></div><div id="d-sevk"></div></div>
+      <div class="page" id="page-d-montaj"><div class="page-h"><div><div class="page-title">🏗️ Saha Montajı</div><div class="page-sub">Şantiye ve günlük rapor</div></div><div><button class="btn admin-only" onclick="openTask('montaj')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-montaj"></div><div class="kpi-grid" id="dk-montaj"></div><div class="section-h"><h2>Görevler</h2></div><div id="d-montaj"></div></div>
+      <div class="page" id="page-d-muhasebe"><div class="page-h"><div><div class="page-title">💰 Muhasebe</div><div class="page-sub">Fatura ve tahsilat</div></div><div><button class="btn admin-only" onclick="openTask('muhasebe')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-muhasebe"></div><div class="kpi-grid" id="dk-muhasebe"></div><div class="section-h"><h2>Görevler</h2></div><div id="d-muhasebe"></div></div>
 
       <div class="page" id="page-team">
         <div class="page-h"><div><div class="page-title">👥 Ekip</div><div class="page-sub">Tüm çalışanlar</div></div></div>
@@ -856,8 +859,8 @@ body.proc-fullscreen{overflow:hidden}
             <button class="btn sec sm" type="button" onclick="exportProcTalepFormu()" title="Tedarikçiye gönderilecek PDF Talep Formu">📋 Talep PDF</button>
             <button class="btn sec sm" type="button" onclick="printProcurement()" title="Detaylı rapor (yazdır/PDF)">🖨️</button>
             <button class="btn sec sm" type="button" onclick="exportProcurementExcel()" title="Detaylı Excel">📥</button>
-            <button class="btn sec sm" type="button" onclick="openProcCatalog()">📚 Katalog</button>
-            <button class="btn sm" type="button" onclick="openProcNew()">+ Manuel</button>
+            <button class="btn sec sm" type="button" id="procCatBtn" onclick="openProcCatalog()">📚 Katalog</button>
+            <button class="btn sm" type="button" id="procNewBtn" onclick="openProcNew()">+ Manuel</button>
           </div>
         </div>
         <div id="procSummaryBar" style="padding:6px 14px;background:#fcfdff;border-bottom:1px solid var(--bd);font-size:11px;color:#666"></div>
@@ -904,7 +907,7 @@ body.proc-fullscreen{overflow:hidden}
     <div class="modal-f">
       <button class="btn err" id="tfDel" style="margin-right:auto;display:none" onclick="delTask()">🗑 Sil</button>
       <button class="btn sec" onclick="closeTask()">Vazgeç</button>
-      <button class="btn ok" onclick="saveTask()">💾 Kaydet</button>
+      <button class="btn ok" id="tfSave" onclick="saveTask()">💾 Kaydet</button>
     </div>
   </div>
 </div>
@@ -1105,6 +1108,9 @@ async function initApp(){
     if(!me){throw new Error('Profil yok')}
     document.getElementById('aNameTxt').textContent=me.full_name||'?';
     document.getElementById('aSub').textContent=me.label||'';
+    // Rol bazlı body class'ı — yetki kontrolü CSS ile
+    document.body.classList.remove('role-admin','role-teklifproje','role-satinalma','role-stok','role-uretim','role-sevk','role-montaj','role-muhasebe');
+    document.body.classList.add('role-' + (me.role === 'yonetici' ? 'admin' : me.role));
     const sa=document.querySelector('.auth-strip .left');
     let av=document.querySelector('.auth-strip .av');
     if(!av){av=document.createElement('div');av.className='av';sa.insertBefore(av,sa.querySelector('div:last-child'))}
@@ -1697,7 +1703,7 @@ function renderTL(arr){
         </div>
       </div>
       <span class="av-mini" style="background:${a.color}" title="${esc(a.full_name)}">${a.initials}</span>
-      <div class="task-actions"><button class="icon-btn" onclick="openTask(null,'${t.id}')">✏️</button></div>
+      <div class="task-actions"><button class="icon-btn admin-only" onclick="openTask(null,'${t.id}')">✏️</button></div>
     </div>`;
   }).join('');
 }
@@ -2210,8 +2216,8 @@ function renderProcDetail(it, c){
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn sec sm" onclick="openProcDeliv('${it.id}')">+ Teslimat</button>
-        <button class="btn sec sm" onclick="editProcItem('${it.id}')">✏️ Düzenle</button>
-        <button class="btn err sm" onclick="deleteProcItem('${it.id}')">🗑 Sil</button>
+        <button class="btn sec sm proj-edit-only" onclick="editProcItem('${it.id}')">✏️ Düzenle</button>
+        <button class="btn err sm proj-edit-only" onclick="deleteProcItem('${it.id}')">🗑 Sil</button>
       </div>
     </div>
     <div style="margin-bottom:10px;padding:10px 12px;background:#fff8e1;border-radius:8px;border:1px dashed #f1c40f">
@@ -3651,11 +3657,27 @@ function openProj(id){
   editP=id||null;
   const sel=document.getElementById('pf-own');
   sel.innerHTML=Object.values(allProfiles).map(u=>`<option value="${u.id}">${u.label} - ${u.full_name}</option>`).join('');
-  // Sorumlu alanı sadece yönetici için düzenlenebilir
   const isAdmin = me?.role === 'yonetici';
+  const canEditProject = isAdmin || me?.role === 'teklifproje';
+  const canManageMaterial = canEditProject;  // Aynı kişiler malzemeyi de yönetir
+  // Sorumlu alanı sadece yönetici için düzenlenebilir
   sel.disabled = !isAdmin;
   sel.style.background = isAdmin ? '' : '#f5f7fa';
   sel.title = isAdmin ? '' : 'Sorumlu yönetici tarafından (aşama seçimine göre otomatik) atanır';
+  // Proje düzenleme yetkisi: yonetici + teklifproje. Diğerleri sadece görür (input disabled).
+  ['pf-no','pf-cust','pf-title','pf-loc','pf-amt','pf-ton','pf-ship','pf-prog','pf-notes'].forEach(f=>{
+    const el = document.getElementById(f); if(!el) return;
+    el.disabled = !canEditProject;
+    el.style.background = canEditProject ? '' : '#f5f7fa';
+  });
+  // Kaydet ve Sil butonlarını yetkiye göre göster/gizle
+  const pfSave = document.getElementById('pfSave');
+  if(pfSave) pfSave.style.display = canEditProject ? 'inline-flex' : 'none';
+  // Malzeme ekleme butonları (Katalog / Manuel)
+  const catBtn = document.getElementById('procCatBtn');
+  const newBtn = document.getElementById('procNewBtn');
+  if(catBtn) catBtn.style.display = canManageMaterial ? 'inline-flex' : 'none';
+  if(newBtn) newBtn.style.display = canManageMaterial ? 'inline-flex' : 'none';
   if(id){
     const p=projects.find(x=>x.id===id);if(!p)return;
     document.getElementById('pmTitle').textContent='Proje Düzenle';
@@ -3947,6 +3969,12 @@ async function delProj(){
 
 /* ============ TASK CRUD ============ */
 function openTask(dept,id){
+  // YETKİ: Görev oluşturma/güncelleme sadece yönetici
+  const isAdmin = me?.role === 'yonetici';
+  if(!isAdmin){
+    alert('⛔ Görev oluşturma/düzenleme yetkin yok.\n\nGörevleri yalnızca YÖNETİCİ açıp güncelleyebilir.');
+    return;
+  }
   editT=id||null;
   const ass=document.getElementById('tf-as');
   ass.innerHTML=Object.values(allProfiles).map(u=>`<option value="${u.id}">${u.label} - ${u.full_name}</option>`).join('');
