@@ -548,6 +548,16 @@ body.proc-fullscreen{overflow:hidden}
             Yedek dosyası: <code>ucel-yedek-YYYY-AA-GG.json</code> — projeler, görevler, satın almalar, teslimatlar, stok, sohbet ve bildirimler dahil.
           </div>
         </div>
+
+        <!-- BAKIM / DENETİM -->
+        <div style="background:#fff;margin-top:16px;padding:18px;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);border:1.5px solid #cfdbe7">
+          <div style="font-weight:700;color:#1f4e8c;margin-bottom:10px">🛠️ Bakım ve Denetim</div>
+          <div style="font-size:12px;color:#555;margin-bottom:12px">
+            Eski bildirimleri arşivle, sistemdeki önemli işlemlerin geçmişini gör.
+          </div>
+          <button class="btn sec sm" onclick="cleanupOldNotifications()" title="90 günden eski bildirimleri sil">🗑 90+ gün Bildirim Temizle</button>
+          <button class="btn sec sm" onclick="showAuditLog()" style="margin-left:6px" title="Önemli işlem geçmişi">📋 Denetim Kaydı</button>
+        </div>
       </div>
 
       <div class="page" id="page-site-reports">
@@ -1117,6 +1127,8 @@ async function initApp(){
     // Rol bazlı body class'ı — yetki kontrolü CSS ile
     document.body.classList.remove('role-admin','role-teklifproje','role-satinalma','role-stok','role-uretim','role-sevk','role-montaj','role-muhasebe');
     document.body.classList.add('role-' + (me.role === 'yonetici' ? 'admin' : me.role));
+    // Haftalık yedek hatırlatma (yönetici için)
+    setTimeout(()=>_checkWeeklyBackupReminder(), 3000);
     const sa=document.querySelector('.auth-strip .left');
     let av=document.querySelector('.auth-strip .av');
     if(!av){av=document.createElement('div');av.className='av';sa.insertBefore(av,sa.querySelector('div:last-child'))}
@@ -1433,6 +1445,96 @@ function toggleProcFullscreen(){
   }
 }
 
+// === AUDIT LOG ===
+// Önemli işlemleri (proje silme, fiyat değişimi, stok düşümü) audit_log tablosuna yaz
+async function logAudit(action, entityType, entityId, entityLabel, details){
+  try {
+    await sb.from('audit_log').insert({
+      user_id: me?.id,
+      user_name: me?.full_name || '',
+      action,
+      entity_type: entityType || null,
+      entity_id: entityId || null,
+      entity_label: entityLabel || null,
+      details: details || null
+    });
+  } catch(e){ console.warn('audit log:', e); }
+}
+
+// === HAFTALIK YEDEK HATIRLATMA ===
+// Yönetici her Cumartesi giriş yaptığında ve son yedek 6+ gün önce ise hatırlatma çıksın
+function _checkWeeklyBackupReminder(){
+  if(me?.role !== 'yonetici') return;
+  const lastBackup = +localStorage.getItem('ucelLastBackup') || 0;
+  const now = Date.now();
+  const sixDaysMs = 6 * 24 * 60 * 60 * 1000;
+  if(now - lastBackup < sixDaysMs) return;  // Son yedek 6 günden az
+  // Cumartesi/Pazar günü hatırlat
+  const day = new Date().getDay();
+  if(day !== 6 && day !== 0) return;
+  // Bu hafta zaten gösterildi mi?
+  const lastReminder = +localStorage.getItem('ucelLastBackupReminder') || 0;
+  if(now - lastReminder < 3 * 24 * 60 * 60 * 1000) return;
+  localStorage.setItem('ucelLastBackupReminder', String(now));
+  setTimeout(()=>{
+    if(confirm('💾 HAFTALIK YEDEK HATIRLATMASI\n\nSon yedek alınalı 7 günden uzun. Verilerin güvenliği için tam yedek alman önerilir.\n\nŞimdi yedek al?\n\n  ✓ TAMAM → Ayarlar > 📥 Tam Veri Yedeği\n  ✕ İPTAL → Sonra')){
+      goto('settings');
+      setTimeout(()=>{ const btn = document.querySelector('button[onclick="downloadFullBackup()"]'); if(btn) btn.scrollIntoView({behavior:'smooth',block:'center'}); }, 300);
+    }
+  }, 5000);
+}
+
+// === BİLDİRİM ARŞİVİ — 90+ gün eski okunmuş bildirimleri sil ===
+async function showAuditLog(){
+  if(me?.role !== 'yonetici'){ toast('Sadece yönetici','err'); return; }
+  try {
+    const {data, error} = await sb.from('audit_log').select('*').order('created_at',{ascending:false}).limit(200);
+    if(error) throw error;
+    const rows = (data||[]).map(r=>{
+      const dt = new Date(r.created_at).toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      const det = r.details ? `<small style="color:#888">${esc(JSON.stringify(r.details))}</small>` : '';
+      return `<tr><td style="padding:6px 8px;font-size:11px;white-space:nowrap">${dt}</td><td style="padding:6px 8px;font-size:12px">${esc(r.user_name||'')}</td><td style="padding:6px 8px;font-size:12px;color:#1f4e8c"><b>${esc(r.action)}</b></td><td style="padding:6px 8px;font-size:12px">${esc(r.entity_type||'')} ${esc(r.entity_label||'')}</td><td style="padding:6px 8px">${det}</td></tr>`;
+    }).join('');
+    const html = `
+      <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)this.remove()">
+        <div style="background:#fff;border-radius:12px;max-width:1100px;width:100%;max-height:90vh;display:flex;flex-direction:column">
+          <div style="padding:14px 18px;border-bottom:1px solid #eef0f5;display:flex;justify-content:space-between;align-items:center">
+            <h3 style="margin:0;color:#1f4e8c">📋 Denetim Kaydı (Son 200 işlem)</h3>
+            <button onclick="this.closest('div[style*=&quot;position:fixed&quot;]').remove()" style="background:transparent;border:none;font-size:20px;cursor:pointer;color:#888">✕</button>
+          </div>
+          <div style="overflow:auto;flex:1">
+            <table style="width:100%;border-collapse:collapse">
+              <thead><tr style="background:#1f4e8c;color:#fff;position:sticky;top:0">
+                <th style="padding:8px;text-align:left;font-size:11px">TARİH</th>
+                <th style="padding:8px;text-align:left;font-size:11px">KULLANICI</th>
+                <th style="padding:8px;text-align:left;font-size:11px">İŞLEM</th>
+                <th style="padding:8px;text-align:left;font-size:11px">HEDEF</th>
+                <th style="padding:8px;text-align:left;font-size:11px">DETAY</th>
+              </tr></thead>
+              <tbody>${rows || '<tr><td colspan="5" style="padding:30px;text-align:center;color:#888">Henüz kayıt yok</td></tr>'}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    document.body.appendChild(div.firstElementChild);
+  } catch(e){ toast('Denetim kaydı yüklenemedi: '+e.message,'err'); }
+}
+
+async function cleanupOldNotifications(){
+  if(me?.role !== 'yonetici'){ toast('Sadece yönetici','err'); return; }
+  if(!confirm('90 günden eski tüm bildirimler kalıcı silinecek.\n\nDevam edilsin mi?')) return;
+  try {
+    const {data, error} = await sb.rpc('cleanup_old_notifications');
+    if(error) throw error;
+    toast(`✅ ${data || 0} eski bildirim silindi`, 'ok');
+    await logAudit('cleanup_notifications', 'notifications', null, '90 gün eski temizlik', {deleted: data});
+    await loadNotifs();
+    renderNotifs();
+  } catch(e){ toast('Temizlik hatası: '+e.message,'err'); }
+}
+
 async function downloadFullBackup(){
   if(me?.role !== 'yonetici'){ toast('Yalnız yönetici yedek alabilir','err'); return; }
   toast('Yedek alınıyor… (10-30 sn)','info');
@@ -1451,6 +1553,8 @@ async function downloadFullBackup(){
   a.href = url; a.download = `ucel-yedek-${new Date().toISOString().slice(0,10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
+  localStorage.setItem('ucelLastBackup', String(Date.now()));
+  await logAudit('backup_json', null, null, 'Tam veri yedeği indirildi', {tables: Object.keys(backup.tables).length});
   toast('✅ Yedek bilgisayara indirildi','ok');
 }
 async function downloadExcelBackup(){
@@ -4039,6 +4143,7 @@ async function delProj(){
   const {error} = await sb.from('projects').delete().eq('id', editP);
   if(error){ toast('Hata: '+error.message,'err'); return; }
   await notify(`🗑️ Yönetici ${me.full_name} "${inf}" projesini sildi`, '🗑️', 'system');
+  await logAudit('project_delete', 'project', editP, inf, {no: p?.no, customer: p?.customer});
   toast('Proje silindi','w'); closeProj();
 }
 
