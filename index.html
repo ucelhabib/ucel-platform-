@@ -575,7 +575,11 @@ body.proc-fullscreen{overflow:hidden}
         </div>
         <div style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);display:flex;flex-direction:column;height:calc(100vh - 200px);min-height:400px">
           <div id="chatList" style="flex:1;overflow-y:auto;padding:16px 18px"></div>
-          <div style="padding:10px 14px;border-top:1px solid var(--bd);background:#fafbfd;display:flex;gap:8px">
+          <div id="chatAttachPreview" style="display:none;padding:6px 14px;border-top:1px solid var(--bd);background:#fff7e0;font-size:12px"></div>
+          <div style="padding:10px 14px;border-top:1px solid var(--bd);background:#fafbfd;display:flex;gap:8px;align-items:center">
+            <label class="btn sec sm" style="cursor:pointer;padding:8px 10px" title="Dosya/resim ekle">📎
+              <input type="file" id="chatFile" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.dwg" style="display:none" onchange="onChatFilePick(this)">
+            </label>
             <input id="chatInput" type="text" placeholder="Mesajını yaz, Enter'a bas..." style="flex:1;padding:8px 12px;border:1px solid var(--bd);border-radius:8px" maxlength="2000">
             <button class="btn" onclick="sendChat()">Gönder</button>
           </div>
@@ -1890,25 +1894,81 @@ function renderChat(){
     const isMe = m.sender_id === me?.id;
     const t = new Date(m.created_at);
     const time = t.toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    let attachHtml = '';
+    if(m.attachment_url){
+      const isImg = (m.attachment_type||'').startsWith('image/');
+      const fname = m.attachment_name || 'dosya';
+      if(isImg){
+        attachHtml = `<a href="${esc(m.attachment_url)}" target="_blank" style="display:block;margin-top:6px"><img src="${esc(m.attachment_url)}" style="max-width:280px;max-height:280px;border-radius:8px;display:block" alt="${esc(fname)}"></a>`;
+      } else {
+        attachHtml = `<a href="${esc(m.attachment_url)}" target="_blank" download="${esc(fname)}" style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:6px 10px;background:${isMe?'rgba(255,255,255,.18)':'#fff'};border:1px solid ${isMe?'rgba(255,255,255,.3)':'#cdd2dc'};border-radius:8px;text-decoration:none;color:${isMe?'#fff':'#1f4e8c'};font-size:12px;font-weight:600">📎 ${esc(fname)}</a>`;
+      }
+    }
     return `<div style="display:flex;gap:10px;padding:8px 0;align-items:flex-start;${isMe?'flex-direction:row-reverse':''}">
       <div style="width:34px;height:34px;border-radius:50%;background:${u.color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0">${esc(u.initials)}</div>
       <div style="max-width:70%">
         <div style="font-size:11px;color:var(--m);margin-bottom:2px;${isMe?'text-align:right':''}">${esc(u.full_name)} · ${time}</div>
-        <div style="background:${isMe?'#1f4e8c':'#eef2f7'};color:${isMe?'#fff':'#222'};padding:8px 12px;border-radius:12px;white-space:pre-wrap;word-wrap:break-word">${esc(m.text)}</div>
+        <div style="background:${isMe?'#1f4e8c':'#eef2f7'};color:${isMe?'#fff':'#222'};padding:8px 12px;border-radius:12px;white-space:pre-wrap;word-wrap:break-word">${m.text?esc(m.text):''}${attachHtml}</div>
       </div>
     </div>`;
   }).join('');
   el.scrollTop = el.scrollHeight;
 }
+
+let _chatPendingFile = null;
+function onChatFilePick(inp){
+  const f = inp.files && inp.files[0];
+  if(!f) return;
+  if(f.size > 20 * 1024 * 1024){
+    toast('Dosya en fazla 20 MB olabilir','err');
+    inp.value = '';
+    return;
+  }
+  _chatPendingFile = f;
+  const prev = document.getElementById('chatAttachPreview');
+  if(prev){
+    prev.style.display = 'block';
+    prev.innerHTML = `<div style="display:flex;align-items:center;gap:8px"><span>📎</span><strong>${esc(f.name)}</strong> <small style="color:#888">(${(f.size/1024).toFixed(0)} KB)</small><button onclick="cancelChatFile()" style="margin-left:auto;background:transparent;border:1px solid #c33;color:#c33;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer">✕ Kaldır</button></div>`;
+  }
+}
+function cancelChatFile(){
+  _chatPendingFile = null;
+  document.getElementById('chatFile').value = '';
+  const prev = document.getElementById('chatAttachPreview');
+  if(prev){ prev.style.display = 'none'; prev.innerHTML = ''; }
+}
+
 async function sendChat(){
   const input = document.getElementById('chatInput');
   const txt = input.value.trim();
-  if(!txt) return;
+  const file = _chatPendingFile;
+  if(!txt && !file) return;
   input.value = '';
-  const {error} = await sb.from('messages').insert({sender_id: me.id, text: txt});
+  let attachment_url = null, attachment_name = null, attachment_type = null;
+  if(file){
+    try {
+      const ts = Date.now();
+      const safe = file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+      const path = `chat/${me.id}/${ts}_${safe}`;
+      const { error: upErr } = await sb.storage.from('project-files').upload(path, file, { upsert: false, contentType: file.type });
+      if(upErr) throw upErr;
+      const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path);
+      attachment_url = urlData?.publicUrl || null;
+      attachment_name = file.name;
+      attachment_type = file.type;
+    } catch(e){
+      toast('Dosya yüklenemedi: '+(e.message||e),'err');
+      input.value = txt;
+      return;
+    }
+    cancelChatFile();
+  }
+  const {error} = await sb.from('messages').insert({sender_id: me.id, text: txt, attachment_url, attachment_name, attachment_type});
   if(error){toast('Mesaj gönderilemedi: '+error.message,'err');input.value = txt;return}
-  // Bildirim de gitsin (yöneticiye ve diğer birimlere)
-  try { await notify(`💬 ${me.full_name}: ${txt.length>80?txt.slice(0,80)+'...':txt}`, '💬', 'system'); } catch(e){}
+  try {
+    const preview = attachment_url ? `📎 ${attachment_name||'dosya'} ${txt?'· '+txt:''}` : txt;
+    await notify(`💬 ${me.full_name}: ${preview.length>80?preview.slice(0,80)+'...':preview}`, '💬', 'system');
+  } catch(e){}
 }
 function updateChatBadge(){
   const unread = chatMessages.filter(m=> m.sender_id !== me?.id && new Date(m.created_at).getTime() > chatLastSeenAt).length;
