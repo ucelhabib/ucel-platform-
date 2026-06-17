@@ -2149,41 +2149,30 @@ function renderProcList(){
     if(c.durum==='tamamlandi') gelenSayi++; else eksikSayi++;
     const expanded = _procExpanded.has(it.id);
     const detail = expanded ? renderProcDetail(it, c) : '';
+    const fmt = v=>(+v).toLocaleString('tr-TR',{maximumFractionDigits:2});
+    const siparis = parseFloat(it.miktar) || 0;
+    const stokDusum = +it.stok_dusum || 0;
+    const ihtiyac = (+it.original_ihtiyac) || (siparis + stokDusum);
+    const yuvarlama = (siparis + stokDusum) - ihtiyac;
     return `<div style="border-bottom:1px solid #eef0f5">
-      <div style="display:grid;grid-template-columns:30px 1fr 100px 90px 80px 120px 100px 100px;gap:6px;align-items:center;padding:8px 10px;cursor:pointer;font-size:13px" onclick="toggleProcExpand('${it.id}')">
+      <div style="display:grid;grid-template-columns:24px 1fr 70px 70px 75px 75px 50px 95px 75px 75px;gap:5px;align-items:center;padding:8px 10px;cursor:pointer;font-size:12.5px" onclick="toggleProcExpand('${it.id}')">
         <div style="text-align:center;color:#888;font-size:12px">${expanded?'▼':'▶'}<br><small style="font-weight:700">${i+1}</small></div>
-        <div style="font-weight:600;font-size:13px">${esc(it.malzeme)}${it.ebat?` <span style="font-size:11px;color:#888">(${esc(it.ebat)})</span>`:''}${(+it.stok_dusum>0)?`<div style="display:inline-block;margin-left:6px;font-size:10px;color:#0a7;background:#e8f5e9;padding:1px 8px;border-radius:10px;font-weight:600">📦 Stoktan ${(+it.stok_dusum).toLocaleString('tr-TR',{maximumFractionDigits:2})} ${esc(it.birim)} düşüldü</div>`:''}</div>
-        <div style="text-align:right;font-size:13px">${(()=>{
-          const fmt = v=>(+v).toLocaleString('tr-TR',{maximumFractionDigits:2});
-          const siparis = parseFloat(it.miktar) || 0;
-          const stokDusum = +it.stok_dusum || 0;
-          const ihtiyac = (+it.original_ihtiyac) || (siparis + stokDusum); // geriye uyum
-          const yuvarlama = (siparis + stokDusum) - ihtiyac; // pozitifse yuvarlama yapıldı
-          let html = `<strong>${fmt(siparis)} ${esc(it.birim)}</strong>`;
-          if(stokDusum > 0 || yuvarlama > 0 || ihtiyac !== siparis){
-            const parts = [];
-            if(stokDusum > 0) parts.push(`<span style="color:#0a7">+ ${fmt(stokDusum)} stoktan</span>`);
-            if(yuvarlama > 0.01) parts.push(`<span style="color:#c80">⤴ ${fmt(yuvarlama)} yuvarlama</span>`);
-            parts.push(`<span style="color:#1f4e8c;font-weight:600">🎯 ${fmt(ihtiyac)} ${esc(it.birim)} ihtiyaç</span>`);
-            html += '<br><small style="font-size:10px;line-height:1.4;display:inline-block;text-align:right">' + parts.join('<br>') + '</small>';
-          }
-          if(c.fiyatBirimi==='kg' && c.toplamKg>0){
-            html += `<br><small style="color:#888;font-size:11px">${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`;
-          }
-          return html;
-        })()}</div>
-        <div style="text-align:right;color:#444;font-size:13px">${parseFloat(it.birim_fiyat).toLocaleString('tr-TR')} ₺<br><small style="color:#888;font-size:11px">/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</small></div>
-        <div style="text-align:right;color:#666;font-size:12px">%${it.kdv_orani}</div>
+        <div style="font-weight:600;font-size:13px">${esc(it.malzeme)}${it.ebat?` <span style="font-size:11px;color:#888">(${esc(it.ebat)})</span>`:''}</div>
+        <div style="text-align:right;color:#1f4e8c;font-weight:600">🎯 ${fmt(ihtiyac)}<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} ihtiyaç</small></div>
+        <div style="text-align:right;color:#0a7;font-weight:600">${stokDusum>0?`📦 ${fmt(stokDusum)}`:'<span style="color:#bbb">—</span>'}${stokDusum>0?`<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} stoktan</small>`:''}</div>
+        <div style="text-align:right;font-weight:700">${fmt(siparis)} ${esc(it.birim)}${yuvarlama>0.01?`<br><small style="color:#c80;font-size:10px">⤴ +${fmt(yuvarlama)} yuv.</small>`:''}${c.fiyatBirimi==='kg' && c.toplamKg>0?`<br><small style="color:#888;font-size:10px">${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`:''}</div>
+        <div style="text-align:right;color:#444;font-size:12px">${parseFloat(it.birim_fiyat).toLocaleString('tr-TR')} ₺<br><small style="color:#888;font-size:10px">/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</small></div>
+        <div style="text-align:right;color:#666;font-size:11px">%${it.kdv_orani}</div>
         <div style="text-align:right;font-weight:700;color:#1f4e8c;font-size:13px">${c.net.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</div>
-        <div style="text-align:right;color:#0a7;font-size:13px">${c.gelen.toLocaleString('tr-TR')} ${esc(it.birim)}</div>
+        <div style="text-align:right;color:#0a7;font-size:12px">${c.gelen.toLocaleString('tr-TR')} ${esc(it.birim)}</div>
         <div style="text-align:center">${_statusBadge(c.durum, c.gelen, parseFloat(it.miktar))}</div>
       </div>
       ${detail}
     </div>`;
   }).join('');
   el.innerHTML = `
-    <div style="background:#f1f4f8;padding:8px 10px;display:grid;grid-template-columns:30px 1fr 100px 90px 80px 120px 100px 100px;gap:6px;font-size:11px;font-weight:700;color:#444;text-transform:uppercase;letter-spacing:0.3px">
-      <div></div><div>Malzeme</div><div style="text-align:right">Sipariş</div><div style="text-align:right">Br.Fiy</div><div style="text-align:right">KDV</div><div style="text-align:right">Net Tutar</div><div style="text-align:right">Gelen</div><div style="text-align:center">Durum</div>
+    <div style="background:#f1f4f8;padding:8px 10px;display:grid;grid-template-columns:24px 1fr 70px 70px 75px 75px 50px 95px 75px 75px;gap:5px;font-size:10.5px;font-weight:700;color:#444;text-transform:uppercase;letter-spacing:0.3px">
+      <div></div><div>Malzeme</div><div style="text-align:right">İhtiyaç</div><div style="text-align:right">Stoktan</div><div style="text-align:right">Sipariş</div><div style="text-align:right">Br.Fiy</div><div style="text-align:right">KDV</div><div style="text-align:right">Net Tutar</div><div style="text-align:right">Gelen</div><div style="text-align:center">Durum</div>
     </div>
     ${rows}`;
   const bar = document.getElementById('procSummaryBar');
@@ -2822,17 +2811,13 @@ function printProcurement(){
     const _stokDusum = +it.stok_dusum || 0;
     const _ihtiyac = (+it.original_ihtiyac) || (_siparis + _stokDusum);
     const _yuvarlama = (_siparis + _stokDusum) - _ihtiyac;
-    let _detail = '';
-    if(_stokDusum > 0 || _yuvarlama > 0.01){
-      _detail = '<br><small style="font-size:8pt;color:#1f4e8c;line-height:1.4">';
-      if(_stokDusum > 0) _detail += `<span style="color:#0a7">+ ${_stokDusum.toLocaleString('tr-TR',{maximumFractionDigits:2})} stoktan</span><br>`;
-      if(_yuvarlama > 0.01) _detail += `<span style="color:#c80">⤴ ${_yuvarlama.toLocaleString('tr-TR',{maximumFractionDigits:2})} yuvarlama</span><br>`;
-      _detail += `<b>🎯 ${_ihtiyac.toLocaleString('tr-TR',{maximumFractionDigits:2})} ${esc(it.birim)} ihtiyaç</b></small>`;
-    }
+    const _fmt = v=>(+v).toLocaleString('tr-TR',{maximumFractionDigits:2});
     return `<tr>
       <td class="ctr">${i+1}</td>
-      <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <small>(${esc(it.ebat)})</small>`:''}${(+it.stok_dusum>0)?`<br><span style="font-size:8.5pt;color:#0a7;background:#e8f5e9;padding:1px 6px;border-radius:8px">📦 Stoktan ${(+it.stok_dusum).toLocaleString('tr-TR',{maximumFractionDigits:2})} ${esc(it.birim)}</span>`:''}</td>
-      <td>${_siparis.toLocaleString('tr-TR')} ${esc(it.birim)}${_detail}${c.toplamKg>0?`<br><small>${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`:''}</td>
+      <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <small>(${esc(it.ebat)})</small>`:''}</td>
+      <td><b style="color:#1f4e8c">${_fmt(_ihtiyac)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small></td>
+      <td>${_stokDusum>0?`<b style="color:#0a7">${_fmt(_stokDusum)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small>`:'<span style="color:#bbb">—</span>'}</td>
+      <td><b>${_fmt(_siparis)} ${esc(it.birim)}</b>${_yuvarlama>0.01?`<br><small style="color:#c80;font-size:8pt">⤴ +${_fmt(_yuvarlama)} yuv.</small>`:''}${c.toplamKg>0?`<br><small style="font-size:8pt">${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`:''}</td>
       <td>${parseFloat(it.birim_fiyat).toLocaleString('tr-TR')} ₺/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</td>
       <td>${c.tutar.toLocaleString('tr-TR',{maximumFractionDigits:2})} ₺</td>
       <td>%${it.kdv_orani}<br>${c.kdv.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
@@ -2868,7 +2853,9 @@ function printProcurement(){
       <table class="frm">
         <thead><tr>
           <th style="width:28px">#</th>
-          <th style="width:18%">Malzeme</th>
+          <th style="width:16%">Malzeme</th>
+          <th>İhtiyaç</th>
+          <th>Stoktan</th>
           <th>Sipariş</th>
           <th>Br. Fiyat</th>
           <th>Tutar</th>
@@ -2881,14 +2868,14 @@ function printProcurement(){
         </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr>
-          <td colspan="4" style="text-align:right">TOPLAM</td>
+          <td colspan="6" style="text-align:right">TOPLAM</td>
           <td>${totT.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
           <td>${totK.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
           <td>−${totTv.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
           <td>${totN.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
           <td colspan="3"></td>
         </tr>
-        ${totKg>0?`<tr><td colspan="4" style="text-align:right">TOPLAM AĞIRLIK</td><td colspan="7" class="lft">${totKg.toLocaleString('tr-TR',{maximumFractionDigits:0})} kg</td></tr>`:''}
+        ${totKg>0?`<tr><td colspan="6" style="text-align:right">TOPLAM AĞIRLIK</td><td colspan="7" class="lft">${totKg.toLocaleString('tr-TR',{maximumFractionDigits:0})} kg</td></tr>`:''}
         </tfoot>
       </table>
       <div style="flex:1"></div>
