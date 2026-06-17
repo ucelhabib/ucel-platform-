@@ -869,7 +869,7 @@ body.proc-fullscreen{overflow:hidden}
       <button class="btn err" id="pfDel" style="margin-right:auto;display:none" onclick="delProj()">🗑 Sil</button>
       <button class="btn sec" id="pfFiles" style="display:none" onclick="if(editP)openFiles(editP)">📎 Dosyalar</button>
       <button class="btn sec" onclick="closeProj()">Vazgeç</button>
-      <button class="btn ok" onclick="saveProj()">💾 Kaydet</button>
+      <button class="btn ok" id="pfSave" onclick="saveProj()">💾 Kaydet</button>
     </div>
   </div>
 </div>
@@ -3746,7 +3746,15 @@ function renderPhases(project){
       ${approvalBtn ? `<div style="display:flex;gap:4px;align-items:center">${approvalBtn}${isPending && !adminEdit ? `<span style="font-size:10px;color:#888">(${esc(pendBy)} talep etti)</span>` : ''}</div>` : ''}
     </div>`;
   }).join('');
-  document.getElementById('phasesList').innerHTML = html;
+  const headerRow = `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:2px solid #1f4e8c;font-size:10.5px;font-weight:800;color:#1f4e8c;text-transform:uppercase;letter-spacing:0.5px;flex-wrap:wrap">
+    <div style="min-width:170px">Faz</div>
+    <div style="flex:1;min-width:200px;display:flex;align-items:center;gap:8px">
+      <div style="flex:1;text-align:center">İlerleme</div>
+      <div style="width:60px;text-align:center">%</div>
+      <div style="font-size:10px">🎯 Hedeflenen Tarih</div>
+    </div>
+  </div>`;
+  document.getElementById('phasesList').innerHTML = headerRow + html;
   const avg = Math.round(PHASE_ORDER.reduce((s,k)=>s+parseInt(phases[k]||0),0)/PHASE_ORDER.length);
   document.getElementById('ph-overall').textContent = 'Toplam: %'+avg;
   document.getElementById('pf-prog').value = avg;
