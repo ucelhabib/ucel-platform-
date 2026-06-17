@@ -224,6 +224,10 @@ tr.click{cursor:pointer}
   .topbar-refresh-txt{display:none !important}
   #topbarRefreshBtn{padding:6px 8px !important}
 }
+/* Takip formu tam ekran modu */
+#procureBox.fullscreen{position:fixed !important;top:0;left:0;right:0;bottom:0;z-index:9000;border-radius:0 !important;margin:0 !important;max-width:100vw;max-height:100vh;display:flex !important;flex-direction:column}
+#procureBox.fullscreen #procList{flex:1;max-height:none !important}
+body.proc-fullscreen{overflow:hidden}
 .stk-edit{transition:background 0.15s}
 .stk-edit:hover{background:#c7e0ff !important;outline:1px dashed #1f4e8c;outline-offset:-2px}
 .stk-edit:hover::after{content:' ✏️';font-size:10px;opacity:0.7;position:absolute}
@@ -848,6 +852,7 @@ tr.click{cursor:pointer}
           <span id="procBoxTitle" style="font-weight:700;color:var(--p)">🛒 Malzeme Takip Formu</span>
           <div style="flex:1"></div>
           <div id="procActions" style="display:flex;gap:4px;flex-wrap:wrap">
+            <button class="btn sec sm" type="button" onclick="toggleProcFullscreen()" id="procFsBtn" title="Tam ekran">⛶ Tam Ekran</button>
             <button class="btn sec sm" type="button" onclick="exportProcTalepFormu()" title="Tedarikçiye gönderilecek PDF Talep Formu">📋 Talep PDF</button>
             <button class="btn sec sm" type="button" onclick="printProcurement()" title="Detaylı rapor (yazdır/PDF)">🖨️</button>
             <button class="btn sec sm" type="button" onclick="exportProcurementExcel()" title="Detaylı Excel">📥</button>
@@ -1396,6 +1401,26 @@ function _updateLastRefreshText(){
 setInterval(_updateLastRefreshText, 15000);
 
 // === VERİ YEDEĞİ ===
+// Takip formu tam ekran toggle
+function toggleProcFullscreen(){
+  const box = document.getElementById('procureBox');
+  const btn = document.getElementById('procFsBtn');
+  if(!box) return;
+  const on = box.classList.toggle('fullscreen');
+  document.body.classList.toggle('proc-fullscreen', on);
+  if(btn) btn.innerHTML = on ? '⛶ Çık' : '⛶ Tam Ekran';
+  if(on){
+    // ESC ile kapatma
+    if(!box._escBind){
+      box._escBind = (e)=>{ if(e.key==='Escape'){ e.preventDefault(); toggleProcFullscreen(); }};
+      document.addEventListener('keydown', box._escBind);
+    }
+  } else if(box._escBind){
+    document.removeEventListener('keydown', box._escBind);
+    box._escBind = null;
+  }
+}
+
 async function downloadFullBackup(){
   if(me?.role !== 'yonetici'){ toast('Yalnız yönetici yedek alabilir','err'); return; }
   toast('Yedek alınıyor… (10-30 sn)','info');
@@ -2128,7 +2153,25 @@ function renderProcList(){
       <div style="display:grid;grid-template-columns:30px 1fr 100px 90px 80px 120px 100px 100px;gap:6px;align-items:center;padding:8px 10px;cursor:pointer;font-size:13px" onclick="toggleProcExpand('${it.id}')">
         <div style="text-align:center;color:#888;font-size:12px">${expanded?'▼':'▶'}<br><small style="font-weight:700">${i+1}</small></div>
         <div style="font-weight:600;font-size:13px">${esc(it.malzeme)}${it.ebat?` <span style="font-size:11px;color:#888">(${esc(it.ebat)})</span>`:''}${(+it.stok_dusum>0)?`<div style="display:inline-block;margin-left:6px;font-size:10px;color:#0a7;background:#e8f5e9;padding:1px 8px;border-radius:10px;font-weight:600">📦 Stoktan ${(+it.stok_dusum).toLocaleString('tr-TR',{maximumFractionDigits:2})} ${esc(it.birim)} düşüldü</div>`:''}</div>
-        <div style="text-align:right;font-size:13px">${parseFloat(it.miktar).toLocaleString('tr-TR')} ${esc(it.birim)}${(+it.stok_dusum>0)?`<br><small style="color:#0a7;font-size:10px;font-weight:600">+ ${(+it.stok_dusum).toLocaleString('tr-TR',{maximumFractionDigits:2})} stoktan</small><br><small style="color:#666;font-size:10px">= ${(parseFloat(it.miktar)+ +it.stok_dusum).toLocaleString('tr-TR',{maximumFractionDigits:2})} ${esc(it.birim)} ihtiyaç</small>`:''}${c.fiyatBirimi==='kg' && c.toplamKg>0?`<br><small style="color:#888;font-size:11px">${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`:''}</div>
+        <div style="text-align:right;font-size:13px">${(()=>{
+          const fmt = v=>(+v).toLocaleString('tr-TR',{maximumFractionDigits:2});
+          const siparis = parseFloat(it.miktar) || 0;
+          const stokDusum = +it.stok_dusum || 0;
+          const ihtiyac = (+it.original_ihtiyac) || (siparis + stokDusum); // geriye uyum
+          const yuvarlama = (siparis + stokDusum) - ihtiyac; // pozitifse yuvarlama yapıldı
+          let html = `<strong>${fmt(siparis)} ${esc(it.birim)}</strong>`;
+          if(stokDusum > 0 || yuvarlama > 0 || ihtiyac !== siparis){
+            const parts = [];
+            if(stokDusum > 0) parts.push(`<span style="color:#0a7">+ ${fmt(stokDusum)} stoktan</span>`);
+            if(yuvarlama > 0.01) parts.push(`<span style="color:#c80">⤴ ${fmt(yuvarlama)} yuvarlama</span>`);
+            parts.push(`<span style="color:#1f4e8c;font-weight:600">🎯 ${fmt(ihtiyac)} ${esc(it.birim)} ihtiyaç</span>`);
+            html += '<br><small style="font-size:10px;line-height:1.4;display:inline-block;text-align:right">' + parts.join('<br>') + '</small>';
+          }
+          if(c.fiyatBirimi==='kg' && c.toplamKg>0){
+            html += `<br><small style="color:#888;font-size:11px">${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`;
+          }
+          return html;
+        })()}</div>
         <div style="text-align:right;color:#444;font-size:13px">${parseFloat(it.birim_fiyat).toLocaleString('tr-TR')} ₺<br><small style="color:#888;font-size:11px">/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</small></div>
         <div style="text-align:right;color:#666;font-size:12px">%${it.kdv_orani}</div>
         <div style="text-align:right;font-weight:700;color:#1f4e8c;font-size:13px">${c.net.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</div>
@@ -2473,6 +2516,7 @@ async function saveProcCatalog(){
       fiyat_birimi: fb,
       catalog_id: id, kg_per_meter: cat.kg_per_meter || 0,
       ebat: ebat || null,
+      original_ihtiyac: miktar,   // kullanıcının girdiği gerçek ihtiyaç (yuvarlama/stok düşümünden önce)
       created_by: me.id
     };
     rows.push(row);
@@ -2774,10 +2818,21 @@ function printProcurement(){
     const dStr = dl.length === 0 ? '<em style="color:#999">— teslimat yok —</em>' :
       dl.map(d=>`<div style="font-size:11px;padding:2px 0">📦 <b>${d.tarih}</b> · ${parseFloat(d.miktar).toLocaleString('tr-TR')} ${esc(it.birim)}${d.gercek_kg?` (${parseFloat(d.gercek_kg).toLocaleString('tr-TR')} kg)`:''}${d.irsaliye_no?` · İrs: <b>${esc(d.irsaliye_no)}</b>`:''}${d.fatura_no?` · Fat: <b>${esc(d.fatura_no)}</b>`:''}${d.tedarikci?` · ${esc(d.tedarikci)}`:''}${d.fatura_tutari?` · ${parseFloat(d.fatura_tutari).toLocaleString('tr-TR')} ₺`:''}${d.not_text?` · <i>${esc(d.not_text)}</i>`:''}</div>`).join('');
     const stat = c.durum==='tamamlandi'?'🟢 Tamam':(c.durum==='kismi'?`🟡 %${Math.round(c.gelen/parseFloat(it.miktar)*100)}`:'🔴 Bekliyor');
+    const _siparis = parseFloat(it.miktar) || 0;
+    const _stokDusum = +it.stok_dusum || 0;
+    const _ihtiyac = (+it.original_ihtiyac) || (_siparis + _stokDusum);
+    const _yuvarlama = (_siparis + _stokDusum) - _ihtiyac;
+    let _detail = '';
+    if(_stokDusum > 0 || _yuvarlama > 0.01){
+      _detail = '<br><small style="font-size:8pt;color:#1f4e8c;line-height:1.4">';
+      if(_stokDusum > 0) _detail += `<span style="color:#0a7">+ ${_stokDusum.toLocaleString('tr-TR',{maximumFractionDigits:2})} stoktan</span><br>`;
+      if(_yuvarlama > 0.01) _detail += `<span style="color:#c80">⤴ ${_yuvarlama.toLocaleString('tr-TR',{maximumFractionDigits:2})} yuvarlama</span><br>`;
+      _detail += `<b>🎯 ${_ihtiyac.toLocaleString('tr-TR',{maximumFractionDigits:2})} ${esc(it.birim)} ihtiyaç</b></small>`;
+    }
     return `<tr>
       <td class="ctr">${i+1}</td>
       <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <small>(${esc(it.ebat)})</small>`:''}${(+it.stok_dusum>0)?`<br><span style="font-size:8.5pt;color:#0a7;background:#e8f5e9;padding:1px 6px;border-radius:8px">📦 Stoktan ${(+it.stok_dusum).toLocaleString('tr-TR',{maximumFractionDigits:2})} ${esc(it.birim)}</span>`:''}</td>
-      <td>${parseFloat(it.miktar).toLocaleString('tr-TR')} ${esc(it.birim)}${c.toplamKg>0?`<br><small>${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`:''}</td>
+      <td>${_siparis.toLocaleString('tr-TR')} ${esc(it.birim)}${_detail}${c.toplamKg>0?`<br><small>${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`:''}</td>
       <td>${parseFloat(it.birim_fiyat).toLocaleString('tr-TR')} ₺/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</td>
       <td>${c.tutar.toLocaleString('tr-TR',{maximumFractionDigits:2})} ₺</td>
       <td>%${it.kdv_orani}<br>${c.kdv.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
