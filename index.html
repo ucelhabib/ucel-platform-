@@ -2155,13 +2155,13 @@ function renderProcList(){
     const ihtiyac = (+it.original_ihtiyac) || (siparis + stokDusum);
     const yuvarlama = (siparis + stokDusum) - ihtiyac;
     return `<div style="border-bottom:1px solid #eef0f5">
-      <div style="display:grid;grid-template-columns:24px 1fr 70px 70px 75px 75px 50px 95px 75px 75px;gap:5px;align-items:center;padding:8px 10px;cursor:pointer;font-size:12.5px" onclick="toggleProcExpand('${it.id}')">
+      <div style="display:grid;grid-template-columns:32px minmax(180px,1.4fr) 95px 90px 105px 85px 55px 115px 85px 100px;gap:14px;align-items:center;padding:12px 16px;cursor:pointer;font-size:13px" onclick="toggleProcExpand('${it.id}')">
         <div style="text-align:center;color:#888;font-size:12px">${expanded?'▼':'▶'}<br><small style="font-weight:700">${i+1}</small></div>
-        <div style="font-weight:600;font-size:13px">${esc(it.malzeme)}${it.ebat?` <span style="font-size:11px;color:#888">(${esc(it.ebat)})</span>`:''}</div>
-        <div style="text-align:right;color:#1f4e8c;font-weight:600">🎯 ${fmt(ihtiyac)}<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} ihtiyaç</small></div>
-        <div style="text-align:right;color:#0a7;font-weight:600">${stokDusum>0?`📦 ${fmt(stokDusum)}`:'<span style="color:#bbb">—</span>'}${stokDusum>0?`<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} stoktan</small>`:''}</div>
-        <div style="text-align:right;font-weight:700">${fmt(siparis)} ${esc(it.birim)}${yuvarlama>0.01?`<br><small style="color:#c80;font-size:10px">⤴ +${fmt(yuvarlama)} yuv.</small>`:''}${c.fiyatBirimi==='kg' && c.toplamKg>0?`<br><small style="color:#888;font-size:10px">${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`:''}</div>
-        <div style="text-align:right;color:#444;font-size:12px">${parseFloat(it.birim_fiyat).toLocaleString('tr-TR')} ₺<br><small style="color:#888;font-size:10px">/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</small></div>
+        <div style="font-weight:600;font-size:13px;line-height:1.4">${esc(it.malzeme)}${it.ebat?` <span style="font-size:11px;color:#888">(${esc(it.ebat)})</span>`:''}</div>
+        <div style="text-align:right;color:#1f4e8c;font-weight:700;line-height:1.4">🎯 ${fmt(ihtiyac)}<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} ihtiyaç</small></div>
+        <div style="text-align:right;color:#0a7;font-weight:700;line-height:1.4">${stokDusum>0?`📦 ${fmt(stokDusum)}`:'<span style="color:#bbb;font-weight:400">—</span>'}${stokDusum>0?`<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} stoktan</small>`:''}</div>
+        <div style="text-align:right;font-weight:700;line-height:1.4">${fmt(siparis)} ${esc(it.birim)}${yuvarlama>0.01?`<br><small style="color:#c80;font-size:10px;font-weight:600">⤴ +${fmt(yuvarlama)} yuv.</small>`:''}${c.fiyatBirimi==='kg' && c.toplamKg>0?`<br><small style="color:#888;font-size:10px">${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`:''}</div>
+        <div style="text-align:right;color:#444;font-size:12px;line-height:1.4">${parseFloat(it.birim_fiyat).toLocaleString('tr-TR')} ₺<br><small style="color:#888;font-size:10px">/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</small></div>
         <div style="text-align:right;color:#666;font-size:11px">%${it.kdv_orani}</div>
         <div style="text-align:right;font-weight:700;color:#1f4e8c;font-size:13px">${c.net.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</div>
         <div style="text-align:right;color:#0a7;font-size:12px">${c.gelen.toLocaleString('tr-TR')} ${esc(it.birim)}</div>
@@ -2171,8 +2171,8 @@ function renderProcList(){
     </div>`;
   }).join('');
   el.innerHTML = `
-    <div style="background:#f1f4f8;padding:8px 10px;display:grid;grid-template-columns:24px 1fr 70px 70px 75px 75px 50px 95px 75px 75px;gap:5px;font-size:10.5px;font-weight:700;color:#444;text-transform:uppercase;letter-spacing:0.3px">
-      <div></div><div>Malzeme</div><div style="text-align:right">İhtiyaç</div><div style="text-align:right">Stoktan</div><div style="text-align:right">Sipariş</div><div style="text-align:right">Br.Fiy</div><div style="text-align:right">KDV</div><div style="text-align:right">Net Tutar</div><div style="text-align:right">Gelen</div><div style="text-align:center">Durum</div>
+    <div style="background:#f1f4f8;padding:10px 16px;display:grid;grid-template-columns:32px minmax(180px,1.4fr) 95px 90px 105px 85px 55px 115px 85px 100px;gap:14px;font-size:11px;font-weight:800;color:#1f4e8c;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #1f4e8c">
+      <div></div><div>Malzeme</div><div style="text-align:right">🎯 İhtiyaç</div><div style="text-align:right">📦 Stoktan</div><div style="text-align:right">Sipariş</div><div style="text-align:right">Br.Fiy</div><div style="text-align:right">KDV</div><div style="text-align:right">Net Tutar</div><div style="text-align:right">Gelen</div><div style="text-align:center">Durum</div>
     </div>
     ${rows}`;
   const bar = document.getElementById('procSummaryBar');
