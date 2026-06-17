@@ -2214,8 +2214,26 @@ function renderProcDetail(it, c){
         <button class="btn err sm" onclick="deleteProcItem('${it.id}')">🗑 Sil</button>
       </div>
     </div>
+    <div style="margin-bottom:10px;padding:10px 12px;background:#fff8e1;border-radius:8px;border:1px dashed #f1c40f">
+      <label style="font-size:11px;color:#7a5a00;font-weight:700;display:block;margin-bottom:4px">📝 Talep Formu Notu (tedarikçiye PDF'te görünür):</label>
+      <textarea id="procnote-${it.id}" rows="2" placeholder="Bu malzemeye dair özel istek/açıklama..." style="width:100%;border:1px solid #f1c40f;border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box">${esc(it.not_text||'')}</textarea>
+      <div style="display:flex;justify-content:flex-end;margin-top:6px">
+        <button class="btn ok sm" onclick="saveProcItemNote('${it.id}')" style="padding:4px 12px;font-size:11px">💾 Notu Kaydet</button>
+      </div>
+    </div>
     <div>${teslimatlar}</div>
   </div>`;
+}
+
+async function saveProcItemNote(itemId){
+  const el = document.getElementById('procnote-'+itemId);
+  if(!el) return;
+  const note = el.value.trim();
+  const {error} = await sb.from('procurement_items').update({not_text: note || null, updated_at: new Date().toISOString()}).eq('id', itemId);
+  if(error){ toast('Not kaydedilemedi: '+error.message, 'err'); return; }
+  const it = procItems.find(x=>x.id===itemId);
+  if(it) it.not_text = note;
+  toast('Not kaydedildi','ok');
 }
 function toggleProcExpand(itemId){
   if(_procExpanded.has(itemId)) _procExpanded.delete(itemId);
