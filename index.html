@@ -4314,7 +4314,7 @@ async function renderShipments(){
     const tarih = s.tarih || '';
     const giris = s.giris_saati ? new Date(s.giris_saati).toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit'}) : '—';
     const cikis = s.cikis_saati ? new Date(s.cikis_saati).toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit'}) : '—';
-    const sure = (s.giris_saati && s.cikis_saati) ? Math.round((new Date(s.cikis_saati)-new Date(s.giris_saati))/60000) + ' dk' : '';
+    const sure = (s.giris_saati && s.cikis_saati) ? _fmtDuration((new Date(s.cikis_saati)-new Date(s.giris_saati))/60000) : '';
     return `<div style="border:1px solid #eef0f5;border-left:4px solid #1f4e8c;border-radius:8px;padding:12px 14px;margin-bottom:10px;background:#fafbfd">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
         <div style="flex:1;min-width:220px">
@@ -4414,7 +4414,7 @@ function printSingleShipment(shipId){
   const proj = projects.find(p => p.id === s.project_id);
   const giris = s.giris_saati ? new Date(s.giris_saati).toLocaleString('tr-TR') : '—';
   const cikis = s.cikis_saati ? new Date(s.cikis_saati).toLocaleString('tr-TR') : '—';
-  const sure = (s.giris_saati && s.cikis_saati) ? Math.round((new Date(s.cikis_saati)-new Date(s.giris_saati))/60000) + ' dk' : '—';
+  const sure = (s.giris_saati && s.cikis_saati) ? _fmtDuration((new Date(s.cikis_saati)-new Date(s.giris_saati))/60000) : '—';
   const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Yükleme Detayı — ${esc(s.cekici_plaka||'')}</title>
     <style>${_pdfStyle()}
       .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border:2px solid #1f4e8c;border-radius:8px;overflow:hidden;margin-bottom:14px}
@@ -4532,7 +4532,7 @@ function printDailyShipmentReport(){
   const rows = dayItems.sort((a,b)=>(a.giris_saati||'').localeCompare(b.giris_saati||'')).map((s,i) => {
     const giris = s.giris_saati ? new Date(s.giris_saati).toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit'}) : '—';
     const cikis = s.cikis_saati ? new Date(s.cikis_saati).toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit'}) : '—';
-    const sure = (s.giris_saati && s.cikis_saati) ? Math.round((new Date(s.cikis_saati)-new Date(s.giris_saati))/60000)+' dk' : '—';
+    const sure = (s.giris_saati && s.cikis_saati) ? _fmtDuration((new Date(s.cikis_saati)-new Date(s.giris_saati))/60000) : '—';
     return `<tr>
       <td class="ctr">${i+1}</td>
       <td class="lft"><b>${esc(s.cekici_plaka||'-')}</b>${s.dorse_plaka?`<br><small>${esc(s.dorse_plaka)}</small>`:''}</td>
@@ -4691,6 +4691,15 @@ async function saveShipment(){
   renderShipments();
 }
 
+// Süreyi dakikadan "X sa Y dk" formatına çevir
+function _fmtDuration(min){
+  if(!min || min < 1) return '—';
+  if(min < 60) return Math.round(min) + ' dk';
+  const h = Math.floor(min/60);
+  const m = Math.round(min - h*60);
+  return m > 0 ? `${h} sa ${m} dk` : `${h} sa`;
+}
+
 function _calcShipmentStats(items){
   const stats = {
     count: items.length,
@@ -4737,7 +4746,7 @@ function printShipmentReport(){
   const rows = items.map((s,i) => {
     const giris = s.giris_saati ? new Date(s.giris_saati).toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit'}) : '—';
     const cikis = s.cikis_saati ? new Date(s.cikis_saati).toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit'}) : '—';
-    const sure = (s.giris_saati && s.cikis_saati) ? Math.round((new Date(s.cikis_saati)-new Date(s.giris_saati))/60000) : '';
+    const sureMin = (s.giris_saati && s.cikis_saati) ? Math.round((new Date(s.cikis_saati)-new Date(s.giris_saati))/60000) : 0;
     return `<tr>
       <td class="ctr">${i+1}</td>
       <td class="ctr">${esc(s.tarih||'-')}</td>
@@ -4746,7 +4755,7 @@ function printShipmentReport(){
       <td class="lft">${esc(s.tedarikci||'-')}</td>
       <td class="ctr">${giris}</td>
       <td class="ctr">${cikis}</td>
-      <td class="ctr">${sure?sure+' dk':'—'}</td>
+      <td class="ctr">${sureMin?_fmtDuration(sureMin):'—'}</td>
       <td class="lft">${esc(s.irsaliye_no||'-')}</td>
       <td><b>${parseFloat(s.tonaj||0).toLocaleString('tr-TR',{maximumFractionDigits:0})}</b></td>
     </tr>`;
@@ -4783,7 +4792,7 @@ function printShipmentReport(){
         <div class="kpi-card"><div class="l">📅 Yükleme Gün</div><div class="v">${st.dayCount}</div></div>
         <div class="kpi-card"><div class="l">🚚 Farklı Plaka</div><div class="v">${st.uniquePlaka}</div></div>
         <div class="kpi-card"><div class="l">📊 Ortalama Yük (kg)</div><div class="v">${st.avgKg.toLocaleString('tr-TR')}</div></div>
-        <div class="kpi-card"><div class="l">⏱️ Ort. Bekleme</div><div class="v">${st.avgDurationMin||'—'}${st.avgDurationMin?' dk':''}</div></div>
+        <div class="kpi-card"><div class="l">⏱️ Ort. Bekleme</div><div class="v" style="font-size:13pt">${_fmtDuration(st.avgDurationMin)}</div></div>
         <div class="kpi-card"><div class="l">🏁 İlk Yükleme</div><div class="v" style="font-size:11pt">${st.firstDate||'—'}</div></div>
         <div class="kpi-card"><div class="l">🏁 Son Yükleme</div><div class="v" style="font-size:11pt">${st.lastDate||'—'}</div></div>
       </div>
@@ -4824,7 +4833,7 @@ function exportShipmentExcel(){
   const items = shipments.filter(s => s.project_id === pid).sort((a,b)=> (a.tarih||'').localeCompare(b.tarih||''));
   if(items.length === 0){ toast('Yükleme yok','err'); return; }
   const st = _calcShipmentStats(items);
-  const headers = ['#','Tarih','Çekici Plaka','Dorse Plaka','Sürücü','Nakliye Firması','Giriş Saati','Çıkış Saati','Süre (dk)','İrsaliye No','Tonaj (kg)','Not'];
+  const headers = ['#','Tarih','Çekici Plaka','Dorse Plaka','Sürücü','Nakliye Firması','Giriş Saati','Çıkış Saati','Süre','İrsaliye No','Tonaj (kg)','Not'];
   const aoa = [
     ['ÜÇEL STEEL CONSTRUCTION'],
     ['SEVKİYAT RAPORU'],
@@ -4834,12 +4843,13 @@ function exportShipmentExcel(){
     ['Toplam Araç', st.count, '', 'Toplam Tonaj (kg)', st.totalKg],
     ['Yükleme Gün Sayısı', st.dayCount, '', 'Farklı Plaka', st.uniquePlaka],
     ['İlk Yükleme', st.firstDate||'', '', 'Son Yükleme', st.lastDate||''],
-    ['Ortalama Yük (kg)', st.avgKg, '', 'Ortalama Bekleme (dk)', st.avgDurationMin],
+    ['Ortalama Yük (kg)', st.avgKg, '', 'Ortalama Bekleme', _fmtDuration(st.avgDurationMin)],
     [],
     headers
   ];
   items.forEach((s,i)=>{
-    const sure = (s.giris_saati && s.cikis_saati) ? Math.round((new Date(s.cikis_saati)-new Date(s.giris_saati))/60000) : '';
+    const sureMin = (s.giris_saati && s.cikis_saati) ? Math.round((new Date(s.cikis_saati)-new Date(s.giris_saati))/60000) : 0;
+    const sure = sureMin ? _fmtDuration(sureMin) : '';
     const giris = s.giris_saati ? new Date(s.giris_saati).toLocaleString('tr-TR') : '';
     const cikis = s.cikis_saati ? new Date(s.cikis_saati).toLocaleString('tr-TR') : '';
     aoa.push([i+1, s.tarih||'', s.cekici_plaka||'', s.dorse_plaka||'', s.surucu||'', s.tedarikci||'', giris, cikis, sure, s.irsaliye_no||'', parseFloat(s.tonaj||0), s.not_text||'']);
