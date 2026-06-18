@@ -873,8 +873,7 @@ body.proc-fullscreen{overflow:hidden}
           <div id="procActions" style="display:flex;gap:4px;flex-wrap:wrap">
             <button class="btn sec sm" type="button" onclick="toggleProcFullscreen()" id="procFsBtn" title="Tam ekran">⛶ Tam Ekran</button>
             <button class="btn sec sm" type="button" onclick="exportProcTalepFormu()" title="Tedarikçiye gönderilecek PDF Talep Formu">📋 Talep PDF</button>
-            <button class="btn sec sm price-only" type="button" onclick="printProcurement()" title="Detaylı rapor (yazdır/PDF)">🖨️</button>
-            <button class="btn sec sm price-only" type="button" onclick="exportProcurementExcel()" title="Detaylı Excel">📥</button>
+            <button class="btn sec sm price-only" type="button" onclick="printProcurement()" title="Detaylı rapor — yazdır, PDF veya Excel indir">📊 Detaylı Rapor</button>
             <button class="btn sec sm" type="button" id="procCatBtn" onclick="openProcCatalog()">📚 Katalog</button>
             <button class="btn sm" type="button" id="procNewBtn" onclick="openProcNew()">+ Manuel</button>
           </div>
@@ -3055,6 +3054,7 @@ function printProcurement(){
       <div style="font-weight:700;font-size:14px">📊 Satın Alma Takip Raporu — ${esc(proj?.no||'')}</div>
       <div style="display:flex;gap:8px">
         <button class="btn-print" onclick="window.print()">🖨️ Yazdır / PDF Kaydet</button>
+        <button class="btn-print" style="background:#0a7" onclick="if(window.opener && window.opener.exportProcurementExcel){window.opener.exportProcurementExcel();}else{alert('İndirme başlatılamadı, ana pencereyi kapatma');}">📊 Excel İndir</button>
         <button class="btn-close" onclick="window.close()">✕ Kapat</button>
       </div>
     </div>
@@ -3939,7 +3939,7 @@ function renderPhases(project){
           ${isPending ? `<div style="position:absolute;top:0;right:0;bottom:0;width:${100-val}%;background:repeating-linear-gradient(45deg,#fc3,#fc3 4px,#ffd 4px,#ffd 8px);opacity:0.6"></div>`:''}
         </div>
         ${editable
-          ? `<input type="number" min="0" max="100" value="${val}" style="width:60px;font-size:12px;padding:3px 6px;border:1px solid #cdd2dc;border-radius:6px" onchange="updatePhase('${project.id}','${ph}',this.value,this)">`
+          ? `<input type="number" min="0" max="100" value="${val}" style="width:60px;font-size:12px;padding:3px 6px;border:1px solid #cdd2dc;border-radius:6px" onchange="updatePhase('${project.id}','${ph}',this.value,this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">`
           : `<span style="width:50px;text-align:right;font-size:12px;color:#666">%${val}</span>`
         }
         ${adminEdit ? `<input type="date" value="${deadline||''}" title="Hedef tarih" style="font-size:11px;padding:2px 4px;border:1px solid #cdd2dc;border-radius:6px" onchange="updatePhaseDate('${project.id}','${ph}',this.value)">` : (deadline ? `<span style="font-size:11px;color:${overdue?'#c00':'#888'}">${deadline}</span>` : '')}
