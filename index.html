@@ -500,6 +500,8 @@ body.proc-fullscreen{overflow:hidden}
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
             <span style="font-weight:700;color:#1f4e8c;font-size:15px">📦 Yükleme Kayıtları</span>
             <select id="shipProj" onchange="renderShipments()" style="flex:1;min-width:200px;padding:6px 10px;border:1px solid #cdd2dc;border-radius:6px;font-size:13px"><option value="">— Proje seç —</option></select>
+            <button class="btn sec sm" onclick="printShipmentReport()" title="Tüm proje raporu (yazdır/PDF/Excel)">📊 Proje Raporu</button>
+            <button class="btn sec sm" onclick="printDailyShipmentReport()" title="Belirli bir günün raporu">📅 Günlük Rapor</button>
             <button class="btn" onclick="openShipmentModal()">+ Yeni Yükleme</button>
           </div>
           <div id="shipSummary" style="font-size:11px;color:#666;margin-bottom:8px"></div>
@@ -4311,10 +4313,163 @@ async function renderShipments(){
         ${s.irsaliye_url?`<a href="${esc(s.irsaliye_url)}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;background:#fff;padding:4px 10px;border:1px solid #cdd2dc;border-radius:6px;text-decoration:none;color:#1f4e8c;font-size:11px;font-weight:600">📷 İrsaliye Foto</a>`:''}
         ${s.kantar_url?`<a href="${esc(s.kantar_url)}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;background:#fff;padding:4px 10px;border:1px solid #cdd2dc;border-radius:6px;text-decoration:none;color:#1f4e8c;font-size:11px;font-weight:600">🏗️ Kantar Fişi</a>`:''}
         <div style="flex:1"></div>
+        <button class="btn sec sm" onclick="printSingleShipment('${s.id}')" style="padding:4px 10px;font-size:11px" title="Bu yüklemeyi yazdır">📄 PDF</button>
         <button class="btn sec sm" onclick="openShipmentModal('${s.id}')" style="padding:4px 10px;font-size:11px">✏️ Düzenle</button>
       </div>
     </div>`;
   }).join('');
+}
+
+// Tek yükleme — sevk irsaliyesi tarzı tek sayfa PDF
+function printSingleShipment(shipId){
+  const s = shipments.find(x => x.id === shipId);
+  if(!s) return;
+  const proj = projects.find(p => p.id === s.project_id);
+  const giris = s.giris_saati ? new Date(s.giris_saati).toLocaleString('tr-TR') : '—';
+  const cikis = s.cikis_saati ? new Date(s.cikis_saati).toLocaleString('tr-TR') : '—';
+  const sure = (s.giris_saati && s.cikis_saati) ? Math.round((new Date(s.cikis_saati)-new Date(s.giris_saati))/60000) + ' dk' : '—';
+  const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Yükleme Detayı — ${esc(s.cekici_plaka||'')}</title>
+    <style>${_pdfStyle()}
+      .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border:2px solid #1f4e8c;border-radius:8px;overflow:hidden;margin-bottom:14px}
+      .info-grid .row{display:flex;border-bottom:1px solid #e3e7ec}
+      .info-grid .row:last-child{border-bottom:none}
+      .info-grid .lbl{background:#f1f4f8;padding:8px 12px;font-size:10pt;color:#1f4e8c;font-weight:700;min-width:120px;border-right:1px solid #e3e7ec}
+      .info-grid .val{padding:8px 12px;font-size:11pt;font-weight:600;flex:1}
+      .photos{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+      .photo-box{border:1.5px solid #cdd2dc;border-radius:8px;padding:8px;text-align:center}
+      .photo-box .tit{font-size:10pt;font-weight:700;color:#1f4e8c;margin-bottom:6px}
+      .photo-box img{max-width:100%;max-height:280px;border-radius:4px}
+      .tonaj-big{background:#fff8e1;border:2px solid #ff7a00;border-radius:10px;padding:14px;text-align:center;margin:12px 0}
+      .tonaj-big .v{font-size:32pt;font-weight:900;color:#ff7a00;line-height:1}
+      .tonaj-big .l{font-size:10pt;color:#7a5a00;margin-top:4px}
+    </style></head><body>
+    <div class="pdf-toolbar no-print">
+      <div style="font-weight:700;font-size:14px">📄 Yükleme — ${esc(s.cekici_plaka||'')}</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-print" onclick="window.print()">🖨️ Yazdır / PDF Kaydet</button>
+        <button class="btn-close" onclick="window.close()">✕ Kapat</button>
+      </div>
+    </div>
+    <div class="page">
+      ${_pdfHeader('YÜKLEME','BELGESİ')}
+      <div class="meta">
+        <span>PROJE: ${esc(proj?.no||'')}${proj?.customer?` · ${esc(proj.customer)}`:''}</span>
+        <span>TARİH: ${esc(s.tarih||'-')}</span>
+      </div>
+      <div class="info-grid">
+        <div class="row"><span class="lbl">🚛 Çekici Plaka</span><span class="val">${esc(s.cekici_plaka||'—')}</span></div>
+        <div class="row"><span class="lbl">🚚 Dorse Plaka</span><span class="val">${esc(s.dorse_plaka||'—')}</span></div>
+        <div class="row"><span class="lbl">👤 Sürücü</span><span class="val">${esc(s.surucu||'—')}</span></div>
+        <div class="row"><span class="lbl">🏢 Nakliye</span><span class="val">${esc(s.tedarikci||'—')}</span></div>
+        <div class="row"><span class="lbl">🕐 Giriş Saati</span><span class="val">${giris}</span></div>
+        <div class="row"><span class="lbl">🕑 Çıkış Saati</span><span class="val">${cikis}</span></div>
+        <div class="row"><span class="lbl">⏱️ Toplam Süre</span><span class="val">${sure}</span></div>
+        <div class="row"><span class="lbl">📋 İrsaliye No</span><span class="val"><b>${esc(s.irsaliye_no||'—')}</b></span></div>
+      </div>
+      <div class="tonaj-big">
+        <div class="v">${parseFloat(s.tonaj||0).toLocaleString('tr-TR',{maximumFractionDigits:0})} kg</div>
+        <div class="l">NET YÜKLEME TONAJI</div>
+      </div>
+      ${(s.irsaliye_url || s.kantar_url) ? `<div class="photos">
+        ${s.irsaliye_url ? `<div class="photo-box"><div class="tit">📷 SEVK İRSALİYESİ</div><img src="${esc(s.irsaliye_url)}"></div>` : '<div></div>'}
+        ${s.kantar_url ? `<div class="photo-box"><div class="tit">🏗️ KANTAR FİŞİ</div><img src="${esc(s.kantar_url)}"></div>` : '<div></div>'}
+      </div>` : ''}
+      ${s.not_text ? `<div style="background:#fff8e1;border-left:4px solid #f1c40f;padding:8px 12px;font-size:10pt;margin:10px 0"><strong>📝 Not:</strong> ${esc(s.not_text)}</div>` : ''}
+      <div style="flex:1"></div>
+      ${_pdfFooter()}
+    </div>
+    </body></html>`;
+  const w = window.open('','_blank');
+  if(!w){ toast('Popup engellendi, izin ver','err'); return; }
+  w.document.write(html); w.document.close();
+}
+
+// Günlük rapor — tarih seç, o tarihteki tüm yüklemeleri rapor et
+function printDailyShipmentReport(){
+  const pid = document.getElementById('shipProj')?.value;
+  if(!pid){ toast('Önce proje seç','err'); return; }
+  const items = shipments.filter(s => s.project_id === pid);
+  if(items.length === 0){ toast('Yükleme yok','err'); return; }
+  // En son yükleme tarihini varsayılan göster
+  const days = [...new Set(items.map(s => s.tarih).filter(Boolean))].sort().reverse();
+  const sec = prompt('Hangi tarih için günlük rapor?\n\nMevcut tarihler:\n' + days.slice(0,10).join('\n') + '\n\nFormat: YYYY-AA-GG', days[0] || new Date().toISOString().slice(0,10));
+  if(!sec) return;
+  const dayItems = items.filter(s => s.tarih === sec);
+  if(dayItems.length === 0){ toast(`${sec} tarihinde yükleme bulunamadı`,'err'); return; }
+  const proj = projects.find(p => p.id === pid);
+  const st = _calcShipmentStats(dayItems);
+  const tedLines = [...st.tedarikciler.entries()].map(([k,v])=>`${esc(k)} (${v})`).join(' · ') || '—';
+  const rows = dayItems.sort((a,b)=>(a.giris_saati||'').localeCompare(b.giris_saati||'')).map((s,i) => {
+    const giris = s.giris_saati ? new Date(s.giris_saati).toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit'}) : '—';
+    const cikis = s.cikis_saati ? new Date(s.cikis_saati).toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit'}) : '—';
+    const sure = (s.giris_saati && s.cikis_saati) ? Math.round((new Date(s.cikis_saati)-new Date(s.giris_saati))/60000)+' dk' : '—';
+    return `<tr>
+      <td class="ctr">${i+1}</td>
+      <td class="lft"><b>${esc(s.cekici_plaka||'-')}</b>${s.dorse_plaka?`<br><small>${esc(s.dorse_plaka)}</small>`:''}</td>
+      <td class="lft">${esc(s.surucu||'-')}</td>
+      <td class="lft">${esc(s.tedarikci||'-')}</td>
+      <td class="ctr">${giris}</td>
+      <td class="ctr">${cikis}</td>
+      <td class="ctr">${sure}</td>
+      <td class="lft">${esc(s.irsaliye_no||'-')}</td>
+      <td><b>${parseFloat(s.tonaj||0).toLocaleString('tr-TR',{maximumFractionDigits:0})}</b></td>
+    </tr>`;
+  }).join('');
+  const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Günlük Sevkiyat — ${esc(sec)}</title>
+    <style>${_pdfStyle()}
+      @media print { @page{size:A4 portrait;margin:0} }
+      .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
+      .kpi-card{background:#fff;border:1.5px solid #1f4e8c;border-radius:8px;padding:12px;text-align:center}
+      .kpi-card .v{font-size:22pt;font-weight:800;color:#1f4e8c;line-height:1}
+      .kpi-card .l{font-size:9pt;color:#666;margin-top:4px;text-transform:uppercase;letter-spacing:.4px}
+      .kpi-card.orange{border-color:#ff7a00}
+      .kpi-card.orange .v{color:#ff7a00}
+    </style></head><body>
+    <div class="pdf-toolbar no-print">
+      <div style="font-weight:700;font-size:14px">📅 Günlük Sevkiyat — ${esc(sec)}</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-print" onclick="window.print()">🖨️ Yazdır / PDF Kaydet</button>
+        <button class="btn-close" onclick="window.close()">✕ Kapat</button>
+      </div>
+    </div>
+    <div class="page">
+      ${_pdfHeader('GÜNLÜK','SEVKİYAT')}
+      <div class="meta">
+        <span>PROJE: ${esc(proj?.no||'')}${proj?.customer?` · ${esc(proj.customer)}`:''}</span>
+        <span>GÜN: ${esc(sec)}</span>
+      </div>
+      <div class="desc">${esc(sec)} tarihinde yapılan ${st.count} yükleme kaydının özeti.</div>
+      <div class="kpis">
+        <div class="kpi-card"><div class="l">🚛 Toplam Araç</div><div class="v">${st.count}</div></div>
+        <div class="kpi-card orange"><div class="l">⚖️ Toplam Tonaj (kg)</div><div class="v">${st.totalKg.toLocaleString('tr-TR',{maximumFractionDigits:0})}</div></div>
+        <div class="kpi-card"><div class="l">📊 Ortalama Yük (kg)</div><div class="v">${st.avgKg.toLocaleString('tr-TR')}</div></div>
+      </div>
+      <div style="background:#f1f4f8;padding:8px 12px;border-radius:6px;font-size:10pt;margin:10px 0"><strong>🏢 Nakliye Firmaları:</strong> ${tedLines}</div>
+      <table class="frm" style="font-size:9.5pt">
+        <thead><tr>
+          <th style="width:28px">#</th>
+          <th>Plaka</th>
+          <th>Sürücü</th>
+          <th>Firma</th>
+          <th>Giriş</th>
+          <th>Çıkış</th>
+          <th>Süre</th>
+          <th>İrsaliye</th>
+          <th>Tonaj (kg)</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr>
+          <td colspan="8" style="text-align:right;background:#fff8e1;font-weight:800">GÜNLÜK TOPLAM</td>
+          <td style="background:#fff8e1;font-weight:800">${st.totalKg.toLocaleString('tr-TR',{maximumFractionDigits:0})}</td>
+        </tr></tfoot>
+      </table>
+      <div style="flex:1"></div>
+      ${_pdfFooter()}
+    </div>
+    </body></html>`;
+  const w = window.open('','_blank');
+  if(!w){ toast('Popup engellendi, izin ver','err'); return; }
+  w.document.write(html); w.document.close();
 }
 
 function openShipmentModal(id){
@@ -4404,6 +4559,180 @@ async function saveShipment(){
   closeShipmentModal();
   await loadShipments();
   renderShipments();
+}
+
+function _calcShipmentStats(items){
+  const stats = {
+    count: items.length,
+    totalKg: 0,
+    days: new Set(),
+    plakas: new Set(),
+    tedarikciler: new Map(),
+    firstDate: null,
+    lastDate: null,
+    totalDurationMin: 0,
+    durationCount: 0
+  };
+  items.forEach(s => {
+    stats.totalKg += parseFloat(s.tonaj)||0;
+    if(s.tarih){
+      stats.days.add(s.tarih);
+      if(!stats.firstDate || s.tarih < stats.firstDate) stats.firstDate = s.tarih;
+      if(!stats.lastDate || s.tarih > stats.lastDate) stats.lastDate = s.tarih;
+    }
+    if(s.cekici_plaka) stats.plakas.add(s.cekici_plaka);
+    if(s.tedarikci) stats.tedarikciler.set(s.tedarikci, (stats.tedarikciler.get(s.tedarikci)||0) + 1);
+    if(s.giris_saati && s.cikis_saati){
+      const dur = (new Date(s.cikis_saati) - new Date(s.giris_saati)) / 60000;
+      if(dur > 0){ stats.totalDurationMin += dur; stats.durationCount++; }
+    }
+  });
+  stats.dayCount = stats.days.size;
+  stats.uniquePlaka = stats.plakas.size;
+  stats.avgDurationMin = stats.durationCount ? Math.round(stats.totalDurationMin / stats.durationCount) : 0;
+  stats.avgKg = stats.count ? Math.round(stats.totalKg / stats.count) : 0;
+  return stats;
+}
+
+function printShipmentReport(){
+  const pid = document.getElementById('shipProj')?.value;
+  if(!pid){ toast('Önce proje seç','err'); return; }
+  const proj = projects.find(p => p.id === pid);
+  const items = shipments.filter(s => s.project_id === pid).sort((a,b)=> (a.tarih||'').localeCompare(b.tarih||''));
+  if(items.length === 0){ toast('Bu projede henüz yükleme yok','err'); return; }
+  const st = _calcShipmentStats(items);
+  const tarih = new Date().toLocaleDateString('tr-TR');
+  // Tedarikçi listesi
+  const tedLines = [...st.tedarikciler.entries()].sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${esc(k)} (${v})`).join(' · ') || '—';
+  const rows = items.map((s,i) => {
+    const giris = s.giris_saati ? new Date(s.giris_saati).toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit'}) : '—';
+    const cikis = s.cikis_saati ? new Date(s.cikis_saati).toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit'}) : '—';
+    const sure = (s.giris_saati && s.cikis_saati) ? Math.round((new Date(s.cikis_saati)-new Date(s.giris_saati))/60000) : '';
+    return `<tr>
+      <td class="ctr">${i+1}</td>
+      <td class="ctr">${esc(s.tarih||'-')}</td>
+      <td class="lft"><b>${esc(s.cekici_plaka||'-')}</b>${s.dorse_plaka?`<br><small>${esc(s.dorse_plaka)}</small>`:''}</td>
+      <td class="lft">${esc(s.surucu||'-')}</td>
+      <td class="lft">${esc(s.tedarikci||'-')}</td>
+      <td class="ctr">${giris}</td>
+      <td class="ctr">${cikis}</td>
+      <td class="ctr">${sure?sure+' dk':'—'}</td>
+      <td class="lft">${esc(s.irsaliye_no||'-')}</td>
+      <td><b>${parseFloat(s.tonaj||0).toLocaleString('tr-TR',{maximumFractionDigits:0})}</b></td>
+    </tr>`;
+  }).join('');
+  const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Sevkiyat Raporu — ${esc(proj?.no||'')}</title>
+    <style>${_pdfStyle()}
+      @media print { @page{size:A4 portrait;margin:0} }
+      .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}
+      .kpi-card{background:#fff;border:1px solid #cdd2dc;border-radius:10px;overflow:hidden;text-align:center;display:flex;flex-direction:column;box-shadow:0 1px 3px rgba(31,78,140,.06)}
+      .kpi-card .l{background:#1f4e8c;color:#fff;font-size:8.5pt;padding:5px 6px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;line-height:1.2}
+      .kpi-card .v{padding:12px 6px;font-size:18pt;font-weight:900;color:#1f4e8c;line-height:1;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%)}
+      .kpi-card.orange .v{color:#ff7a00}
+      .kpi-card.orange .l{background:#ff7a00}
+      .ted-list{background:#f1f4f8;border-left:4px solid #1f4e8c;padding:10px 14px;border-radius:6px;font-size:10pt;margin:12px 0}
+    </style></head><body>
+    <div class="pdf-toolbar no-print">
+      <div style="font-weight:700;font-size:14px">📊 Sevkiyat Raporu — ${esc(proj?.no||'')}</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-print" onclick="window.print()">🖨️ Yazdır / PDF Kaydet</button>
+        <button class="btn-print" style="background:#0a7" onclick="if(window.opener && window.opener.exportShipmentExcel){window.opener.exportShipmentExcel();}else{alert('İndirme başlatılamadı, ana pencereyi kapatma');}">📊 Excel İndir</button>
+        <button class="btn-close" onclick="window.close()">✕ Kapat</button>
+      </div>
+    </div>
+    <div class="page">
+      ${_pdfHeader('SEVKİYAT','RAPORU')}
+      <div class="meta">
+        <span>PROJE: ${esc(proj?.no||'')}${proj?.customer?` · ${esc(proj.customer)}`:''}</span>
+        <span>TARİH: ${tarih}</span>
+      </div>
+      <div class="desc">Bu projede toplam ${st.count} yükleme kaydı yapılmıştır. Detaylar aşağıdadır.</div>
+      <div class="kpis">
+        <div class="kpi-card"><div class="l">🚛 Toplam Araç</div><div class="v">${st.count}</div></div>
+        <div class="kpi-card orange"><div class="l">⚖️ Toplam Tonaj (kg)</div><div class="v">${st.totalKg.toLocaleString('tr-TR',{maximumFractionDigits:0})}</div></div>
+        <div class="kpi-card"><div class="l">📅 Yükleme Gün</div><div class="v">${st.dayCount}</div></div>
+        <div class="kpi-card"><div class="l">🚚 Farklı Plaka</div><div class="v">${st.uniquePlaka}</div></div>
+        <div class="kpi-card"><div class="l">📊 Ortalama Yük (kg)</div><div class="v">${st.avgKg.toLocaleString('tr-TR')}</div></div>
+        <div class="kpi-card"><div class="l">⏱️ Ort. Bekleme</div><div class="v">${st.avgDurationMin||'—'}${st.avgDurationMin?' dk':''}</div></div>
+        <div class="kpi-card"><div class="l">🏁 İlk Yükleme</div><div class="v" style="font-size:11pt">${st.firstDate||'—'}</div></div>
+        <div class="kpi-card"><div class="l">🏁 Son Yükleme</div><div class="v" style="font-size:11pt">${st.lastDate||'—'}</div></div>
+      </div>
+      <div class="ted-list"><strong>🏢 Nakliye Firmaları:</strong> ${tedLines}</div>
+      <table class="frm" style="font-size:9pt">
+        <thead><tr>
+          <th style="width:28px">#</th>
+          <th style="width:70px">Tarih</th>
+          <th>Plaka</th>
+          <th>Sürücü</th>
+          <th>Firma</th>
+          <th>Giriş</th>
+          <th>Çıkış</th>
+          <th>Süre</th>
+          <th>İrsaliye</th>
+          <th>Tonaj (kg)</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr>
+          <td colspan="9" style="text-align:right;font-weight:800;background:#fff8e1">TOPLAM</td>
+          <td style="font-weight:800;background:#fff8e1">${st.totalKg.toLocaleString('tr-TR',{maximumFractionDigits:0})}</td>
+        </tr></tfoot>
+      </table>
+      <div style="flex:1"></div>
+      ${_pdfFooter()}
+    </div>
+    </body></html>`;
+  const w = window.open('','_blank');
+  if(!w){ toast('Popup engellendi, izin ver','err'); return; }
+  w.document.write(html); w.document.close();
+}
+
+function exportShipmentExcel(){
+  const pid = document.getElementById('shipProj')?.value;
+  if(!pid){ toast('Önce proje seç','err'); return; }
+  if(typeof XLSX === 'undefined'){ toast('Excel kütüphanesi yüklenemedi','err'); return; }
+  const proj = projects.find(p => p.id === pid);
+  const items = shipments.filter(s => s.project_id === pid).sort((a,b)=> (a.tarih||'').localeCompare(b.tarih||''));
+  if(items.length === 0){ toast('Yükleme yok','err'); return; }
+  const st = _calcShipmentStats(items);
+  const headers = ['#','Tarih','Çekici Plaka','Dorse Plaka','Sürücü','Nakliye Firması','Giriş Saati','Çıkış Saati','Süre (dk)','İrsaliye No','Tonaj (kg)','Not'];
+  const aoa = [
+    ['ÜÇEL STEEL CONSTRUCTION'],
+    ['SEVKİYAT RAPORU'],
+    [`PROJE: ${proj?.no||''} · ${proj?.customer||''}`, '', '', '', '', '', '', '', '', '', `TARİH: ${new Date().toLocaleDateString('tr-TR')}`],
+    [],
+    ['ÖZET'],
+    ['Toplam Araç', st.count, '', 'Toplam Tonaj (kg)', st.totalKg],
+    ['Yükleme Gün Sayısı', st.dayCount, '', 'Farklı Plaka', st.uniquePlaka],
+    ['İlk Yükleme', st.firstDate||'', '', 'Son Yükleme', st.lastDate||''],
+    ['Ortalama Yük (kg)', st.avgKg, '', 'Ortalama Bekleme (dk)', st.avgDurationMin],
+    [],
+    headers
+  ];
+  items.forEach((s,i)=>{
+    const sure = (s.giris_saati && s.cikis_saati) ? Math.round((new Date(s.cikis_saati)-new Date(s.giris_saati))/60000) : '';
+    const giris = s.giris_saati ? new Date(s.giris_saati).toLocaleString('tr-TR') : '';
+    const cikis = s.cikis_saati ? new Date(s.cikis_saati).toLocaleString('tr-TR') : '';
+    aoa.push([i+1, s.tarih||'', s.cekici_plaka||'', s.dorse_plaka||'', s.surucu||'', s.tedarikci||'', giris, cikis, sure, s.irsaliye_no||'', parseFloat(s.tonaj||0), s.not_text||'']);
+  });
+  aoa.push([]);
+  aoa.push(['', 'TOPLAM', '', '', '', '', '', '', '', '', st.totalKg]);
+  aoa.push([]);
+  aoa.push(['ÜÇEL Steel Construction · Fevzi Çakmak Mah. Loras Cad. No:5/I-J-K (Zümer-1 Sanayi Sitesi) Karatay/KONYA']);
+  aoa.push(['Tel: +90 332 345 15 99 · E-posta: bilgi@ucelmetal.net · Web: www.ucelmetal.net']);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges'] = [
+    {s:{r:0,c:0},e:{r:0,c:headers.length-1}},
+    {s:{r:1,c:0},e:{r:1,c:headers.length-1}},
+    {s:{r:2,c:0},e:{r:2,c:9}},
+    {s:{r:2,c:10},e:{r:2,c:headers.length-1}}
+  ];
+  ws['!cols'] = [{wch:4},{wch:11},{wch:14},{wch:14},{wch:18},{wch:18},{wch:18},{wch:18},{wch:8},{wch:14},{wch:12},{wch:25}];
+  ws['!rows'] = [{hpt:26},{hpt:22},{hpt:18}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sevkiyat Raporu');
+  const projNo = (proj?.no||'proje').replace(/[^a-zA-Z0-9_-]/g,'_');
+  XLSX.writeFile(wb, `UCEL_Sevkiyat_${projNo}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('Excel indirildi','ok');
 }
 
 async function deleteShipment(){
