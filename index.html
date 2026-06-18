@@ -226,7 +226,7 @@ tr.click{cursor:pointer}
 }
 /* Rol bazlı görünürlük — Yetki kontrolü */
 body:not(.role-admin) .admin-only{display:none !important}
-body:not(.role-admin):not(.role-teklifproje) .proj-edit-only{display:none !important}
+body:not(.role-admin):not(.role-teklifproje):not(.role-satinalma):not(.role-muhasebe) .proj-edit-only{display:none !important}
 body:not(.role-admin):not(.role-satinalma):not(.role-muhasebe) .price-only{display:none !important}
 body:not(.role-admin):not(.role-satinalma):not(.role-muhasebe) .price-edit-only{display:none !important}
 /* Takip formu tam ekran modu */
@@ -502,6 +502,7 @@ body.proc-fullscreen{overflow:hidden}
             <select id="shipProj" onchange="renderShipments()" style="flex:1;min-width:200px;padding:6px 10px;border:1px solid #cdd2dc;border-radius:6px;font-size:13px"><option value="">— Proje seç —</option></select>
             <button class="btn sec sm" onclick="printShipmentReport()" title="Tüm proje raporu (yazdır/PDF/Excel)">📊 Proje Raporu</button>
             <button class="btn sec sm" onclick="printDailyShipmentReport()" title="Belirli bir günün raporu">📅 Günlük Rapor</button>
+            <button class="btn ok sm" onclick="completeShipping()" style="background:#0a7;color:#fff" title="Yüklemeyi sonlandır ve final rapor al">🏁 Yüklemeyi Tamamla</button>
             <button class="btn" onclick="openShipmentModal()">+ Yeni Yükleme</button>
           </div>
           <div id="shipSummary" style="font-size:11px;color:#666;margin-bottom:8px"></div>
@@ -882,11 +883,24 @@ body.proc-fullscreen{overflow:hidden}
       </div><!-- /form-side-scroll -->
       <div class="info-side-scroll">
 <div id="phasesBox" style="display:none;margin-top:0;padding:14px;background:#fafbfd;border:1px solid var(--bd);border-radius:10px">
-        <div style="font-weight:700;color:var(--p);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
-          <span>📊 Faz İlerlemesi (6 birim)</span>
-          <span id="ph-overall" style="font-size:12px;color:var(--m)">Toplam: %0</span>
+        <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:14px">
+          <!-- SOL: Faz İlerlemesi -->
+          <div style="border-right:1px solid var(--bd);padding-right:14px">
+            <div style="font-weight:700;color:var(--p);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+              <span>📊 Faz İlerlemesi (6 birim)</span>
+              <span id="ph-overall" style="font-size:12px;color:var(--m)">Toplam: %0</span>
+            </div>
+            <div id="phasesList"></div>
+          </div>
+          <!-- SAĞ: Yükleme Özeti -->
+          <div>
+            <div style="font-weight:700;color:var(--p);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+              <span>🚚 Yükleme Durumu</span>
+              <button class="btn sec sm" type="button" onclick="goto('d-sevk');setTimeout(()=>{const s=document.getElementById('shipProj');if(s){s.value=editP;renderShipments();}},300)" style="padding:3px 8px;font-size:10px">Tümünü gör →</button>
+            </div>
+            <div id="projShipSummary" style="font-size:13px;color:#333"></div>
+          </div>
         </div>
-        <div id="phasesList"></div>
       </div>
 
       <div id="procureBox" style="display:none;margin-top:6px;background:#fff;border:1px solid var(--bd);border-radius:10px;overflow:hidden">
@@ -3901,7 +3915,8 @@ function openProj(id){
   sel.innerHTML=Object.values(allProfiles).map(u=>`<option value="${u.id}">${u.label} - ${u.full_name}</option>`).join('');
   const isAdmin = me?.role === 'yonetici';
   const canEditProject = isAdmin || me?.role === 'teklifproje';
-  const canManageMaterial = canEditProject;  // Aynı kişiler malzemeyi de yönetir
+  // Malzeme ekleme/silme: yonetici + teklifproje + satinalma + muhasebe
+  const canManageMaterial = canEditProject || me?.role === 'satinalma' || me?.role === 'muhasebe';
   // Sorumlu alanı sadece yönetici için düzenlenebilir
   sel.disabled = !isAdmin;
   sel.style.background = isAdmin ? '' : '#f5f7fa';
@@ -3939,6 +3954,7 @@ function openProj(id){
     document.getElementById('phasesBox').style.display='block';
     document.getElementById('procureBox').style.display='block';
     renderPhases(p);
+    renderProjectShipmentSummary(id);
     // Procurement
     _procProjectId = id;
     const t = document.getElementById('procBoxTitle');
@@ -3992,8 +4008,12 @@ function renderPhases(project){
         approvalBtn = `<span style="font-size:11px;color:#c80;background:#fff3cd;padding:2px 8px;border-radius:10px">⏳ %100 onay bekliyor</span>`;
       }
     }
-    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #eef0f5;flex-wrap:wrap">
-      <div style="min-width:170px;font-size:13px;color:${overdue?'#c00':'#333'};font-weight:${overdue?'700':'500'}">
+    const PHASE_BG = {teklifproje:'#f3eafa',satinalma:'#e8f4ff',uretim:'#fff4e6',sevk:'#e8f0ff',montaj:'#e8f5e8',muhasebe:'#fce8e8'};
+    const PHASE_BORDER = {teklifproje:'#6b3fa0',satinalma:'#0aa3c7',uretim:'#d97706',sevk:'#1f4e8c',montaj:'#15803d',muhasebe:'#b91c1c'};
+    const bgColor = PHASE_BG[ph] || '#fafbfd';
+    const borderColor = PHASE_BORDER[ph] || '#cdd2dc';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;margin-bottom:4px;border-left:4px solid ${borderColor};background:${bgColor};border-radius:6px;flex-wrap:wrap">
+      <div style="min-width:170px;font-size:13px;color:${overdue?'#c00':borderColor};font-weight:${overdue?'700':'600'}">
         ${DI[ph]||''} ${DN[ph]||ph}${overdue?' ⚠️':''}${isPending?' ⏳':''}
       </div>
       <div style="flex:1;min-width:200px;display:flex;align-items:center;gap:8px">
@@ -4010,7 +4030,7 @@ function renderPhases(project){
       ${approvalBtn ? `<div style="display:flex;gap:4px;align-items:center">${approvalBtn}${isPending && !adminEdit ? `<span style="font-size:10px;color:#888">(${esc(pendBy)} talep etti)</span>` : ''}</div>` : ''}
     </div>`;
   }).join('');
-  const headerRow = `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:2px solid #1f4e8c;font-size:10.5px;font-weight:800;color:#1f4e8c;text-transform:uppercase;letter-spacing:0.5px;flex-wrap:wrap">
+  const headerRow = `<div style="display:flex;align-items:center;gap:10px;padding:6px 12px 6px 16px;margin-bottom:6px;border-bottom:2px solid #1f4e8c;font-size:10.5px;font-weight:800;color:#1f4e8c;text-transform:uppercase;letter-spacing:0.5px;flex-wrap:wrap">
     <div style="min-width:170px">Faz</div>
     <div style="flex:1;min-width:200px;display:flex;align-items:center;gap:8px">
       <div style="flex:1;text-align:center">İlerleme</div>
@@ -4321,6 +4341,73 @@ async function renderShipments(){
 }
 
 // Tek yükleme — sevk irsaliyesi tarzı tek sayfa PDF
+// Proje modal'ı içinde sağ tarafta gösterilen yükleme özeti
+function renderProjectShipmentSummary(projectId){
+  const el = document.getElementById('projShipSummary'); if(!el) return;
+  const items = (shipments || []).filter(s => s.project_id === projectId)
+    .sort((a,b)=> (a.tarih||'').localeCompare(b.tarih||''));
+  if(items.length === 0){
+    el.innerHTML = `<div style="padding:16px;text-align:center;color:#888;background:#fff;border:1px dashed #cdd2dc;border-radius:8px">
+      <div style="font-size:22px;margin-bottom:4px">🚚</div>
+      <div style="font-size:12px">Bu projede henüz yükleme yapılmamış.</div>
+      <button class="btn ok sm" onclick="goto('d-sevk');setTimeout(()=>{const s=document.getElementById('shipProj');if(s){s.value='${projectId}';renderShipments();setTimeout(()=>openShipmentModal(),200);}},300)" style="margin-top:8px;padding:4px 10px;font-size:11px">+ İlk Yüklemeyi Ekle</button>
+    </div>`;
+    return;
+  }
+  const st = _calcShipmentStats(items);
+  // Hedef tonaj (proje.tonnage) varsa ilerleme %
+  const proj = projects.find(p => p.id === projectId);
+  const hedefKg = (parseFloat(proj?.tonnage) || 0) * 1000;
+  const yuklenenKg = st.totalKg;
+  const ilerleme = hedefKg > 0 ? Math.min(100, Math.round((yuklenenKg/hedefKg)*100)) : 0;
+  const son3 = items.slice(-3).reverse();
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div style="background:#fff;border:1px solid #cdd2dc;border-radius:8px;overflow:hidden">
+        <div style="background:#1f4e8c;color:#fff;font-size:9pt;padding:4px 6px;text-align:center;font-weight:700">🚛 ARAÇ</div>
+        <div style="padding:8px;text-align:center;font-size:18pt;font-weight:900;color:#1f4e8c">${st.count}</div>
+      </div>
+      <div style="background:#fff;border:1px solid #cdd2dc;border-radius:8px;overflow:hidden">
+        <div style="background:#ff7a00;color:#fff;font-size:9pt;padding:4px 6px;text-align:center;font-weight:700">⚖️ TONAJ (KG)</div>
+        <div style="padding:8px;text-align:center;font-size:18pt;font-weight:900;color:#ff7a00">${yuklenenKg.toLocaleString('tr-TR',{maximumFractionDigits:0})}</div>
+      </div>
+      <div style="background:#fff;border:1px solid #cdd2dc;border-radius:8px;overflow:hidden">
+        <div style="background:#1f4e8c;color:#fff;font-size:9pt;padding:4px 6px;text-align:center;font-weight:700">📅 GÜN</div>
+        <div style="padding:8px;text-align:center;font-size:18pt;font-weight:900;color:#1f4e8c">${st.dayCount}</div>
+      </div>
+      <div style="background:#fff;border:1px solid #cdd2dc;border-radius:8px;overflow:hidden">
+        <div style="background:#1f4e8c;color:#fff;font-size:9pt;padding:4px 6px;text-align:center;font-weight:700">🚚 FARKLI PLAKA</div>
+        <div style="padding:8px;text-align:center;font-size:18pt;font-weight:900;color:#1f4e8c">${st.uniquePlaka}</div>
+      </div>
+    </div>
+    ${hedefKg > 0 ? `
+      <div style="background:#fff;padding:8px 10px;border:1px solid #cdd2dc;border-radius:8px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#666;margin-bottom:4px">
+          <span>Hedef Tonaj: ${(hedefKg/1000).toLocaleString('tr-TR')} t</span>
+          <span style="font-weight:700;color:#1f4e8c">%${ilerleme}</span>
+        </div>
+        <div style="height:8px;background:#e8ecf2;border-radius:4px;overflow:hidden">
+          <div style="width:${ilerleme}%;height:100%;background:${ilerleme>=100?'#0a7':'#ff7a00'}"></div>
+        </div>
+      </div>
+    ` : ''}
+    <div style="background:#fff;padding:8px 10px;border:1px solid #cdd2dc;border-radius:8px;font-size:11px;color:#666;margin-bottom:8px">
+      <div>🏁 <strong>İlk:</strong> ${st.firstDate || '—'}</div>
+      <div style="margin-top:2px">🏁 <strong>Son:</strong> ${st.lastDate || '—'}</div>
+      <div style="margin-top:2px">📊 <strong>Ortalama:</strong> ${st.avgKg.toLocaleString('tr-TR')} kg/araç</div>
+    </div>
+    <div style="font-size:11px;color:#1f4e8c;font-weight:700;margin-bottom:4px">SON YÜKLEMELER</div>
+    ${son3.map(s => `
+      <div style="background:#fff;padding:6px 10px;border:1px solid #eef0f5;border-left:3px solid #1f4e8c;border-radius:6px;margin-bottom:4px;font-size:11px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span><b>${esc(s.cekici_plaka||'-')}</b> · ${esc(s.tarih||'-')}</span>
+          <span style="color:#ff7a00;font-weight:700">${parseFloat(s.tonaj||0).toLocaleString('tr-TR',{maximumFractionDigits:0})} kg</span>
+        </div>
+      </div>`).join('')}
+  `;
+}
+
 function printSingleShipment(shipId){
   const s = shipments.find(x => x.id === shipId);
   if(!s) return;
@@ -4385,6 +4472,49 @@ function printSingleShipment(shipId){
 }
 
 // Günlük rapor — tarih seç, o tarihteki tüm yüklemeleri rapor et
+// Yüklemeyi tamamla — sevk fazını %100 yap + audit log + final raporu aç
+async function completeShipping(){
+  const pid = document.getElementById('shipProj')?.value;
+  if(!pid){ toast('Önce proje seç','err'); return; }
+  const proj = projects.find(p => p.id === pid);
+  const items = shipments.filter(s => s.project_id === pid);
+  if(items.length === 0){ toast('Bu projede yükleme yok, önce yükleme ekle','err'); return; }
+  const st = _calcShipmentStats(items);
+  const onay = confirm(
+    `🏁 PROJE YÜKLEMESİ TAMAMLANIYOR\n\n` +
+    `Proje: ${proj?.no||''} · ${proj?.customer||''}\n` +
+    `Toplam Araç: ${st.count}\n` +
+    `Toplam Tonaj: ${st.totalKg.toLocaleString('tr-TR',{maximumFractionDigits:0})} kg\n` +
+    `Yükleme Günü: ${st.dayCount}\n\n` +
+    `✓ Sevkiyat fazı %100 olarak işaretlenecek\n` +
+    `✓ Bildirim ekibe iletilecek\n` +
+    `✓ Final raporu otomatik açılacak\n\n` +
+    `Devam edilsin mi?`
+  );
+  if(!onay) return;
+  try {
+    // Sevkiyat fazını %100 yap
+    const phases = {...(proj.phases || {}), sevk: 100};
+    const {error} = await sb.from('projects').update({phases, updated_at: new Date().toISOString()}).eq('id', pid);
+    if(error) throw error;
+    proj.phases = phases;
+    // Audit log
+    try { await logAudit('shipping_complete', 'project', pid, `${proj.no} · ${proj.customer}`, {araclar: st.count, tonaj: st.totalKg, gun: st.dayCount}); } catch(e){}
+    // Bildirim
+    try {
+      await notify(
+        `🏁 ${me.full_name} "${proj?.no||''}" projesinin yüklemesini TAMAMLADI: ${st.count} araç · ${st.totalKg.toLocaleString('tr-TR',{maximumFractionDigits:0})} kg`,
+        '🏁', 'system', 'project', pid
+      );
+    } catch(e){}
+    toast('🏁 Proje yüklemesi tamamlandı — final rapor açılıyor','ok');
+    // Final raporu otomatik aç
+    setTimeout(()=>printShipmentReport(), 600);
+  } catch(e){
+    toast('Hata: '+(e.message||e),'err');
+  }
+}
+
 function printDailyShipmentReport(){
   const pid = document.getElementById('shipProj')?.value;
   if(!pid){ toast('Önce proje seç','err'); return; }
