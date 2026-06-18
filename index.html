@@ -487,7 +487,28 @@ body.proc-fullscreen{overflow:hidden}
         </div>
         <div class="section-h"><h2>Görevler</h2></div><div id="d-stok"></div></div>
       <div class="page" id="page-d-uretim"><div class="page-h"><div><div class="page-title">🔧 Üretim</div><div class="page-sub">Atölye ve emirler</div></div><div><button class="btn admin-only" onclick="openTask('uretim')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-uretim"></div><div class="kpi-grid" id="dk-uretim"></div><div class="section-h"><h2>Görevler</h2></div><div id="d-uretim"></div></div>
-      <div class="page" id="page-d-sevk"><div class="page-h"><div><div class="page-title">🚚 Sevkiyat</div><div class="page-sub">Sevk planı ve lojistik</div></div><div><button class="btn admin-only" onclick="openTask('sevk')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-sevk"></div><div class="kpi-grid" id="dk-sevk"></div><div class="section-h"><h2>Görevler</h2></div><div id="d-sevk"></div></div>
+      <div class="page" id="page-d-sevk">
+        <div class="page-h">
+          <div><div class="page-title">🚚 Sevkiyat</div><div class="page-sub">Sevk planı ve lojistik · Proje bazlı yükleme kayıtları</div></div>
+          <div><button class="btn admin-only" onclick="openTask('sevk')">+ Yeni Görev</button></div>
+        </div>
+        <div class="banner warn" id="b-sevk"></div>
+        <div class="kpi-grid" id="dk-sevk"></div>
+
+        <!-- PROJE BAZLI YÜKLEME KAYITLARI -->
+        <div style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);margin-top:16px;padding:14px 18px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+            <span style="font-weight:700;color:#1f4e8c;font-size:15px">📦 Yükleme Kayıtları</span>
+            <select id="shipProj" onchange="renderShipments()" style="flex:1;min-width:200px;padding:6px 10px;border:1px solid #cdd2dc;border-radius:6px;font-size:13px"><option value="">— Proje seç —</option></select>
+            <button class="btn" onclick="openShipmentModal()">+ Yeni Yükleme</button>
+          </div>
+          <div id="shipSummary" style="font-size:11px;color:#666;margin-bottom:8px"></div>
+          <div id="shipList" style="min-height:60px"></div>
+        </div>
+
+        <div class="section-h"><h2>Görevler</h2></div>
+        <div id="d-sevk"></div>
+      </div>
       <div class="page" id="page-d-montaj"><div class="page-h"><div><div class="page-title">🏗️ Saha Montajı</div><div class="page-sub">Şantiye ve günlük rapor</div></div><div><button class="btn admin-only" onclick="openTask('montaj')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-montaj"></div><div class="kpi-grid" id="dk-montaj"></div><div class="section-h"><h2>Görevler</h2></div><div id="d-montaj"></div></div>
       <div class="page" id="page-d-muhasebe"><div class="page-h"><div><div class="page-title">💰 Muhasebe</div><div class="page-sub">Fatura ve tahsilat</div></div><div><button class="btn admin-only" onclick="openTask('muhasebe')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-muhasebe"></div><div class="kpi-grid" id="dk-muhasebe"></div><div class="section-h"><h2>Görevler</h2></div><div id="d-muhasebe"></div></div>
 
@@ -927,6 +948,44 @@ body.proc-fullscreen{overflow:hidden}
   </div>
 </div>
 
+<!-- YÜKLEME / SEVKİYAT MODALI -->
+<div class="modal-bg" id="shipModal">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-h"><h3 id="smTitle">🚚 Yeni Yükleme Kaydı</h3><button class="x" onclick="closeShipmentModal()">✕</button></div>
+    <div class="modal-b">
+      <div class="fgrid">
+        <div class="frow"><label>📅 Tarih</label><input id="sh-tarih" type="date"></div>
+        <div class="frow"><label>⚖️ Tonaj (kg)</label><input id="sh-tonaj" type="number" step="0.01" placeholder="0"></div>
+        <div class="frow"><label>🚛 Çekici Plakası</label><input id="sh-cekici" placeholder="34 ABC 123" maxlength="20" style="text-transform:uppercase"></div>
+        <div class="frow"><label>🚚 Dorse Plakası</label><input id="sh-dorse" placeholder="34 XYZ 456" maxlength="20" style="text-transform:uppercase"></div>
+        <div class="frow"><label>🕐 Giriş Saati</label><input id="sh-giris" type="datetime-local"></div>
+        <div class="frow"><label>🕑 Çıkış Saati</label><input id="sh-cikis" type="datetime-local"></div>
+        <div class="frow"><label>👤 Sürücü</label><input id="sh-surucu" placeholder="Ad Soyad"></div>
+        <div class="frow"><label>🏢 Nakliye Firması</label><input id="sh-tedarikci" placeholder="Tedarikçi adı"></div>
+        <div class="frow" style="grid-column:1/-1"><label>📋 Sevk İrsaliye No</label><input id="sh-irsno" placeholder="İrsaliye no"></div>
+        <div class="frow" style="grid-column:1/-1"><label>📷 İrsaliye Görseli</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="file" id="sh-irsfile" accept="image/*" style="flex:1">
+            <span id="sh-irspreview" style="font-size:11px;color:#0a7"></span>
+          </div>
+        </div>
+        <div class="frow" style="grid-column:1/-1"><label>🏗️ Kantar Fişi Görseli</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="file" id="sh-kantfile" accept="image/*" style="flex:1">
+            <span id="sh-kantpreview" style="font-size:11px;color:#0a7"></span>
+          </div>
+        </div>
+        <div class="frow" style="grid-column:1/-1"><label>📝 Not</label><textarea id="sh-not" rows="2" placeholder="Yükleme notu / özel durum"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-f">
+      <button class="btn err" id="shDel" style="margin-right:auto;display:none" onclick="deleteShipment()">🗑 Sil</button>
+      <button class="btn sec" onclick="closeShipmentModal()">Vazgeç</button>
+      <button class="btn ok" onclick="saveShipment()">💾 Kaydet</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-wrap" id="toasts"></div>
 
 <script>
@@ -1150,7 +1209,8 @@ async function initApp(){
         withTimeout(loadChat(),TIMEOUT,'chat'),
         withTimeout(loadStockFiles(),TIMEOUT,'stock_files'),
         withTimeout(loadStockItems(),TIMEOUT,'stock_items'),
-        withTimeout(loadSiteReports(),TIMEOUT,'site_reports')
+        withTimeout(loadSiteReports(),TIMEOUT,'site_reports'),
+        withTimeout(loadShipments(),TIMEOUT,'shipments')
       ]).then(()=>{ try { renderVisibleOnly(); } catch(e){} });
     }, 100);
     const results = critical;
@@ -1375,6 +1435,7 @@ function goto(id){
   if(id==='site-reports'){renderSiteReports()}
   if(id==='d-stok'){renderStockFiles();loadStockItems(); if(localStorage.getItem('stkOpen')==='1' && document.getElementById('stkBody')?.style.display!=='block') toggleStockList();}
   if(id.startsWith('d-'))renderDept(id.substring(2));
+  if(id === 'd-sevk'){ loadShipments().then(renderShipments); }
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function tSidebar(){document.getElementById('sb').classList.toggle('show');document.getElementById('sbOv').classList.toggle('show')}
@@ -4185,6 +4246,176 @@ function openTask(dept,id){
   document.getElementById('tModal').classList.add('show');
 }
 function closeTask(){document.getElementById('tModal').classList.remove('show');editT=null}
+
+/* ============ SEVKIYAT / YÜKLEME KAYITLARI ============ */
+let shipments = [];
+let editShipId = null;
+
+async function loadShipments(){
+  const {data, error} = await sb.from('shipments').select('*').order('tarih',{ascending:false}).order('created_at',{ascending:false});
+  if(error){ console.warn('shipments load:', error); return; }
+  shipments = data || [];
+}
+
+function _populateShipProjects(){
+  const sel = document.getElementById('shipProj'); if(!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Proje seç —</option>' +
+    projects.filter(p => p.stage !== 'tamamlandi').map(p => `<option value="${p.id}">${esc(p.no)} · ${esc(p.customer)}</option>`).join('');
+  if(cur) sel.value = cur;
+}
+
+async function renderShipments(){
+  _populateShipProjects();
+  const sel = document.getElementById('shipProj');
+  const pid = sel?.value || '';
+  const listEl = document.getElementById('shipList');
+  const sumEl = document.getElementById('shipSummary');
+  if(!listEl) return;
+  if(!pid){
+    listEl.innerHTML = '<div style="padding:30px;text-align:center;color:#888">Üstten bir proje seç, yükleme kayıtları görünür.</div>';
+    if(sumEl) sumEl.textContent = '';
+    return;
+  }
+  if(!shipments.length) await loadShipments();
+  const items = shipments.filter(s => s.project_id === pid);
+  let totalKg = 0;
+  items.forEach(s => totalKg += parseFloat(s.tonaj)||0);
+  if(sumEl){
+    sumEl.innerHTML = `<strong>${items.length}</strong> yükleme · Toplam: <strong style="color:#1f4e8c">${totalKg.toLocaleString('tr-TR',{maximumFractionDigits:0})} kg</strong>`;
+  }
+  if(items.length === 0){
+    listEl.innerHTML = '<div style="padding:30px;text-align:center;color:#888">Bu projede henüz yükleme yok. Sağdaki <strong>+ Yeni Yükleme</strong> ile başla.</div>';
+    return;
+  }
+  listEl.innerHTML = items.map(s => {
+    const tarih = s.tarih || '';
+    const giris = s.giris_saati ? new Date(s.giris_saati).toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit'}) : '—';
+    const cikis = s.cikis_saati ? new Date(s.cikis_saati).toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit'}) : '—';
+    const sure = (s.giris_saati && s.cikis_saati) ? Math.round((new Date(s.cikis_saati)-new Date(s.giris_saati))/60000) + ' dk' : '';
+    return `<div style="border:1px solid #eef0f5;border-left:4px solid #1f4e8c;border-radius:8px;padding:12px 14px;margin-bottom:10px;background:#fafbfd">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px">
+          <div style="font-weight:800;color:#1f4e8c;font-size:14px">🚛 ${esc(s.cekici_plaka||'—')}${s.dorse_plaka?` <span style="color:#888">/ 🚚 ${esc(s.dorse_plaka)}</span>`:''}</div>
+          <div style="font-size:12px;color:#444;margin-top:4px">📅 ${esc(tarih)} · 🕐 ${esc(giris)} → 🕑 ${esc(cikis)}${sure?` <span style="color:#888">(${sure})</span>`:''}</div>
+          ${s.surucu?`<div style="font-size:12px;color:#666;margin-top:2px">👤 ${esc(s.surucu)}${s.tedarikci?` · 🏢 ${esc(s.tedarikci)}`:''}</div>`:''}
+          ${s.irsaliye_no?`<div style="font-size:12px;color:#666;margin-top:2px">📋 İrsaliye: <strong>${esc(s.irsaliye_no)}</strong></div>`:''}
+          ${s.not_text?`<div style="font-size:11px;color:#888;margin-top:4px;font-style:italic">"${esc(s.not_text)}"</div>`:''}
+        </div>
+        <div style="text-align:right;min-width:120px">
+          <div style="font-size:18px;font-weight:800;color:#0a7">${parseFloat(s.tonaj||0).toLocaleString('tr-TR',{maximumFractionDigits:0})}</div>
+          <div style="font-size:11px;color:#666">kg</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center">
+        ${s.irsaliye_url?`<a href="${esc(s.irsaliye_url)}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;background:#fff;padding:4px 10px;border:1px solid #cdd2dc;border-radius:6px;text-decoration:none;color:#1f4e8c;font-size:11px;font-weight:600">📷 İrsaliye Foto</a>`:''}
+        ${s.kantar_url?`<a href="${esc(s.kantar_url)}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;background:#fff;padding:4px 10px;border:1px solid #cdd2dc;border-radius:6px;text-decoration:none;color:#1f4e8c;font-size:11px;font-weight:600">🏗️ Kantar Fişi</a>`:''}
+        <div style="flex:1"></div>
+        <button class="btn sec sm" onclick="openShipmentModal('${s.id}')" style="padding:4px 10px;font-size:11px">✏️ Düzenle</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openShipmentModal(id){
+  editShipId = id || null;
+  document.getElementById('smTitle').textContent = id ? '🚚 Yükleme Düzenle' : '🚚 Yeni Yükleme Kaydı';
+  document.getElementById('shDel').style.display = id ? 'inline-flex' : 'none';
+  if(id){
+    const s = shipments.find(x=>x.id===id); if(!s) return;
+    document.getElementById('sh-tarih').value = s.tarih || '';
+    document.getElementById('sh-tonaj').value = s.tonaj || '';
+    document.getElementById('sh-cekici').value = s.cekici_plaka || '';
+    document.getElementById('sh-dorse').value = s.dorse_plaka || '';
+    document.getElementById('sh-giris').value = s.giris_saati ? new Date(s.giris_saati).toISOString().slice(0,16) : '';
+    document.getElementById('sh-cikis').value = s.cikis_saati ? new Date(s.cikis_saati).toISOString().slice(0,16) : '';
+    document.getElementById('sh-surucu').value = s.surucu || '';
+    document.getElementById('sh-tedarikci').value = s.tedarikci || '';
+    document.getElementById('sh-irsno').value = s.irsaliye_no || '';
+    document.getElementById('sh-not').value = s.not_text || '';
+    document.getElementById('sh-irspreview').textContent = s.irsaliye_url ? '✓ Mevcut görseli koru (yeni seçilirse değişir)' : '';
+    document.getElementById('sh-kantpreview').textContent = s.kantar_url ? '✓ Mevcut görseli koru (yeni seçilirse değişir)' : '';
+  } else {
+    ['sh-tonaj','sh-cekici','sh-dorse','sh-giris','sh-cikis','sh-surucu','sh-tedarikci','sh-irsno','sh-not'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';});
+    document.getElementById('sh-tarih').value = new Date().toISOString().slice(0,10);
+    document.getElementById('sh-irspreview').textContent = '';
+    document.getElementById('sh-kantpreview').textContent = '';
+  }
+  document.getElementById('sh-irsfile').value = '';
+  document.getElementById('sh-kantfile').value = '';
+  document.getElementById('shipModal').classList.add('show');
+}
+
+function closeShipmentModal(){
+  document.getElementById('shipModal').classList.remove('show');
+  editShipId = null;
+}
+
+async function _uploadShipPhoto(file, type){
+  const ts = Date.now();
+  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+  const path = `shipments/${type}/${ts}_${safe}`;
+  const { error: upErr } = await sb.storage.from('project-files').upload(path, file, { upsert: false, contentType: file.type });
+  if(upErr) throw upErr;
+  const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path);
+  return urlData?.publicUrl || null;
+}
+
+async function saveShipment(){
+  const pid = document.getElementById('shipProj').value;
+  if(!pid){ toast('Önce üstten proje seç','err'); return; }
+  const row = {
+    project_id: pid,
+    tarih: document.getElementById('sh-tarih').value || null,
+    tonaj: parseFloat(document.getElementById('sh-tonaj').value) || null,
+    cekici_plaka: document.getElementById('sh-cekici').value.toUpperCase().trim() || null,
+    dorse_plaka: document.getElementById('sh-dorse').value.toUpperCase().trim() || null,
+    giris_saati: document.getElementById('sh-giris').value || null,
+    cikis_saati: document.getElementById('sh-cikis').value || null,
+    surucu: document.getElementById('sh-surucu').value.trim() || null,
+    tedarikci: document.getElementById('sh-tedarikci').value.trim() || null,
+    irsaliye_no: document.getElementById('sh-irsno').value.trim() || null,
+    not_text: document.getElementById('sh-not').value.trim() || null
+  };
+  // Foto yükleme
+  try {
+    const irsFile = document.getElementById('sh-irsfile').files[0];
+    if(irsFile){ row.irsaliye_url = await _uploadShipPhoto(irsFile, 'irsaliye'); }
+    const kantFile = document.getElementById('sh-kantfile').files[0];
+    if(kantFile){ row.kantar_url = await _uploadShipPhoto(kantFile, 'kantar'); }
+  } catch(e){
+    toast('Foto yükleme hatası: '+(e.message||e),'err');
+    return;
+  }
+  if(editShipId){
+    const {error} = await sb.from('shipments').update(row).eq('id', editShipId);
+    if(error){ toast('Hata: '+error.message,'err'); return; }
+    toast('Yükleme güncellendi','ok');
+  } else {
+    row.created_by = me.id;
+    const {error} = await sb.from('shipments').insert(row);
+    if(error){ toast('Hata: '+error.message,'err'); return; }
+    toast('Yükleme kaydedildi','ok');
+    try {
+      const proj = projects.find(p=>p.id===pid);
+      await notify(`🚚 ${me.full_name} ${proj?.no||''} projesine yeni yükleme ekledi: ${row.cekici_plaka||'?'} · ${row.tonaj||0} kg`, '🚚', 'sevk', 'project', pid);
+    } catch(e){}
+  }
+  closeShipmentModal();
+  await loadShipments();
+  renderShipments();
+}
+
+async function deleteShipment(){
+  if(!editShipId) return;
+  if(!confirm('Bu yükleme kaydı silinsin mi?')) return;
+  const {error} = await sb.from('shipments').delete().eq('id', editShipId);
+  if(error){ toast('Silme hatası: '+error.message,'err'); return; }
+  toast('Silindi','info');
+  closeShipmentModal();
+  await loadShipments();
+  renderShipments();
+}
 async function saveTask(){
   const d={
     title:document.getElementById('tf-title').value.trim(),
