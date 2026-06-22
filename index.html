@@ -198,33 +198,40 @@ tr.click{cursor:pointer}
 
 /* Proje detay modal'ı GERÇEK tam ekran */
 #pModal{padding:0 !important}
-#pModal .modal{max-width:100vw !important;width:100vw !important;max-height:100vh !important;height:100vh !important;border-radius:0 !important}
-#pModal .modal-h{padding:10px 16px}
-#pModal .modal-b{flex:1;overflow:hidden;padding:10px 16px}
-#pModal .modal-f{padding:8px 16px}
-@media (min-width:1100px){
+#pModal .modal{max-width:100vw !important;width:100vw !important;max-height:100vh !important;height:100vh !important;border-radius:0 !important;background:#e8edf3}
+#pModal .modal-h{padding:10px 16px;background:#fff;border-bottom:2px solid #cbd5e1}
+#pModal .modal-b{flex:1;overflow:hidden;padding:14px;background:#e8edf3}
+#pModal .modal-f{padding:8px 16px;background:#fff;border-top:2px solid #cbd5e1}
+@media (min-width:900px){
   /* 2x2 EŞİT GRID: 4 kart — Form | Faz | Yükleme | Malzeme Takip */
-  #pModal .modal-b{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:12px;align-items:stretch;overflow:hidden}
-  #pModal .pm-card{background:#fff;border:1px solid var(--bd);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;min-height:0;box-shadow:0 1px 3px rgba(0,0,0,.04)}
-  #pModal .pm-card-h{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--bd);font-weight:700;color:var(--p);font-size:14px;flex:0 0 auto}
-  #pModal .pm-card-h .pm-fs{margin-left:auto;background:transparent;border:1px solid var(--bd);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--m);display:inline-flex;align-items:center;justify-content:center}
+  #pModal .modal-b{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:14px;align-items:stretch;overflow:hidden}
+  #pModal .pm-card{background:#fff;border:2px solid #94a3b8;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;min-height:0;box-shadow:0 4px 12px rgba(15,23,42,.10),0 1px 3px rgba(15,23,42,.06)}
+  #pModal .pm-card-h{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:2px solid #cbd5e1;font-weight:700;color:var(--p);font-size:14px;flex:0 0 auto;background:#f8fafc}
+  #pModal .pm-card-h .pm-fs{margin-left:auto;background:#fff;border:1px solid #94a3b8;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--m);display:inline-flex;align-items:center;justify-content:center}
   #pModal .pm-card-h .pm-fs:hover{background:var(--bg);color:var(--p)}
   #pModal .pm-card-b{flex:1 1 auto;overflow-y:auto;padding:12px 14px;min-height:0}
-  #pModal .pm-card.card-form{grid-column:1;grid-row:1;border-top:3px solid #6b3fa0}
-  #pModal .pm-card.card-phases{grid-column:2;grid-row:1;border-top:3px solid #0aa3c7}
-  #pModal .pm-card.card-ship{grid-column:1;grid-row:2;border-top:3px solid #d97706}
-  #pModal .pm-card.card-proc{grid-column:2;grid-row:2;border-top:3px solid #15803d}
+  /* 4 eşit kart — eşit yükseklik/genişlik, her birinin üst sınırı belirgin tematik renk */
+  #pModal .pm-card.card-form{grid-column:1;grid-row:1;border-top:5px solid #6b3fa0}
+  #pModal .pm-card.card-phases{grid-column:2;grid-row:1;border-top:5px solid #0aa3c7}
+  #pModal .pm-card.card-ship{grid-column:1;grid-row:2;border-top:5px solid #d97706}
+  #pModal .pm-card.card-proc{grid-column:2;grid-row:2;border-top:5px solid #15803d}
+  /* Hover'da gölge biraz artar */
+  #pModal .pm-card:hover{box-shadow:0 6px 16px rgba(15,23,42,.14),0 2px 4px rgba(15,23,42,.08)}
   /* Tam ekran modu */
   #pModal .pm-card.pm-fs-active{position:fixed;left:8px;top:8px;right:8px;bottom:8px;z-index:9999;grid-column:auto;grid-row:auto;box-shadow:0 12px 40px rgba(0,0,0,.25)}
   #pModal .modal-b.has-fs > .pm-card:not(.pm-fs-active){visibility:hidden}
   #pModal #phasesBox,#pModal #procureBox{margin:0 !important;border:0 !important;border-radius:0 !important;background:transparent !important}
 }
-@media (max-width:1099px){
+@media (max-width:899px){
   /* Mobil/küçük ekran: tek sütun, kaydırma */
-  #pModal .modal-b{display:block;overflow-y:auto}
-  #pModal .pm-card{background:#fff;border:1px solid var(--bd);border-radius:12px;margin-bottom:10px;overflow:hidden}
-  #pModal .pm-card-h{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700;color:var(--p);font-size:13px}
-  #pModal .pm-card-h .pm-fs{margin-left:auto;background:transparent;border:1px solid var(--bd);border-radius:6px;width:26px;height:26px;cursor:pointer}
+  #pModal .modal-b{display:block;overflow-y:auto;background:#e8edf3;padding:12px}
+  #pModal .pm-card{background:#fff;border:2px solid #94a3b8;border-radius:12px;margin-bottom:12px;overflow:hidden;box-shadow:0 4px 12px rgba(15,23,42,.10)}
+  #pModal .pm-card.card-form{border-top:5px solid #6b3fa0}
+  #pModal .pm-card.card-phases{border-top:5px solid #0aa3c7}
+  #pModal .pm-card.card-ship{border-top:5px solid #d97706}
+  #pModal .pm-card.card-proc{border-top:5px solid #15803d}
+  #pModal .pm-card-h{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:2px solid #cbd5e1;font-weight:700;color:var(--p);font-size:13px;background:#f8fafc}
+  #pModal .pm-card-h .pm-fs{margin-left:auto;background:#fff;border:1px solid #94a3b8;border-radius:6px;width:26px;height:26px;cursor:pointer}
   #pModal .pm-card-b{padding:10px 12px}
 }
 /* Mobil alt navbar — sadece mobilde göster, sidebar gizle */
@@ -5032,9 +5039,16 @@ function exportShipmentExcel(){
 
 async function deleteShipment(){
   if(!editShipId) return;
+  // YETKİ: sadece yönetici veya sevkiyat birimi silebilir
+  if(me?.role !== 'yonetici' && me?.role !== 'sevk'){
+    alert('⛔ Yükleme kaydı silme yetkin yok.\n\nYalnızca YÖNETİCİ veya SEVKİYAT birimi silebilir.');
+    return;
+  }
   if(!confirm('Bu yükleme kaydı silinsin mi?')) return;
+  const s = shipments.find(x=>x.id===editShipId);
   const {error} = await sb.from('shipments').delete().eq('id', editShipId);
   if(error){ toast('Silme hatası: '+error.message,'err'); return; }
+  try { await logAudit('shipment_delete','shipment',editShipId,`${s?.cekici_plaka||''} · ${s?.tarih||''}`,{tonaj:s?.tonaj}); } catch(e){}
   toast('Silindi','info');
   closeShipmentModal();
   await loadShipments();
@@ -5070,11 +5084,17 @@ async function saveTask(){
   closeTask();
 }
 async function delTask(){
+  // YETKİ: sadece yönetici görev silebilir
+  if(me?.role !== 'yonetici'){
+    alert('⛔ Görev silme yetkin yok.\n\nGörevleri yalnızca YÖNETİCİ silebilir.');
+    return;
+  }
   if(!confirm('Bu görev silinsin mi?'))return;
   const t=tasks.find(x=>x.id===editT);
   const {error}=await sb.from('tasks').delete().eq('id',editT);
   if(error){toast('Hata: '+error.message,'err');return}
   await notify(`🗑️ ${me.full_name} "${t?t.title:'görev'}" görevini sildi`,'🗑️',me.role);
+  await logAudit('task_delete','task',editT,t?t.title:'görev',{dept:t?.dept});
   toast('Görev silindi','w');closeTask();
 }
 async function toggle(id){
