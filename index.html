@@ -867,7 +867,7 @@ body.proc-fullscreen{overflow:hidden}
       <div class="fgrid">
         <div class="frow"><label>Lokasyon</label><input id="pf-loc" placeholder="İstanbul"></div>
         <div class="frow"><label>Bedel (TL)</label><input id="pf-amt" type="number" placeholder="0"></div>
-        <div class="frow"><label>Tonaj (kg)</label><input id="pf-ton" type="number" step="0.1" placeholder="0"></div>
+        <div class="frow"><label>Tonaj (TON)</label><input id="pf-ton" type="number" step="0.1" placeholder="0"></div>
         <div class="frow"><label>Sevk Tarihi</label><input id="pf-ship" type="date"></div>
       </div>
       <div class="frow"><label>Aşamalar (çoklu seçim — sadece yönetici)</label>
@@ -4008,12 +4008,10 @@ function renderPhases(project){
         approvalBtn = `<span style="font-size:11px;color:#c80;background:#fff3cd;padding:2px 8px;border-radius:10px">⏳ %100 onay bekliyor</span>`;
       }
     }
-    const PHASE_BG = {teklifproje:'#f3eafa',satinalma:'#e8f4ff',uretim:'#fff4e6',sevk:'#e8f0ff',montaj:'#e8f5e8',muhasebe:'#fce8e8'};
     const PHASE_BORDER = {teklifproje:'#6b3fa0',satinalma:'#0aa3c7',uretim:'#d97706',sevk:'#1f4e8c',montaj:'#15803d',muhasebe:'#b91c1c'};
-    const bgColor = PHASE_BG[ph] || '#fafbfd';
     const borderColor = PHASE_BORDER[ph] || '#cdd2dc';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;margin-bottom:4px;border-left:4px solid ${borderColor};background:${bgColor};border-radius:6px;flex-wrap:wrap">
-      <div style="min-width:170px;font-size:13px;color:${overdue?'#c00':borderColor};font-weight:${overdue?'700':'600'}">
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-left:4px solid ${borderColor};border-bottom:1px solid #eef0f5;background:#fff;flex-wrap:wrap">
+      <div style="min-width:170px;font-size:13px;color:${overdue?'#c00':'#333'};font-weight:${overdue?'700':'600'}">
         ${DI[ph]||''} ${DN[ph]||ph}${overdue?' ⚠️':''}${isPending?' ⏳':''}
       </div>
       <div style="flex:1;min-width:200px;display:flex;align-items:center;gap:8px">
