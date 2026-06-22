@@ -893,7 +893,7 @@ body.proc-fullscreen{overflow:hidden}
           <div class="frow"><label>Proje Adı</label><input id="pf-title" placeholder="Sancaktepe Depo Çatı"></div>
           <div class="fgrid">
             <div class="frow"><label>Lokasyon</label><input id="pf-loc" placeholder="İstanbul"></div>
-            <div class="frow amount-only"><label>Bedel (TL)</label><input id="pf-amt" type="number" placeholder="0"></div>
+            <div class="frow amount-only"><label>Bedel (TL — kuruşlu yazabilirsin: 500000,50)</label><input id="pf-amt" type="number" step="0.01" placeholder="0,00"></div>
             <div class="frow"><label>Tonaj (TON)</label><input id="pf-ton" type="number" step="0.1" placeholder="0"></div>
             <div class="frow"><label>Sevk Tarihi</label><input id="pf-ship" type="date"></div>
           </div>
@@ -1736,7 +1736,7 @@ function renderOverviewAdmin(){
     <div class="kpi ok"><div class="kpi-label">Toplam Tonaj</div><div class="kpi-val g">${tn.toFixed(1)} t</div><div class="kpi-sub">Aktif</div></div>
     <div class="kpi err"><div class="kpi-label">Geciken</div><div class="kpi-val r">${ov.length}</div><div class="kpi-sub">Acil aksiyon</div></div>
     <div class="kpi"><div class="kpi-label">Açık Görev</div><div class="kpi-val">${ot.length}</div><div class="kpi-sub">Tüm ekip</div></div>
-    <div class="kpi ok"><div class="kpi-label">Aktif Ciro</div><div class="kpi-val g">${(ttl/1000).toFixed(0)}K TL</div><div class="kpi-sub">Sözleşme</div></div>
+    <div class="kpi ok amount-only"><div class="kpi-label">Aktif Ciro</div><div class="kpi-val g" style="font-size:18px">${fmtTL0(ttl)}</div><div class="kpi-sub">Sözleşme</div></div>
     <div class="kpi w"><div class="kpi-label">Teklif/Çizim</div><div class="kpi-val">${projects.filter(p=>p.stage==='teklifproje').length}</div><div class="kpi-sub">Hazırlık</div></div>`;
   document.getElementById('deptGrid').innerHTML=ALL_D.map(d=>{
     const dt=tasks.filter(t=>t.dept===d);
@@ -1816,7 +1816,7 @@ function renderOverviewUnit(){
     const tamamlanan = projects.filter(p => p.stage === 'tamamlandi').length;
     const ttl = projects.reduce((s,p) => s + (+p.amount||0), 0);
     kpis = `
-      <div class="kpi ok"><div class="kpi-label">💰 Toplam Ciro</div><div class="kpi-val g">${(ttl/1000).toFixed(0)}K TL</div><div class="kpi-sub">Tüm projeler</div></div>
+      <div class="kpi ok amount-only"><div class="kpi-label">💰 Toplam Ciro</div><div class="kpi-val g" style="font-size:18px">${fmtTL0(ttl)}</div><div class="kpi-sub">Tüm projeler</div></div>
       <div class="kpi"><div class="kpi-label">✅ Tamamlanan</div><div class="kpi-val">${tamamlanan}</div><div class="kpi-sub">Proje</div></div>
       <div class="kpi w"><div class="kpi-label">📁 Devam Eden</div><div class="kpi-val">${projects.filter(p=>p.stage!=='tamamlandi').length}</div><div class="kpi-sub">Aktif</div></div>
       <div class="kpi ${myOpen.length>0?'':'ok'}"><div class="kpi-label">📋 Görevlerim</div><div class="kpi-val">${myOpen.length}</div><div class="kpi-sub">${myOverdue.length} geciken</div></div>`;
@@ -1869,7 +1869,7 @@ function renderProjects(){
     return `<tr class="click" onclick="openProj('${p.id}')">
       <td><strong>${esc(p.no)}</strong></td><td>${esc(p.customer)}</td>
       <td>${((p.stages&&p.stages.length)?p.stages:[p.stage]).filter(Boolean).map(s=>`<span class="pill ${SP[s]||'pl-gray'}" style="margin:1px">${DI[s]||''} ${DN[s]||s}</span>`).join('')}</td>
-      <td>${p.tonnage} t</td><td class="amount-only">${p.amount?(p.amount/1000).toFixed(0)+'K':'-'}</td>
+      <td>${p.tonnage} t</td><td class="amount-only" style="text-align:right;white-space:nowrap">${p.amount ? fmtTL(p.amount) : '—'}</td>
       <td ${lt}>${p.shipdate||'-'}</td>
       <td><div style="display:flex;flex-direction:column;gap:3px">
         <div style="display:flex;align-items:center;gap:6px"><div class="progress" style="flex:1"><div class="pbar" style="width:${p.progress}%"></div></div><span style="font-size:12px;font-weight:700;color:var(--p);min-width:34px;text-align:right">%${p.progress||0}</span></div>
@@ -2441,9 +2441,9 @@ function renderProcList(){
     // Fiyat bilgilerini sadece yönetici / satınalma / muhasebe görür
     const canSeePrice = me?.role === 'yonetici' || me?.role === 'satinalma' || me?.role === 'muhasebe';
     const priceCells = canSeePrice ? `
-        <div style="text-align:right;color:#444;font-size:12px;line-height:1.4">${parseFloat(it.birim_fiyat).toLocaleString('tr-TR')} ₺<br><small style="color:#888;font-size:10px">/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</small></div>
+        <div style="text-align:right;color:#444;font-size:12px;line-height:1.4">${fmtTL(it.birim_fiyat)}<br><small style="color:#888;font-size:10px">/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</small></div>
         <div style="text-align:right;color:#666;font-size:11px">%${it.kdv_orani}</div>
-        <div style="text-align:right;font-weight:700;color:#1f4e8c;font-size:13px">${c.net.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</div>` : '';
+        <div style="text-align:right;font-weight:700;color:#1f4e8c;font-size:13px">${fmtTL(c.net)}</div>` : '';
     const gridCols = canSeePrice
       ? '32px minmax(180px,1.4fr) 95px 90px 105px 85px 55px 115px 85px 100px'
       : '32px minmax(220px,1.6fr) 110px 100px 120px 100px 110px';
@@ -2474,10 +2474,10 @@ function renderProcList(){
     ${rows}`;
   const bar = document.getElementById('procSummaryBar');
   if(bar){
-    bar.innerHTML = `<strong>${procItems.length} kalem</strong> · Toplam Net: <strong style="color:#1f4e8c">${totalNet.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</strong> · ${gelenSayi} tamam / ${eksikSayi} eksik`;
+    bar.innerHTML = `<strong>${procItems.length} kalem</strong> · Toplam Net: <strong style="color:#1f4e8c">${fmtTL(totalNet)}</strong> · ${gelenSayi} tamam / ${eksikSayi} eksik`;
   }
   const sumEl = document.getElementById('procSummary');
-  if(sumEl) sumEl.textContent = `· ${procItems.length} kalem · ${totalNet.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺ · ${gelenSayi} tamam / ${eksikSayi} eksik`;
+  if(sumEl) sumEl.textContent = `· ${procItems.length} kalem · ${fmtTL(totalNet)} · ${gelenSayi} tamam / ${eksikSayi} eksik`;
 }
 function renderProcDetail(it, c){
   const dl = _procDelvOf(it.id);
@@ -2489,7 +2489,7 @@ function renderProcDetail(it, c){
         ${d.irsaliye_no?` · İrs: <strong>${esc(d.irsaliye_no)}</strong>`:''}
         ${d.fatura_no?` · Fat: <strong>${esc(d.fatura_no)}</strong>`:''}
         ${d.tedarikci?` · <span style="color:#1f4e8c">${esc(d.tedarikci)}</span>`:''}
-        ${d.fatura_tutari?` · ${parseFloat(d.fatura_tutari).toLocaleString('tr-TR')} ₺`:''}
+        ${d.fatura_tutari?` · ${fmtTL(d.fatura_tutari)}`:''}
         ${d.not_text?`<div style="font-size:11px;color:#666;margin-top:2px">${esc(d.not_text)}</div>`:''}
       </div>
       <button class="btn err sm" onclick="event.stopPropagation();deleteDelivery('${d.id}')" style="padding:2px 6px;font-size:11px">🗑</button>
@@ -2498,12 +2498,12 @@ function renderProcDetail(it, c){
   return `<div style="background:#f9fbfd;padding:10px 16px;border-top:1px solid #eef0f5" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;flex-wrap:wrap;gap:8px">
       <div style="font-size:11px;color:#666;line-height:1.6">
-        ${c.toplamKg > 0 ? `Toplam Ağırlık: <strong>${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</strong> · Gelen: <strong>${c.gelenKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</strong> · Fark: <strong style="color:${(c.gelenKg-c.toplamKg)>=0?'#0a7':'#c33'}">${(c.gelenKg-c.toplamKg).toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</strong><br>` : ''}
-        <span class="price-only">Fiyat: <strong>${parseFloat(it.birim_fiyat).toLocaleString('tr-TR')} ₺/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</strong>
-        · Tutar: <strong>${c.tutar.toLocaleString('tr-TR',{maximumFractionDigits:2})} ₺</strong>
-        · KDV: <strong>${c.kdv.toLocaleString('tr-TR',{maximumFractionDigits:2})} ₺</strong>
-        · Tevkifat (%${it.tevkifat_orani}): <strong>−${c.tevkifat.toLocaleString('tr-TR',{maximumFractionDigits:2})} ₺</strong>
-        · <span style="color:#1f4e8c">NET: <strong>${c.net.toLocaleString('tr-TR',{maximumFractionDigits:2})} ₺</strong></span></span>
+        ${c.toplamKg > 0 ? `Toplam Ağırlık: <strong>${fmtNum(c.toplamKg,2)} kg</strong> · Gelen: <strong>${fmtNum(c.gelenKg,2)} kg</strong> · Fark: <strong style="color:${(c.gelenKg-c.toplamKg)>=0?'#0a7':'#c33'}">${fmtNum(c.gelenKg-c.toplamKg,2)} kg</strong><br>` : ''}
+        <span class="price-only">Fiyat: <strong>${fmtTL(it.birim_fiyat)}/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</strong>
+        · Tutar: <strong>${fmtTL(c.tutar)}</strong>
+        · KDV: <strong>${fmtTL(c.kdv)}</strong>
+        · Tevkifat (%${it.tevkifat_orani}): <strong>−${fmtTL(c.tevkifat)}</strong>
+        · <span style="color:#1f4e8c">NET: <strong>${fmtTL(c.net)}</strong></span></span>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn sec sm" onclick="openProcDeliv('${it.id}')">+ Teslimat</button>
@@ -3102,7 +3102,7 @@ async function editProcItem(itemId){
   if(error){toast('Hata: '+errTr(error),'err');return}
   toast('Güncellendi','ok');
   await loadProcurement(_procProjectId);
-  try { const proj = projects.find(p=>p.id===_procProjectId); await notify(`🛒 ${me.full_name} ${it.malzeme} için birim fiyatı güncelledi: ${fiyat} ₺`, '🛒', 'satinalma', 'project', _procProjectId); } catch(e){}
+  try { const proj = projects.find(p=>p.id===_procProjectId); await notify(`🛒 ${me.full_name} ${it.malzeme} için birim fiyatı güncelledi: ${fmtTL(fiyat)}`, '🛒', 'satinalma', 'project', _procProjectId); } catch(e){}
 }
 
 /* --- Teslimat --- */
@@ -3216,7 +3216,7 @@ function printProcurement(){
     totT += c.tutar; totK += c.kdv; totTv += c.tevkifat; totN += c.net; totKg += c.toplamKg;
     const dl = _procDelvOf(it.id);
     const dStr = dl.length === 0 ? '<em style="color:#999">— teslimat yok —</em>' :
-      dl.map(d=>`<div style="font-size:11px;padding:2px 0">📦 <b>${d.tarih}</b> · ${parseFloat(d.miktar).toLocaleString('tr-TR')} ${esc(it.birim)}${d.gercek_kg?` (${parseFloat(d.gercek_kg).toLocaleString('tr-TR')} kg)`:''}${d.irsaliye_no?` · İrs: <b>${esc(d.irsaliye_no)}</b>`:''}${d.fatura_no?` · Fat: <b>${esc(d.fatura_no)}</b>`:''}${d.tedarikci?` · ${esc(d.tedarikci)}`:''}${d.fatura_tutari?` · ${parseFloat(d.fatura_tutari).toLocaleString('tr-TR')} ₺`:''}${d.not_text?` · <i>${esc(d.not_text)}</i>`:''}</div>`).join('');
+      dl.map(d=>`<div style="font-size:11px;padding:2px 0">📦 <b>${d.tarih}</b> · ${fmtNum(d.miktar,2)} ${esc(it.birim)}${d.gercek_kg?` (${fmtNum(d.gercek_kg,2)} kg)`:''}${d.irsaliye_no?` · İrs: <b>${esc(d.irsaliye_no)}</b>`:''}${d.fatura_no?` · Fat: <b>${esc(d.fatura_no)}</b>`:''}${d.tedarikci?` · ${esc(d.tedarikci)}`:''}${d.fatura_tutari?` · ${fmtTL(d.fatura_tutari)}`:''}${d.not_text?` · <i>${esc(d.not_text)}</i>`:''}</div>`).join('');
     const stat = c.durum==='tamamlandi'?'🟢 Tamam':(c.durum==='kismi'?`🟡 %${Math.round(c.gelen/parseFloat(it.miktar)*100)}`:'🔴 Bekliyor');
     const _siparis = parseFloat(it.miktar) || 0;
     const _stokDusum = +it.stok_dusum || 0;
@@ -3229,11 +3229,11 @@ function printProcurement(){
       <td><b style="color:#1f4e8c">${_fmt(_ihtiyac)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small></td>
       <td>${_stokDusum>0?`<b style="color:#0a7">${_fmt(_stokDusum)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small>`:'<span style="color:#bbb">—</span>'}</td>
       <td><b>${_fmt(_siparis)} ${esc(it.birim)}</b>${_yuvarlama>0.01?`<br><small style="color:#0a7;font-size:8pt;font-weight:600">📥 +${_fmt(_yuvarlama)} stoğa</small>`:''}${c.toplamKg>0?`<br><small style="font-size:8pt">${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`:''}</td>
-      <td>${parseFloat(it.birim_fiyat).toLocaleString('tr-TR')} ₺/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</td>
-      <td>${c.tutar.toLocaleString('tr-TR',{maximumFractionDigits:2})} ₺</td>
-      <td>%${it.kdv_orani}<br>${c.kdv.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
-      <td>−${c.tevkifat.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
-      <td><b>${c.net.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</b></td>
+      <td>${fmtTL(it.birim_fiyat)}/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</td>
+      <td>${fmtTL(c.tutar)}</td>
+      <td>%${it.kdv_orani}<br>${fmtTL(c.kdv)}</td>
+      <td>−${fmtTL(c.tevkifat)}</td>
+      <td><b>${fmtTL(c.net)}</b></td>
       <td>${c.gelen.toLocaleString('tr-TR')} ${esc(it.birim)}</td>
       <td class="ctr">${stat}</td>
       <td class="lft">${dStr}</td>
@@ -3288,13 +3288,13 @@ function printProcurement(){
         <tbody>${rows}</tbody>
         <tfoot><tr>
           <td colspan="6" style="text-align:right">TOPLAM</td>
-          <td>${totT.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
-          <td>${totK.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
-          <td>−${totTv.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
-          <td>${totN.toLocaleString('tr-TR',{maximumFractionDigits:0})} ₺</td>
+          <td>${fmtTL(totT)}</td>
+          <td>${fmtTL(totK)}</td>
+          <td>−${fmtTL(totTv)}</td>
+          <td>${fmtTL(totN)}</td>
           <td colspan="3"></td>
         </tr>
-        ${totKg>0?`<tr><td colspan="6" style="text-align:right">TOPLAM AĞIRLIK</td><td colspan="7" class="lft">${totKg.toLocaleString('tr-TR',{maximumFractionDigits:0})} kg</td></tr>`:''}
+        ${totKg>0?`<tr><td colspan="6" style="text-align:right">TOPLAM AĞIRLIK</td><td colspan="7" class="lft">${fmtNum(totKg,2)} kg</td></tr>`:''}
         </tfoot>
       </table>
       <div style="flex:1"></div>
@@ -5189,6 +5189,47 @@ async function toggle(id){
 /* ============ UTIL ============ */
 function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c])}
 function toast(m,t='ok'){const el=document.createElement('div');el.className='toast '+t;el.textContent=m;document.getElementById('toasts').appendChild(el);setTimeout(()=>el.style.opacity='0',2400);setTimeout(()=>el.remove(),2700)}
+
+/* ============ PARA / SAYI FORMATLAYICILARI ============ */
+// Türk Lirası: 500.000,00 ₺ — kuruşlu (iki ondalık hep gösterilir)
+function fmtTL(v, opts){
+  opts = opts || {};
+  const n = parseFloat(v);
+  if(isNaN(n)) return opts.dash ? '—' : '0,00 ₺';
+  return n.toLocaleString('tr-TR',{
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }) + ' ₺';
+}
+// Türk Lirası (kuruşsuz — sadece tam liralar): 500.000 ₺
+function fmtTL0(v){
+  const n = parseFloat(v);
+  if(isNaN(n)) return '—';
+  return n.toLocaleString('tr-TR',{
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }) + ' ₺';
+}
+// Genel sayı formatı (TL değil): kg, adet, metre vb. için
+function fmtNum(v, decimals){
+  const n = parseFloat(v);
+  if(isNaN(n)) return '—';
+  const d = (decimals === undefined) ? 2 : decimals;
+  return n.toLocaleString('tr-TR',{
+    minimumFractionDigits: d,
+    maximumFractionDigits: d
+  });
+}
+// "Kg" ve benzeri için: 22.000,50 kg gibi — 2 ondalık
+function fmtKg(v){ return fmtNum(v, 2) + ' kg'; }
+// Türkçe sayı stringini sayıya parse et (formdan gelirken): "1.234,56" → 1234.56
+function parseTR(s){
+  if(s === null || s === undefined) return 0;
+  if(typeof s === 'number') return s;
+  const str = String(s).trim().replace(/\s/g,'').replace(/\./g,'').replace(',', '.');
+  const n = parseFloat(str);
+  return isNaN(n) ? 0 : n;
+}
 
 /* ============ HATA MESAJLARINI TÜRKÇELEŞTİR ============ */
 function errTr(err){
