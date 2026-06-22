@@ -2817,24 +2817,24 @@ async function _addToStock(cat, miktar, projectId, reason){
       if(!(upd['boy'+s] > 0) || !(upd['adet'+s] > 0)){ slot = s; break; }
     }
     if(slot === 0){
-      // Tüm slotlar dolu → aynı boy varsa ona ekle, yoksa slot3'ün üzerine boy değiştirmeden adet artıramayız
-      // En küçük slot'u arttırmak yerine aynı uzunlukta slot varsa ona +1 adet, yoksa slot1'e overwrite (eski parça korunur değil)
+      // Tüm slotlar dolu → aynı boy varsa ona ekle
       const matchSlot = [1,2,3].find(s => upd['boy'+s] === lenMm);
       if(matchSlot){
         const before = upd['adet'+matchSlot];
         upd['adet'+matchSlot] = before + 1;
         movement = {slot: matchSlot, before, after: upd['adet'+matchSlot], qty: 1, length: lenMm};
       } else {
-        // Yer yok — fazlayı kayıt olarak işle ama stock güncellemesi yapma
+        // Yer yok → adetçe en az olan slot'a aynı boy yerine adet ekle (boyu güncelleyemeyiz, ama log atalım)
         try {
           await sb.from('stock_movements').insert({
             item_id: cat.id, action: 'rounding_surplus', slot: null, qty_change: 0,
             length_mm: lenMm, before_adet: 0, after_adet: 0,
-            note: (reason||'Yuvarlama fazlası') + ' (slot dolu — manuel yerleştirme gerekir)',
+            note: (reason||'Yuvarlama fazlası') + ' (3 slot dolu — manuel yerleştirme gerekir)',
             project_id: projectId, user_id: me.id
           });
         } catch(e){ console.warn('rounding surplus log fail', e); }
-        return;
+        // Üst katmana belli olsun ki uyarı verebilsin
+        throw new Error('Stok kalemine ait 3 slot da farklı boylarla dolu, fazlalık otomatik eklenemedi');
       }
     } else {
       upd['boy'+slot] = lenMm;
@@ -2956,10 +2956,28 @@ async function saveProcCatalog(){
   };
   let roundedCount = 0;
   let totalAddedToStock = 0;
+  let failedAddToStock = 0;
+  const failedItems = [];
   const roundedDetail = [];
+  // Ürün adıyla stockItems içinde eşleşeni bul (catalog_id yoksa fallback)
+  const _matchCatByName = (name) => {
+    if(!name) return null;
+    const target = String(name).toUpperCase().replace(/\s+/g,'').trim();
+    // Tam eşleşme
+    let hit = stockItems.find(x => String(x.urun||'').toUpperCase().replace(/\s+/g,'').trim() === target);
+    if(hit) return hit;
+    // Kısmi: ürün adı içinde geçer
+    hit = stockItems.find(x => {
+      const u = String(x.urun||'').toUpperCase().replace(/\s+/g,'').trim();
+      return u && (u === target || u.startsWith(target) || target.startsWith(u));
+    });
+    return hit || null;
+  };
   for(const r of rows){
     if(r.birim !== 'm' || !(r.miktar > 0)) continue;
-    const cat = stockItems.find(x => x.id === r.catalog_id);
+    // 1) catalog_id ile dene, 2) ürün adıyla fallback
+    let cat = stockItems.find(x => x.id === r.catalog_id);
+    if(!cat) cat = _matchCatByName(r.malzeme);
     const tag = (cat?.kategori || '').toUpperCase().replace(/\s+/g,'');
     const urunPrefix = (cat?.urun || r.malzeme || '').toUpperCase().replace(/\s+/g,'').slice(0,3);
     const boy = STD_BOY[tag] || STD_BOY[urunPrefix];
@@ -2971,22 +2989,34 @@ async function saveProcCatalog(){
       roundedDetail.push(`${r.malzeme}: ${r.miktar} → ${yeni} m (${boy}m boy) · fazla ${fStr} m → stoğa`);
       r.miktar = yeni;
       // Stoğa ekle (fazlalık)
-      let okAdd = false;
       if(cat){
         try {
           const proj = projects.find(p=>p.id===_procProjectId);
           await _addToStock(cat, fazla, _procProjectId, `Yuvarlama fazlası — ${proj?.no||''} ${proj?.customer||''}`.trim());
           totalAddedToStock++;
-          okAdd = true;
-        } catch(e){ console.warn('addToStock fail', cat.urun, e); }
+        } catch(e){
+          console.warn('addToStock fail', cat.urun, e);
+          failedAddToStock++;
+          failedItems.push(`${r.malzeme} (+${fStr} m): ${errTr(e)}`);
+        }
+      } else {
+        failedAddToStock++;
+        failedItems.push(`${r.malzeme} (+${fStr} m): stokta karşılığı bulunamadı`);
       }
-      // Not alanına yuvarlama fazlasını işaretle (UI'da gösterim için)
-      const stokNot = okAdd ? `📥 +${fStr} m stoğa eklendi (yuvarlama fazlası)` : `⚠️ ${fStr} m yuvarlama fazlası — stoğa eklenemedi`;
-      r.not_text = (r.not_text ? (r.not_text + ' · ') : '') + stokNot;
+      // Stok/yuvarlama bilgisi iç bilgidir — Tedarikçi Talep PDF'ine düşmemesi için
+      // not_text'e YAZILMAZ. UI'da "📥 +X stoğa" göstergesi sipariş hücresinde zaten gözüküyor.
       roundedCount++;
     }
   }
   if(totalAddedToStock > 0){ try { await loadStockItems(); } catch(e){} }
+  if(failedAddToStock > 0){
+    console.warn('Stoğa eklenemeyen kalemler:', failedItems);
+    setTimeout(()=>alert(
+      '⚠️ Bazı yuvarlama fazlalıkları stoğa eklenemedi:\n\n' +
+      failedItems.join('\n') +
+      '\n\nManuel olarak Stok ekranından ekleyebilirsin.'
+    ), 800);
+  }
 
   // miktar = 0 olan satırlar → stoktan tam karşılandı, talep formuna eklenmez
   const finalRows = rows.filter(r => r.miktar > 0);
@@ -3305,6 +3335,22 @@ function printProcurement(){
   if(!w){toast('Popup engellendi, izin ver','err');return}
   w.document.write(html); w.document.close();
 }
+// Tedarikçiye gönderilen PDF/Excel'de iç bilgileri (stok, yuvarlama, fire vb.) gizleyen filtre
+function _cleanSupplierNote(s){
+  if(!s) return '';
+  let txt = String(s);
+  // İç bilgi içeren parçaları kaldır — "·" ile ayrılmış olabilir
+  txt = txt.split('·').map(part => {
+    const p = part.trim();
+    if(/sto(ğ|g)a eklendi/i.test(p)) return '';
+    if(/yuvarlama fazlas/i.test(p)) return '';
+    if(/stoktan/i.test(p)) return '';
+    if(/stoğa eklenemedi/i.test(p)) return '';
+    if(/^📥|^⚠️|^📦/.test(p)) return '';
+    return p;
+  }).filter(Boolean).join(' · ');
+  return txt;
+}
 function exportProcTalepFormu(){
   if(!_procProjectId || procItems.length === 0){toast('Önce proje seç ve kalem ekle','err');return}
   const proj = projects.find(p=>p.id===_procProjectId);
@@ -3313,9 +3359,9 @@ function exportProcTalepFormu(){
     <tr>
       <td class="no">${i+1}.</td>
       <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <span style="font-size:9pt;color:#1f4e8c">— ${esc(it.ebat)}</span>`:''}</td>
-      <td>${parseFloat(it.miktar).toLocaleString('tr-TR')}</td>
+      <td>${fmtNum(it.miktar,2)}</td>
       <td>${esc(it.birim||'mt')}</td>
-      <td class="lft">${esc(it.not_text||'')}</td>
+      <td class="lft">${esc(_cleanSupplierNote(it.not_text))}</td>
     </tr>`).join('');
   const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Talep Formu - ${esc(proj?.no||'')}</title>
     <style>${_pdfStyle()}</style></head><body>
