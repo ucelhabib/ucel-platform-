@@ -1006,17 +1006,21 @@ body.proc-fullscreen{overflow:hidden}
         <div class="frow"><label>👤 Sürücü</label><input id="sh-surucu" placeholder="Ad Soyad"></div>
         <div class="frow"><label>🏢 Nakliye Firması</label><input id="sh-tedarikci" placeholder="Tedarikçi adı"></div>
         <div class="frow" style="grid-column:1/-1"><label>📋 Sevk İrsaliye No</label><input id="sh-irsno" placeholder="İrsaliye no"></div>
-        <div class="frow" style="grid-column:1/-1"><label>📷 İrsaliye Görseli</label>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="file" id="sh-irsfile" accept="image/*" style="flex:1">
-            <span id="sh-irspreview" style="font-size:11px;color:#0a7"></span>
+        <div class="frow" style="grid-column:1/-1">
+          <label>🖼 Yükleme Görselleri</label>
+          <div style="border:1px solid var(--bd);border-radius:10px;padding:10px 12px;background:#fafbfd;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <div style="font-size:11px;font-weight:600;color:#1f4e8c;margin-bottom:4px">📷 İrsaliye</div>
+              <input type="file" id="sh-irsfile" accept="image/*" style="width:100%;font-size:12px">
+              <div id="sh-irspreview" style="font-size:11px;color:#0a7;margin-top:3px;min-height:14px"></div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:600;color:#1f4e8c;margin-bottom:4px">🏗️ Kantar Fişi</div>
+              <input type="file" id="sh-kantfile" accept="image/*" style="width:100%;font-size:12px">
+              <div id="sh-kantpreview" style="font-size:11px;color:#0a7;margin-top:3px;min-height:14px"></div>
+            </div>
           </div>
-        </div>
-        <div class="frow" style="grid-column:1/-1"><label>🏗️ Kantar Fişi Görseli</label>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="file" id="sh-kantfile" accept="image/*" style="flex:1">
-            <span id="sh-kantpreview" style="font-size:11px;color:#0a7"></span>
-          </div>
+          <small style="color:var(--m);margin-top:4px;display:block">İrsaliye ve kantar fişi fotoğraflarını birlikte ekleyebilirsiniz. Her ikisi de opsiyoneldir.</small>
         </div>
         <div class="frow" style="grid-column:1/-1"><label>📝 Not</label><textarea id="sh-not" rows="2" placeholder="Yükleme notu / özel durum"></textarea></div>
       </div>

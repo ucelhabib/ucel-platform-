@@ -1,8 +1,8 @@
-// ÜÇEL Steel Construction - Service Worker v23
+// ÜÇEL Steel Construction - Service Worker v24
 // Strateji: HTML/JS için NETWORK-FIRST → her zaman taze sürüm, offline ise cache.
 // Görseller için CACHE-FIRST (statik).
 
-const CACHE_NAME = 'ucel-v76';
+const CACHE_NAME = 'ucel-v77';
 const STATIC_ASSETS = [
   './manifest.json',
   './icon-192.png',
