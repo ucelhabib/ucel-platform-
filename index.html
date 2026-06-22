@@ -893,7 +893,7 @@ body.proc-fullscreen{overflow:hidden}
           <div class="frow"><label>Proje Adı</label><input id="pf-title" placeholder="Sancaktepe Depo Çatı"></div>
           <div class="fgrid">
             <div class="frow"><label>Lokasyon</label><input id="pf-loc" placeholder="İstanbul"></div>
-            <div class="frow amount-only"><label>Bedel (TL — kuruşlu yazabilirsin: 500000,50)</label><input id="pf-amt" type="number" step="0.01" placeholder="0,00"></div>
+            <div class="frow amount-only"><label>Bedel (TL — kuruşlu yazabilirsin: 12420000.00)</label><input id="pf-amt" type="number" step="0.01" placeholder="0.00"></div>
             <div class="frow"><label>Tonaj (TON)</label><input id="pf-ton" type="number" step="0.1" placeholder="0"></div>
             <div class="frow"><label>Sevk Tarihi</label><input id="pf-ship" type="date"></div>
           </div>
@@ -2433,7 +2433,7 @@ function renderProcList(){
     if(c.durum==='tamamlandi') gelenSayi++; else eksikSayi++;
     const expanded = _procExpanded.has(it.id);
     const detail = expanded ? renderProcDetail(it, c) : '';
-    const fmt = v=>(+v).toLocaleString('tr-TR',{maximumFractionDigits:2});
+    const fmt = v=>(+v).toLocaleString('en-US',{maximumFractionDigits:2});
     const siparis = parseFloat(it.miktar) || 0;
     const stokDusum = +it.stok_dusum || 0;
     const ihtiyac = (+it.original_ihtiyac) || (siparis + stokDusum);
@@ -2453,9 +2453,9 @@ function renderProcList(){
         <div style="font-weight:600;font-size:13px;line-height:1.4">${esc(it.malzeme)}${it.ebat?` <span style="font-size:11px;color:#888">(${esc(it.ebat)})</span>`:''}</div>
         <div style="text-align:right;color:#1f4e8c;font-weight:700;line-height:1.4">🎯 ${fmt(ihtiyac)}<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} ihtiyaç</small></div>
         <div style="text-align:right;color:#0a7;font-weight:700;line-height:1.4">${stokDusum>0?`📦 ${fmt(stokDusum)}`:'<span style="color:#bbb;font-weight:400">—</span>'}${stokDusum>0?`<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} stoktan</small>`:''}</div>
-        <div style="text-align:right;font-weight:700;line-height:1.4">${fmt(siparis)} ${esc(it.birim)}${yuvarlama>0.01?`<br><small style="color:#0a7;font-size:10px;font-weight:700" title="Yuvarlama fazlası otomatik olarak stoğa eklendi">📥 +${fmt(yuvarlama)} stoğa</small>`:''}${c.fiyatBirimi==='kg' && c.toplamKg>0?`<br><small style="color:#888;font-size:10px">${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`:''}</div>
+        <div style="text-align:right;font-weight:700;line-height:1.4">${fmt(siparis)} ${esc(it.birim)}${yuvarlama>0.01?`<br><small style="color:#0a7;font-size:10px;font-weight:700" title="Yuvarlama fazlası otomatik olarak stoğa eklendi">📥 +${fmt(yuvarlama)} stoğa</small>`:''}${c.fiyatBirimi==='kg' && c.toplamKg>0?`<br><small style="color:#888;font-size:10px">${c.toplamKg.toLocaleString('en-US',{maximumFractionDigits:1})} kg</small>`:''}</div>
         ${priceCells}
-        <div style="text-align:right;color:#0a7;font-size:12px">${c.gelen.toLocaleString('tr-TR')} ${esc(it.birim)}</div>
+        <div style="text-align:right;color:#0a7;font-size:12px">${c.gelen.toLocaleString('en-US')} ${esc(it.birim)}</div>
         <div style="text-align:center">${_statusBadge(c.durum, c.gelen, parseFloat(it.miktar))}</div>
       </div>
       ${detail}
@@ -2485,7 +2485,7 @@ function renderProcDetail(it, c){
     const u = allProfiles[d.created_by] || {full_name:''};
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:#fafbfd;border-radius:6px;margin-bottom:4px">
       <div style="flex:1;font-size:12px">
-        📦 <strong>${d.tarih}</strong> · ${parseFloat(d.miktar).toLocaleString('tr-TR')} ${esc(it.birim)}${d.gercek_kg?` (${parseFloat(d.gercek_kg).toLocaleString('tr-TR')} kg)`:''}
+        📦 <strong>${d.tarih}</strong> · ${parseFloat(d.miktar).toLocaleString('en-US')} ${esc(it.birim)}${d.gercek_kg?` (${parseFloat(d.gercek_kg).toLocaleString('en-US')} kg)`:''}
         ${d.irsaliye_no?` · İrs: <strong>${esc(d.irsaliye_no)}</strong>`:''}
         ${d.fatura_no?` · Fat: <strong>${esc(d.fatura_no)}</strong>`:''}
         ${d.tedarikci?` · <span style="color:#1f4e8c">${esc(d.tedarikci)}</span>`:''}
@@ -2912,7 +2912,7 @@ async function saveProcCatalog(){
   let totalTaken = 0;
   if(stockMatches.length > 0){
     const lines = stockMatches.map(d=>{
-      const fmt = v=>(+v).toLocaleString('tr-TR',{maximumFractionDigits:2});
+      const fmt = v=>(+v).toLocaleString('en-US',{maximumFractionDigits:2});
       const take = Math.min(d.miktar, d.avail);
       const kalan = d.miktar - take;
       const kalanTxt = kalan > 0 ? ` → satın al: ${fmt(kalan)} ${d.birim}` : ' → satın alma listesine eklenmez (stoktan karşılandı)';
@@ -3141,14 +3141,14 @@ function openProcDeliv(itemId){
   const it = procItems.find(x=>x.id===itemId); if(!it) return;
   const c = _procCalc(it);
   document.getElementById('pdTitle').textContent = '🚚 Teslimatlar — ' + it.malzeme;
-  document.getElementById('pdInfo').innerHTML = `<strong>${esc(it.malzeme)}</strong> · İhtiyaç: ${parseFloat(it.miktar).toLocaleString('tr-TR')} ${esc(it.birim)} · Gelen: <strong>${c.gelen.toLocaleString('tr-TR')}</strong> · Kalan: <strong style="color:${c.kalan>0?'#c33':'#0a7'}">${c.kalan.toLocaleString('tr-TR')}</strong>`;
+  document.getElementById('pdInfo').innerHTML = `<strong>${esc(it.malzeme)}</strong> · İhtiyaç: ${parseFloat(it.miktar).toLocaleString('en-US')} ${esc(it.birim)} · Gelen: <strong>${c.gelen.toLocaleString('en-US')}</strong> · Kalan: <strong style="color:${c.kalan>0?'#c33':'#0a7'}">${c.kalan.toLocaleString('en-US')}</strong>`;
   document.getElementById('pd-tarih').value = new Date().toISOString().slice(0,10);
   ['pd-miktar','pd-irs','pd-fat','pd-ted','pd-tutar','pd-not'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value = (id==='pd-miktar'?'0':''); });
   // Mevcut teslimatlar
   const dl = _procDelvOf(itemId);
   document.getElementById('pdList').innerHTML = dl.length === 0
     ? '<div style="padding:8px;color:#888;font-size:12px;text-align:center">Henüz teslimat yok.</div>'
-    : dl.map(d=>`<div style="background:#f9fbfd;padding:6px 8px;border-radius:4px;margin-bottom:4px;font-size:12px">📦 ${d.tarih} · ${parseFloat(d.miktar).toLocaleString('tr-TR')} ${esc(it.birim)} · İrs: ${esc(d.irsaliye_no||'-')} · ${esc(d.tedarikci||'-')}</div>`).join('');
+    : dl.map(d=>`<div style="background:#f9fbfd;padding:6px 8px;border-radius:4px;margin-bottom:4px;font-size:12px">📦 ${d.tarih} · ${parseFloat(d.miktar).toLocaleString('en-US')} ${esc(it.birim)} · İrs: ${esc(d.irsaliye_no||'-')} · ${esc(d.tedarikci||'-')}</div>`).join('');
   document.getElementById('procDelivModal').classList.add('show');
 }
 function closeProcDeliv(){ document.getElementById('procDelivModal').classList.remove('show'); _pdCurrentItemId = null; }
@@ -3252,19 +3252,19 @@ function printProcurement(){
     const _stokDusum = +it.stok_dusum || 0;
     const _ihtiyac = (+it.original_ihtiyac) || (_siparis + _stokDusum);
     const _yuvarlama = (_siparis + _stokDusum) - _ihtiyac;
-    const _fmt = v=>(+v).toLocaleString('tr-TR',{maximumFractionDigits:2});
+    const _fmt = v=>(+v).toLocaleString('en-US',{maximumFractionDigits:2});
     return `<tr>
       <td class="ctr">${i+1}</td>
       <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <small>(${esc(it.ebat)})</small>`:''}</td>
       <td><b style="color:#1f4e8c">${_fmt(_ihtiyac)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small></td>
       <td>${_stokDusum>0?`<b style="color:#0a7">${_fmt(_stokDusum)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small>`:'<span style="color:#bbb">—</span>'}</td>
-      <td><b>${_fmt(_siparis)} ${esc(it.birim)}</b>${_yuvarlama>0.01?`<br><small style="color:#0a7;font-size:8pt;font-weight:600">📥 +${_fmt(_yuvarlama)} stoğa</small>`:''}${c.toplamKg>0?`<br><small style="font-size:8pt">${c.toplamKg.toLocaleString('tr-TR',{maximumFractionDigits:1})} kg</small>`:''}</td>
+      <td><b>${_fmt(_siparis)} ${esc(it.birim)}</b>${_yuvarlama>0.01?`<br><small style="color:#0a7;font-size:8pt;font-weight:600">📥 +${_fmt(_yuvarlama)} stoğa</small>`:''}${c.toplamKg>0?`<br><small style="font-size:8pt">${c.toplamKg.toLocaleString('en-US',{maximumFractionDigits:1})} kg</small>`:''}</td>
       <td>${fmtTL(it.birim_fiyat)}/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</td>
       <td>${fmtTL(c.tutar)}</td>
       <td>%${it.kdv_orani}<br>${fmtTL(c.kdv)}</td>
       <td>−${fmtTL(c.tevkifat)}</td>
       <td><b>${fmtTL(c.net)}</b></td>
-      <td>${c.gelen.toLocaleString('tr-TR')} ${esc(it.birim)}</td>
+      <td>${c.gelen.toLocaleString('en-US')} ${esc(it.birim)}</td>
       <td class="ctr">${stat}</td>
       <td class="lft">${dStr}</td>
     </tr>`;
@@ -3704,9 +3704,9 @@ function renderStockTable(){
     return `<tr style="border-bottom:1px solid #eef0f5" onmouseover="this.style.background='#f8fbff'" onmouseout="this.style.background=''">
       <td data-label="Kategori" class="stk-edit" style="padding:6px 8px;font-size:12px;color:#333;${editCell}" ondblclick="editStockCell('${it.id}','kategori',this)" title="📝 Çift tıkla düzenle">${esc(it.kategori)}</td>
       <td data-label="Ürün" class="stk-edit" style="padding:6px 8px;font-weight:600;${editCell}" ondblclick="editStockCell('${it.id}','urun',this)" title="📝 Çift tıkla düzenle">${esc(it.urun)}</td>
-      <td data-label="Toplam mm" class="stk-edit" style="padding:6px 8px;color:${tot.mm===0?'#c33':'#0a7'};font-weight:700;${editCell}" ondblclick="editStockTotalMm('${it.id}',this)" title="📝 Çift tıkla toplam mm gir">${tot.mm.toLocaleString('tr-TR')}</td>
-      <td data-label="kg/m" class="stk-edit" style="padding:6px 8px;color:#444;font-size:12px;${editCell}" ondblclick="editStockCell('${it.id}','kg_per_meter',this)" title="📝 Çift tıkla kg/m düzenle">${parseFloat(it.kg_per_meter||0).toLocaleString('tr-TR')}</td>
-      <td data-label="Ağırlık" style="padding:6px 8px;text-align:center;color:#1f4e8c;font-weight:700;background:#fff8e1">${parseFloat(tot.kg).toLocaleString('tr-TR')} kg</td>
+      <td data-label="Toplam mm" class="stk-edit" style="padding:6px 8px;color:${tot.mm===0?'#c33':'#0a7'};font-weight:700;${editCell}" ondblclick="editStockTotalMm('${it.id}',this)" title="📝 Çift tıkla toplam mm gir">${tot.mm.toLocaleString('en-US')}</td>
+      <td data-label="kg/m" class="stk-edit" style="padding:6px 8px;color:#444;font-size:12px;${editCell}" ondblclick="editStockCell('${it.id}','kg_per_meter',this)" title="📝 Çift tıkla kg/m düzenle">${parseFloat(it.kg_per_meter||0).toLocaleString('en-US')}</td>
+      <td data-label="Ağırlık" style="padding:6px 8px;text-align:center;color:#1f4e8c;font-weight:700;background:#fff8e1">${parseFloat(tot.kg).toLocaleString('en-US')} kg</td>
       <td data-label="Not" class="stk-edit" style="padding:6px 8px;font-size:11px;color:${noteText?'#333':'#999'};${editCell}" ondblclick="editStockCell('${it.id}','not_text',this)" title="📝 Çift tıkla not gir">${esc(noteText) || '📝 not ekle'}</td>
     </tr>`;
   };
@@ -3717,7 +3717,7 @@ function renderStockTable(){
   const sumM = filtered.reduce((s,it)=>s+parseFloat(stockTotals(it).m), 0).toFixed(2);
   const sumKg = filtered.reduce((s,it)=>s+parseFloat(stockTotals(it).kg), 0).toFixed(0);
   const el = document.getElementById('stkSummary');
-  if(el) el.textContent = `${filtered.length} kalem · ${sumAdet} adet · ${sumM} m · ${parseInt(sumKg).toLocaleString('tr-TR')} kg`;
+  if(el) el.textContent = `${filtered.length} kalem · ${sumAdet} adet · ${sumM} m · ${parseInt(sumKg).toLocaleString('en-US')} kg`;
 }
 function renderStockDetail(it){
   const slotRow = (slot)=>{
@@ -3822,9 +3822,9 @@ function printStockList(){
       <td style="text-align:center">${i+1}</td>
       <td>${esc(it.kategori)}</td>
       <td><strong>${esc(it.urun)}</strong></td>
-      <td style="text-align:right">${t.mm.toLocaleString('tr-TR')}</td>
-      <td style="text-align:right">${parseFloat(it.kg_per_meter||0).toLocaleString('tr-TR')}</td>
-      <td style="text-align:right"><strong>${parseFloat(t.kg).toLocaleString('tr-TR')}</strong></td>
+      <td style="text-align:right">${t.mm.toLocaleString('en-US')}</td>
+      <td style="text-align:right">${parseFloat(it.kg_per_meter||0).toLocaleString('en-US')}</td>
+      <td style="text-align:right"><strong>${parseFloat(t.kg).toLocaleString('en-US')}</strong></td>
       <td>${esc(it.not_text||'')}</td>
     </tr>`;
   }).join('');
@@ -3856,9 +3856,9 @@ function printStockList(){
       <tbody>${rows}</tbody>
       <tfoot><tr>
         <td colspan="3" style="text-align:right">TOPLAM</td>
-        <td style="text-align:right">${totalMm.toLocaleString('tr-TR')} mm</td>
+        <td style="text-align:right">${totalMm.toLocaleString('en-US')} mm</td>
         <td></td>
-        <td style="text-align:right">${totalKg.toLocaleString('tr-TR',{maximumFractionDigits:0})} kg</td>
+        <td style="text-align:right">${totalKg.toLocaleString('en-US',{maximumFractionDigits:0})} kg</td>
         <td></td>
       </tr></tfoot>
     </table>
@@ -3951,12 +3951,12 @@ function editStockTotalMm(itemId, cellEl){
             user_id: me.id
           });
         } catch(e){}
-        toast(`Toplam metraj: ${curMm.toLocaleString('tr-TR')} → ${newMm.toLocaleString('tr-TR')} mm`,'ok');
+        toast(`Toplam metraj: ${curMm.toLocaleString('en-US')} → ${newMm.toLocaleString('en-US')} mm`,'ok');
         // Tüm birimlere bildirim
         try {
           const delta = newMm - curMm;
           const sign = delta > 0 ? '➕' : '➖';
-          await notify(`📦 ${me.full_name} ${it.kategori}/${it.urun} stoğunu güncelledi: ${curMm.toLocaleString('tr-TR')} → ${newMm.toLocaleString('tr-TR')} mm (${sign}${Math.abs(delta).toLocaleString('tr-TR')} mm)`, '📦', 'system');
+          await notify(`📦 ${me.full_name} ${it.kategori}/${it.urun} stoğunu güncelledi: ${curMm.toLocaleString('en-US')} → ${newMm.toLocaleString('en-US')} mm (${sign}${Math.abs(delta).toLocaleString('en-US')} mm)`, '📦', 'system');
         } catch(e){}
       }
     }
@@ -4510,7 +4510,7 @@ async function renderShipments(){
   let totalKg = 0;
   items.forEach(s => totalKg += parseFloat(s.tonaj)||0);
   if(sumEl){
-    sumEl.innerHTML = `<strong>${items.length}</strong> yükleme · Toplam: <strong style="color:#1f4e8c">${totalKg.toLocaleString('tr-TR',{maximumFractionDigits:0})} kg</strong>`;
+    sumEl.innerHTML = `<strong>${items.length}</strong> yükleme · Toplam: <strong style="color:#1f4e8c">${totalKg.toLocaleString('en-US',{maximumFractionDigits:0})} kg</strong>`;
   }
   if(items.length === 0){
     listEl.innerHTML = '<div style="padding:30px;text-align:center;color:#888">Bu projede henüz yükleme yok. Sağdaki <strong>+ Yeni Yükleme</strong> ile başla.</div>';
@@ -4531,7 +4531,7 @@ async function renderShipments(){
           ${s.not_text?`<div style="font-size:11px;color:#888;margin-top:4px;font-style:italic">"${esc(s.not_text)}"</div>`:''}
         </div>
         <div style="text-align:right;min-width:120px">
-          <div style="font-size:18px;font-weight:800;color:#0a7">${parseFloat(s.tonaj||0).toLocaleString('tr-TR',{maximumFractionDigits:0})}</div>
+          <div style="font-size:18px;font-weight:800;color:#0a7">${parseFloat(s.tonaj||0).toLocaleString('en-US',{maximumFractionDigits:0})}</div>
           <div style="font-size:11px;color:#666">kg</div>
         </div>
       </div>
@@ -4585,7 +4585,7 @@ function renderProjectShipmentSummary(projectId){
       </div>
       <div style="background:#fff;border:1px solid #cdd2dc;border-radius:8px;overflow:hidden">
         <div style="background:#ff7a00;color:#fff;font-size:9pt;padding:4px 6px;text-align:center;font-weight:700">⚖️ TONAJ (KG)</div>
-        <div style="padding:8px;text-align:center;font-size:18pt;font-weight:900;color:#ff7a00">${yuklenenKg.toLocaleString('tr-TR',{maximumFractionDigits:0})}</div>
+        <div style="padding:8px;text-align:center;font-size:18pt;font-weight:900;color:#ff7a00">${yuklenenKg.toLocaleString('en-US',{maximumFractionDigits:0})}</div>
       </div>
       <div style="background:#fff;border:1px solid #cdd2dc;border-radius:8px;overflow:hidden">
         <div style="background:#1f4e8c;color:#fff;font-size:9pt;padding:4px 6px;text-align:center;font-weight:700">📅 GÜN</div>
@@ -4599,7 +4599,7 @@ function renderProjectShipmentSummary(projectId){
     ${hedefKg > 0 ? `
       <div style="background:#fff;padding:8px 10px;border:1px solid #cdd2dc;border-radius:8px;margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:#666;margin-bottom:4px">
-          <span>Hedef Tonaj: ${(hedefKg/1000).toLocaleString('tr-TR')} t</span>
+          <span>Hedef Tonaj: ${(hedefKg/1000).toLocaleString('en-US')} t</span>
           <span style="font-weight:700;color:#1f4e8c">%${ilerleme}</span>
         </div>
         <div style="height:8px;background:#e8ecf2;border-radius:4px;overflow:hidden">
@@ -4610,14 +4610,14 @@ function renderProjectShipmentSummary(projectId){
     <div style="background:#fff;padding:8px 10px;border:1px solid #cdd2dc;border-radius:8px;font-size:11px;color:#666;margin-bottom:8px">
       <div>🏁 <strong>İlk:</strong> ${st.firstDate || '—'}</div>
       <div style="margin-top:2px">🏁 <strong>Son:</strong> ${st.lastDate || '—'}</div>
-      <div style="margin-top:2px">📊 <strong>Ortalama:</strong> ${st.avgKg.toLocaleString('tr-TR')} kg/araç</div>
+      <div style="margin-top:2px">📊 <strong>Ortalama:</strong> ${st.avgKg.toLocaleString('en-US')} kg/araç</div>
     </div>
     <div style="font-size:11px;color:#1f4e8c;font-weight:700;margin-bottom:4px">SON YÜKLEMELER</div>
     ${son3.map(s => `
       <div style="background:#fff;padding:6px 10px;border:1px solid #eef0f5;border-left:3px solid #1f4e8c;border-radius:6px;margin-bottom:4px;font-size:11px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span><b>${esc(s.cekici_plaka||'-')}</b> · ${esc(s.tarih||'-')}</span>
-          <span style="color:#ff7a00;font-weight:700">${parseFloat(s.tonaj||0).toLocaleString('tr-TR',{maximumFractionDigits:0})} kg</span>
+          <span style="color:#ff7a00;font-weight:700">${parseFloat(s.tonaj||0).toLocaleString('en-US',{maximumFractionDigits:0})} kg</span>
         </div>
       </div>`).join('')}
   `;
@@ -4669,7 +4669,7 @@ function printSingleShipment(shipId){
         <div class="row"><span class="lbl">📋 İrsaliye No</span><span class="val"><b>${esc(s.irsaliye_no||'—')}</b></span></div>
       </div>
       <div class="tonaj-big">
-        <div class="v">${parseFloat(s.tonaj||0).toLocaleString('tr-TR',{maximumFractionDigits:0})} kg</div>
+        <div class="v">${parseFloat(s.tonaj||0).toLocaleString('en-US',{maximumFractionDigits:0})} kg</div>
         <div class="l">NET YÜKLEME TONAJI</div>
       </div>
       ${(function(){
@@ -4704,7 +4704,7 @@ async function completeShipping(){
     `🏁 PROJE YÜKLEMESİ TAMAMLANIYOR\n\n` +
     `Proje: ${proj?.no||''} · ${proj?.customer||''}\n` +
     `Toplam Araç: ${st.count}\n` +
-    `Toplam Tonaj: ${st.totalKg.toLocaleString('tr-TR',{maximumFractionDigits:0})} kg\n` +
+    `Toplam Tonaj: ${st.totalKg.toLocaleString('en-US',{maximumFractionDigits:0})} kg\n` +
     `Yükleme Günü: ${st.dayCount}\n\n` +
     `✓ Sevkiyat fazı %100 olarak işaretlenecek\n` +
     `✓ Bildirim ekibe iletilecek\n` +
@@ -4723,7 +4723,7 @@ async function completeShipping(){
     // Bildirim
     try {
       await notify(
-        `🏁 ${me.full_name} "${proj?.no||''}" projesinin yüklemesini TAMAMLADI: ${st.count} araç · ${st.totalKg.toLocaleString('tr-TR',{maximumFractionDigits:0})} kg`,
+        `🏁 ${me.full_name} "${proj?.no||''}" projesinin yüklemesini TAMAMLADI: ${st.count} araç · ${st.totalKg.toLocaleString('en-US',{maximumFractionDigits:0})} kg`,
         '🏁', 'system', 'project', pid
       );
     } catch(e){}
@@ -4762,7 +4762,7 @@ function printDailyShipmentReport(){
       <td class="ctr">${cikis}</td>
       <td class="ctr">${sure}</td>
       <td class="lft">${esc(s.irsaliye_no||'-')}</td>
-      <td><b>${parseFloat(s.tonaj||0).toLocaleString('tr-TR',{maximumFractionDigits:0})}</b></td>
+      <td><b>${parseFloat(s.tonaj||0).toLocaleString('en-US',{maximumFractionDigits:0})}</b></td>
     </tr>`;
   }).join('');
   const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Günlük Sevkiyat — ${esc(sec)}</title>
@@ -4791,8 +4791,8 @@ function printDailyShipmentReport(){
       <div class="desc">${esc(sec)} tarihinde yapılan ${st.count} yükleme kaydının özeti.</div>
       <div class="kpis">
         <div class="kpi-card"><div class="l">🚛 Toplam Araç</div><div class="v">${st.count}</div></div>
-        <div class="kpi-card orange"><div class="l">⚖️ Toplam Tonaj (kg)</div><div class="v">${st.totalKg.toLocaleString('tr-TR',{maximumFractionDigits:0})}</div></div>
-        <div class="kpi-card"><div class="l">📊 Ortalama Yük (kg)</div><div class="v">${st.avgKg.toLocaleString('tr-TR')}</div></div>
+        <div class="kpi-card orange"><div class="l">⚖️ Toplam Tonaj (kg)</div><div class="v">${st.totalKg.toLocaleString('en-US',{maximumFractionDigits:0})}</div></div>
+        <div class="kpi-card"><div class="l">📊 Ortalama Yük (kg)</div><div class="v">${st.avgKg.toLocaleString('en-US')}</div></div>
       </div>
       <div style="background:#f1f4f8;padding:8px 12px;border-radius:6px;font-size:10pt;margin:10px 0"><strong>🏢 Nakliye Firmaları:</strong> ${tedLines}</div>
       <table class="frm" style="font-size:9.5pt">
@@ -4810,7 +4810,7 @@ function printDailyShipmentReport(){
         <tbody>${rows}</tbody>
         <tfoot><tr>
           <td colspan="8" style="text-align:right;background:#fff8e1;font-weight:800">GÜNLÜK TOPLAM</td>
-          <td style="background:#fff8e1;font-weight:800">${st.totalKg.toLocaleString('tr-TR',{maximumFractionDigits:0})}</td>
+          <td style="background:#fff8e1;font-weight:800">${st.totalKg.toLocaleString('en-US',{maximumFractionDigits:0})}</td>
         </tr></tfoot>
       </table>
       <div style="flex:1"></div>
@@ -5044,7 +5044,7 @@ function printShipmentReport(){
       <td class="ctr">${cikis}</td>
       <td class="ctr">${sureMin?_fmtDuration(sureMin):'—'}</td>
       <td class="lft">${esc(s.irsaliye_no||'-')}</td>
-      <td><b>${parseFloat(s.tonaj||0).toLocaleString('tr-TR',{maximumFractionDigits:0})}</b></td>
+      <td><b>${parseFloat(s.tonaj||0).toLocaleString('en-US',{maximumFractionDigits:0})}</b></td>
     </tr>`;
   }).join('');
   const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Sevkiyat Raporu — ${esc(proj?.no||'')}</title>
@@ -5075,10 +5075,10 @@ function printShipmentReport(){
       <div class="desc">Bu projede toplam ${st.count} yükleme kaydı yapılmıştır. Detaylar aşağıdadır.</div>
       <div class="kpis">
         <div class="kpi-card"><div class="l">🚛 Toplam Araç</div><div class="v">${st.count}</div></div>
-        <div class="kpi-card orange"><div class="l">⚖️ Toplam Tonaj (kg)</div><div class="v">${st.totalKg.toLocaleString('tr-TR',{maximumFractionDigits:0})}</div></div>
+        <div class="kpi-card orange"><div class="l">⚖️ Toplam Tonaj (kg)</div><div class="v">${st.totalKg.toLocaleString('en-US',{maximumFractionDigits:0})}</div></div>
         <div class="kpi-card"><div class="l">📅 Yükleme Gün</div><div class="v">${st.dayCount}</div></div>
         <div class="kpi-card"><div class="l">🚚 Farklı Plaka</div><div class="v">${st.uniquePlaka}</div></div>
-        <div class="kpi-card"><div class="l">📊 Ortalama Yük (kg)</div><div class="v">${st.avgKg.toLocaleString('tr-TR')}</div></div>
+        <div class="kpi-card"><div class="l">📊 Ortalama Yük (kg)</div><div class="v">${st.avgKg.toLocaleString('en-US')}</div></div>
         <div class="kpi-card"><div class="l">⏱️ Ort. Bekleme</div><div class="v" style="font-size:13pt">${_fmtDuration(st.avgDurationMin)}</div></div>
         <div class="kpi-card"><div class="l">🏁 İlk Yükleme</div><div class="v" style="font-size:11pt">${st.firstDate||'—'}</div></div>
         <div class="kpi-card"><div class="l">🏁 Son Yükleme</div><div class="v" style="font-size:11pt">${st.lastDate||'—'}</div></div>
@@ -5100,7 +5100,7 @@ function printShipmentReport(){
         <tbody>${rows}</tbody>
         <tfoot><tr>
           <td colspan="9" style="text-align:right;font-weight:800;background:#fff8e1">TOPLAM</td>
-          <td style="font-weight:800;background:#fff8e1">${st.totalKg.toLocaleString('tr-TR',{maximumFractionDigits:0})}</td>
+          <td style="font-weight:800;background:#fff8e1">${st.totalKg.toLocaleString('en-US',{maximumFractionDigits:0})}</td>
         </tr></tfoot>
       </table>
       <div style="flex:1"></div>
@@ -5237,42 +5237,54 @@ function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function toast(m,t='ok'){const el=document.createElement('div');el.className='toast '+t;el.textContent=m;document.getElementById('toasts').appendChild(el);setTimeout(()=>el.style.opacity='0',2400);setTimeout(()=>el.remove(),2700)}
 
 /* ============ PARA / SAYI FORMATLAYICILARI ============ */
-// Türk Lirası: 500.000,00 ₺ — kuruşlu (iki ondalık hep gösterilir)
+// Türk Lirası — uluslararası format: 12,420,000.00 TL (binlik virgül, ondalık nokta)
 function fmtTL(v, opts){
   opts = opts || {};
   const n = parseFloat(v);
-  if(isNaN(n)) return opts.dash ? '—' : '0,00 ₺';
-  return n.toLocaleString('tr-TR',{
+  if(isNaN(n)) return opts.dash ? '—' : '0.00 TL';
+  return n.toLocaleString('en-US',{
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
-  }) + ' ₺';
+  }) + ' TL';
 }
-// Türk Lirası (kuruşsuz — sadece tam liralar): 500.000 ₺
+// Kuruşsuz (tam liralar): 12,420,000 TL
 function fmtTL0(v){
   const n = parseFloat(v);
   if(isNaN(n)) return '—';
-  return n.toLocaleString('tr-TR',{
+  return n.toLocaleString('en-US',{
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
-  }) + ' ₺';
+  }) + ' TL';
 }
-// Genel sayı formatı (TL değil): kg, adet, metre vb. için
+// Genel sayı formatı (TL değil): kg, adet, metre vb. için — uluslararası: 22,000.50
 function fmtNum(v, decimals){
   const n = parseFloat(v);
   if(isNaN(n)) return '—';
   const d = (decimals === undefined) ? 2 : decimals;
-  return n.toLocaleString('tr-TR',{
+  return n.toLocaleString('en-US',{
     minimumFractionDigits: d,
     maximumFractionDigits: d
   });
 }
-// "Kg" ve benzeri için: 22.000,50 kg gibi — 2 ondalık
+// "Kg" ve benzeri için: 22,000.50 kg
 function fmtKg(v){ return fmtNum(v, 2) + ' kg'; }
-// Türkçe sayı stringini sayıya parse et (formdan gelirken): "1.234,56" → 1234.56
+// Sayı stringini sayıya parse et — hem en-US (1,234.56) hem tr (1.234,56) hem yalın
 function parseTR(s){
   if(s === null || s === undefined) return 0;
   if(typeof s === 'number') return s;
-  const str = String(s).trim().replace(/\s/g,'').replace(/\./g,'').replace(',', '.');
+  let str = String(s).trim().replace(/\s/g,'');
+  // Hem virgül hem nokta varsa: son geleni ondalık say
+  const lastDot = str.lastIndexOf('.');
+  const lastCom = str.lastIndexOf(',');
+  if(lastDot > -1 && lastCom > -1){
+    if(lastDot > lastCom){ str = str.replace(/,/g,''); }            // en-US: 1,234.56
+    else { str = str.replace(/\./g,'').replace(',', '.'); }          // tr:    1.234,56
+  } else if(lastCom > -1){
+    // Sadece virgül var → ondalık virgülü mü, binlik mi?
+    const decimals = str.length - lastCom - 1;
+    if(decimals <= 2) str = str.replace(',', '.');
+    else str = str.replace(/,/g,'');
+  }
   const n = parseFloat(str);
   return isNaN(n) ? 0 : n;
 }
