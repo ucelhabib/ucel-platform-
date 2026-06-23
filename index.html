@@ -893,8 +893,8 @@ body.proc-fullscreen{overflow:hidden}
           <div class="frow"><label>Proje Adı</label><input id="pf-title"></div>
           <div class="fgrid">
             <div class="frow"><label>Lokasyon</label><input id="pf-loc"></div>
-            <div class="frow amount-only"><label>Bedel (TL)</label><input id="pf-amt" type="number" step="0.01"></div>
-            <div class="frow"><label>Tonaj (TON)</label><input id="pf-ton" type="number" step="0.1" placeholder="0"></div>
+            <div class="frow amount-only"><label>Bedel (TL)</label><input id="pf-amt" type="text" inputmode="decimal" class="money-input"></div>
+            <div class="frow"><label>Tonaj (TON)</label><input id="pf-ton" type="text" inputmode="decimal" class="num-input"></div>
             <div class="frow"><label>Sevk Tarihi</label><input id="pf-ship" type="date"></div>
           </div>
           <div class="frow"><label>Aşamalar (çoklu seçim — sadece yönetici)</label>
@@ -4115,8 +4115,8 @@ function openProj(id){
     document.getElementById('pf-cust').value=p.customer;
     document.getElementById('pf-title').value=p.title;
     document.getElementById('pf-loc').value=p.location||'';
-    document.getElementById('pf-amt').value=p.amount;
-    document.getElementById('pf-ton').value=p.tonnage;
+    document.getElementById('pf-amt').value = p.amount ? Number(p.amount).toLocaleString('en-US',{minimumFractionDigits:0, maximumFractionDigits:2}) : '';
+    document.getElementById('pf-ton').value = p.tonnage ? Number(p.tonnage).toLocaleString('en-US',{minimumFractionDigits:0, maximumFractionDigits:3}) : '';
     document.getElementById('pf-ship').value=p.shipdate||'';
     renderStageChips(p.stages || (p.stage ? [p.stage] : []));
     document.getElementById('pf-own').value=p.owner_id||'';
@@ -4147,6 +4147,8 @@ function openProj(id){
     _procProjectId = null;
   }
   document.getElementById('pModal').classList.add('show');
+  // Para/sayı inputlarına canlı binlik ayırıcı bind et
+  bindMoneyInputs(document.getElementById('pModal'));
 }
 const PHASE_ORDER = ['teklifproje','satinalma','uretim','sevk','montaj','muhasebe'];
 const PHASE_ROLE_MAP = {
@@ -4334,15 +4336,16 @@ async function saveProj(){
     customer:document.getElementById('pf-cust').value.trim(),
     title:document.getElementById('pf-title').value.trim(),
     location:document.getElementById('pf-loc').value.trim(),
-    amount:+document.getElementById('pf-amt').value||0,
-    tonnage:+document.getElementById('pf-ton').value||0,
+    amount: parseTR(document.getElementById('pf-amt').value) || 0,
+    tonnage: parseTR(document.getElementById('pf-ton').value) || 0,
     shipdate:document.getElementById('pf-ship').value||null,
     progress:+document.getElementById('pf-prog').value||0,
     notes:document.getElementById('pf-notes').value
   };
   // Sorumluyu sadece yönetici değiştirebilir (UI + trigger korumalı)
   if(me?.role === 'yonetici'){
-    d.owner_id = document.getElementById('pf-own').value;
+    const ownVal = document.getElementById('pf-own').value;
+    d.owner_id = (ownVal && ownVal.trim()) ? ownVal : null;
   }
   // Aşamayı sadece yönetici ana update'e dahil eder
   if(me?.role === 'yonetici'){
@@ -5268,6 +5271,60 @@ function fmtNum(v, decimals){
 }
 // "Kg" ve benzeri için: 22,000.50 kg
 function fmtKg(v){ return fmtNum(v, 2) + ' kg'; }
+// Input alanına yazarken canlı olarak binlik virgülleri ekler (1250000 → 1,250,000)
+// Kullanım: <input class="money-input"> veya <input class="num-input">
+function _liveFormatInput(el){
+  if(!el || el.dataset.lfBound === '1') return;
+  el.dataset.lfBound = '1';
+  el.setAttribute('inputmode', 'decimal');
+  // Eğer type=number ise text'e çevir (binlik ayırıcı ile uyumsuz)
+  if(el.type === 'number') el.type = 'text';
+  const fmt = (raw) => {
+    if(!raw) return '';
+    // Yalnızca rakam, virgül, nokta ve eksi tut
+    let s = String(raw).replace(/[^\d.,-]/g, '');
+    // İlk eksi koru
+    const neg = s.startsWith('-');
+    s = s.replace(/-/g, '');
+    // Türkçe yazımı normalize et: son nokta veya virgül ondalıktır
+    const lastDot = s.lastIndexOf('.');
+    const lastCom = s.lastIndexOf(',');
+    let intPart = s, decPart = '';
+    if(lastDot > -1 || lastCom > -1){
+      const decSep = (lastDot > lastCom) ? '.' : ',';
+      const decIdx = s.lastIndexOf(decSep);
+      intPart = s.slice(0, decIdx).replace(/[.,]/g,'');
+      decPart = s.slice(decIdx + 1).replace(/[.,]/g,'');
+    }
+    intPart = intPart.replace(/^0+(?=\d)/, '');
+    if(intPart === '') intPart = '0';
+    const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    let out = grouped;
+    if(decPart) out += '.' + decPart.slice(0, 2);
+    else if(/[.,]$/.test(String(raw))) out += '.';
+    return (neg ? '-' : '') + out;
+  };
+  el.addEventListener('input', () => {
+    const cursorAtEnd = el.selectionStart === el.value.length;
+    const oldLen = el.value.length;
+    el.value = fmt(el.value);
+    if(cursorAtEnd) el.setSelectionRange(el.value.length, el.value.length);
+    else {
+      const diff = el.value.length - oldLen;
+      const pos = Math.max(0, (el.selectionStart || 0) + diff);
+      try { el.setSelectionRange(pos, pos); } catch(e){}
+    }
+  });
+  el.addEventListener('blur', () => { el.value = fmt(el.value); });
+  // Form okurken parseTR kullanılacak — burada raw değer korunmaz, formatlı kalır
+  // Mevcut değer varsa formatla
+  if(el.value) el.value = fmt(el.value);
+}
+function bindMoneyInputs(root){
+  const parent = root || document;
+  parent.querySelectorAll('input.money-input, input.num-input').forEach(_liveFormatInput);
+}
+
 // Sayı stringini sayıya parse et — hem en-US (1,234.56) hem tr (1.234,56) hem yalın
 function parseTR(s){
   if(s === null || s === undefined) return 0;
