@@ -2532,7 +2532,9 @@ function renderProcList(){
   _renderProcKatTabs();
   if(procItems.length === 0){
     el.innerHTML = '<div style="padding:30px;text-align:center;color:var(--m)">Bu projede henüz satın alma kalemi yok. <br>"📚 Katalog" veya "+ Manuel" ile başla.</div>';
-    document.getElementById('procSummary').textContent = '';
+    // Özet barı temizle (önceki projeden kalan değer gözükmesin)
+    const _b = document.getElementById('procSummaryBar'); if(_b) _b.innerHTML = '';
+    const _s = document.getElementById('procSummary'); if(_s) _s.textContent = '';
     return;
   }
   // Filtreyi uygula — görünür kalemler
@@ -4808,9 +4810,9 @@ function _smartOpenFolder(raw){
   const isNet   = /^\\\\/.test(v);
   const isLocal = /^[A-Za-z]:\\/.test(v);
   if(isNet || isLocal){
-    // Yolu URL encode et — Türkçe karakterler ve boşluklar için
-    const enc = encodeURI(v.replace(/\\/g,'/'));
-    const proto = 'ucelopen://' + enc;
+    // Yolu encode et — Türkçe karakter, boşluk vs.
+    // encodeURIComponent her şeyi encode eder, sonra PowerShell UrlDecode ile çözer
+    const proto = 'ucelopen://' + encodeURIComponent(v);
     // Önce panoya yaz (fallback için)
     try { navigator.clipboard.writeText(v); } catch(e){}
     // <a> linki oluştur ve programlı tıkla — Chrome'un user gesture'unu korur
@@ -5920,7 +5922,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v102';
+const APP_VERSION = 'v103';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){

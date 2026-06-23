@@ -1,18 +1,15 @@
 Windows Registry Editor Version 5.00
 
 ; ============================================================
-; ÜÇEL Steel Construction — Ortak Klasör Tek Tık ile Açma (v2)
+; ÜÇEL Steel Construction — Ortak Klasör Tek Tık ile Açma (v3)
 ; ============================================================
-; KULLANIM:
-;   1) Bu dosyaya çift tıkla
-;   2) Çıkan Windows uyarısında "Çalıştır" → "Evet" → "Tamam"
-;   3) BİR KEZ kuruldu, hep çalışır.
+; KURULUM:
+;   1) Bu dosyaya çift tıkla → "Çalıştır" → "Evet" → "Tamam"
+;   2) ÜÇEL'de "Aç" → ilk seferinde Chrome diyaloğunda
+;      "İzin ver / Always open" seç
 ;
-; SONRA tarayıcıda ÜÇEL uygulaması Aç butonuna basınca
-; çıkacak diyalogda "İzin ver" (Allow / Always open) seç.
-; Bir defa kabul ettikten sonra her seferinde sessizce açılır.
-;
-; KALDIRMA: regedit aç → HKEY_CURRENT_USER\Software\Classes\ucelopen sil
+; NOT: Bu yöntem, projeler klasörünüzdeki UCEL_KlasorAc.ps1
+;      script'ini çağırır. .ps1 dosyası aynı klasörde olmalı.
 ; ============================================================
 
 [HKEY_CURRENT_USER\Software\Classes\ucelopen]
@@ -27,4 +24,4 @@ Windows Registry Editor Version 5.00
 [HKEY_CURRENT_USER\Software\Classes\ucelopen\shell\open]
 
 [HKEY_CURRENT_USER\Software\Classes\ucelopen\shell\open\command]
-@="powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"$u=$args[0]; $u=$u -replace '^ucelopen:[/]{0,2}',''; $u=[System.Web.HttpUtility]::UrlDecode($u); $u=$u -replace '/','\\\\'; if($u -match '^[A-Z]:\\\\') {Start-Process explorer.exe -ArgumentList ('\"' + $u + '\"')} elseif($u -match '^\\\\\\\\') {Start-Process explorer.exe -ArgumentList ('\"' + $u + '\"')} else {Start-Process $u}\" \"%1\""
+@="powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\ucelh\\OneDrive\\Masaüstü\\projeler\\UCEL_KlasorAc.ps1\" -Url \"%1\""
