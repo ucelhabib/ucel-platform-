@@ -5283,17 +5283,17 @@ function fmtTL0(v){
     maximumFractionDigits: 0
   }) + ' TL';
 }
-// Genel sayı formatı (TL değil): kg, adet, metre vb. için — uluslararası: 22,000.50
+// Genel sayı formatı (TL değil): kg, adet, metre vb. için
+// Tam sayıda .00 göstermez (204 m), ondalıklıda gösterir (204.5 m)
 function fmtNum(v, decimals){
   const n = parseFloat(v);
   if(isNaN(n)) return '—';
-  const d = (decimals === undefined) ? 2 : decimals;
+  const maxD = (decimals === undefined) ? 2 : decimals;
   return n.toLocaleString('en-US',{
-    minimumFractionDigits: d,
-    maximumFractionDigits: d
+    minimumFractionDigits: 0,
+    maximumFractionDigits: maxD
   });
 }
-// "Kg" ve benzeri için: 22,000.50 kg
 function fmtKg(v){ return fmtNum(v, 2) + ' kg'; }
 // Input alanına yazarken canlı olarak binlik virgülleri ekler (1250000 → 1,250,000)
 // Kullanım: <input class="money-input"> veya <input class="num-input">
