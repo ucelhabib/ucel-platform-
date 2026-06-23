@@ -1,0 +1,25 @@
+Windows Registry Editor Version 5.00
+
+; ============================================================
+; ÜÇEL Steel Construction — Ortak Klasör Tek Tık ile Açma
+; ============================================================
+; KULLANIM: Bu dosyaya çift tıklayın → "Evet" deyin.
+; Sonra ÜÇEL uygulamasında proje "Aç" butonuna basınca
+; yerel klasör veya ağ paylaşımı doğrudan Dosya Gezgini'nde açılır.
+;
+; Her bilgisayarda BİR KEZ çalıştırmanız yeterli. Yönetici hakkı ister.
+; ============================================================
+
+[HKEY_CLASSES_ROOT\ucelopen]
+@="URL:UCEL Open Folder"
+"URL Protocol"=""
+
+[HKEY_CLASSES_ROOT\ucelopen\DefaultIcon]
+@="explorer.exe,1"
+
+[HKEY_CLASSES_ROOT\ucelopen\shell]
+
+[HKEY_CLASSES_ROOT\ucelopen\shell\open]
+
+[HKEY_CLASSES_ROOT\ucelopen\shell\open\command]
+@="powershell.exe -WindowStyle Hidden -Command \"$p=$args[0] -replace '^ucelopen://?','' -replace '/','\\\\'; if($p -match '^[A-Z]:\\\\') {Start-Process explorer $p} elseif($p -match '^\\\\\\\\') {Start-Process explorer $p} else {Start-Process $p}\" \"%1\""

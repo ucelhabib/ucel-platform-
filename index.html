@@ -987,7 +987,6 @@ body.proc-fullscreen{overflow:hidden}
             <button class="btn sec sm" type="button" onclick="exportProcTalepFormu()" title="Tedarikçiye gönderilecek PDF Talep Formu">📋 Talep PDF</button>
             <button class="btn sec sm price-only" type="button" onclick="printProcurement()" title="Detaylı rapor — yazdır, PDF veya Excel indir">📊 Detaylı Rapor</button>
             <button class="btn sec sm" type="button" id="procCatBtn" onclick="openProcCatalog()">📚 Katalog</button>
-            <button class="btn sec sm" type="button" onclick="openBoluset()" title="Cıvata-somun-pul setini tek seferde ekle">Cıvata Seti</button>
             <button class="btn sm" type="button" id="procNewBtn" onclick="openProcNew()">+ Manuel</button>
           </div>
           <button type="button" class="pm-fs" onclick="pmToggleFs('proc')" title="Tam ekran">⛶</button>
@@ -2510,11 +2509,17 @@ function _renderProcKatTabs(){
       ${esc(label)} <span style="background:${active?'rgba(255,255,255,.25)':'#f1f4f8'};color:${active?'#fff':'#1f4e8c'};padding:1px 7px;border-radius:9px;font-size:10px">${n||0}</span>
     </button>`;
   };
-  const html = [
+  const chips = [
     mkChip('all','Tümü','#1f4e8c', counts.all),
     ...PROC_KAT.map(k => mkChip(k.k, k.l, k.color, counts[k.k]))
   ].join('');
-  tabs.innerHTML = html;
+  // Kategoriye özel yardımcı buton — Cıvata-Somun seçiliyse "Cıvata Seti Ekle" görünür
+  let kontextButton = '';
+  if(_procFilterKat === 'civata'){
+    kontextButton = `<button type="button" class="btn sm" onclick="openBoluset()" style="margin-left:auto;background:#6b3fa0;color:#fff;border:0;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Cıvata Seti</button>`;
+  }
+  tabs.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;flex:1">${chips}</div>${kontextButton}`;
+  tabs.style.justifyContent = 'space-between';
 }
 function _setProcFilterKat(k){
   _procFilterKat = k;
@@ -4677,21 +4682,46 @@ function _readFolderInput(){
   if(!v){ toast('Önce klasör linki gir','err'); return null; }
   return v;
 }
+function _smartOpenFolder(raw){
+  const v = (raw||'').trim(); if(!v) return false;
+  // 1) http/https → doğrudan aç (Drive, OneDrive, SharePoint vs.)
+  if(/^https?:\/\//i.test(v)){
+    window.open(v, '_blank');
+    return true;
+  }
+  // 2) Yerel veya ağ yolu → 'ucelopen://' özel protokol ile dene
+  //    (UCEL_KlasorAc_Kurulum.reg dosyası bilgisayara 1 kez kurulduysa Explorer'da açar)
+  const isNet   = /^\\\\/.test(v);
+  const isLocal = /^[A-Za-z]:\\/.test(v);
+  if(isNet || isLocal){
+    // ucelopen://C:/path/to  veya  ucelopen://server/share/path
+    const enc = v.replace(/\\/g,'/');
+    const proto = 'ucelopen://' + enc;
+    // Görünmez iframe ile tetikle (popup engellemez)
+    try {
+      const f = document.createElement('iframe');
+      f.style.display = 'none';
+      f.src = proto;
+      document.body.appendChild(f);
+      setTimeout(()=>f.remove(), 1500);
+    } catch(e){}
+    // Yine de panoya kopyala — protokol kurulu değilse manuel kullanılır
+    try { navigator.clipboard.writeText(v); } catch(e){}
+    toast('Klasör açılıyor… Açılmazsa "UCEL_KlasorAc_Kurulum.reg" dosyasını bir kez çalıştır (yol panoya kopyalandı: gezgin → Ctrl+L → Ctrl+V).', 'info');
+    return true;
+  }
+  // 3) Bilinmeyen → yeni sekme dene + clipboard
+  let opened = null;
+  try { opened = window.open(v, '_blank'); } catch(e){}
+  if(!opened){
+    try { navigator.clipboard.writeText(v); } catch(e){}
+    toast('Açılamadı — yol panoya kopyalandı.','info');
+  }
+  return true;
+}
 function openProjectFolder(){
   const v = _readFolderInput(); if(!v) return;
-  // http/https → yeni sekme; file:// veya ağ yolu \\sunucu → yeni sekmede dene
-  let url = v;
-  // \\sunucu\... pattern'i için file: önek ekle
-  if(/^\\\\/.test(url)) url = 'file:' + url.replace(/\\/g,'/');
-  else if(/^[A-Za-z]:\\/.test(url)) url = 'file:///' + url.replace(/\\/g,'/');
-  // Tarayıcı engellerse fallback: panoya kopyala
-  let opened = null;
-  try { opened = window.open(url, '_blank'); } catch(e){}
-  if(!opened){
-    // file:// genelde engellenir — panoya kopyala + kullanıcıya söyle
-    try { navigator.clipboard.writeText(v); } catch(e){}
-    toast('Tarayıcı yerel klasörü doğrudan açamadı. Yol panoya kopyalandı, Dosya Gezgini → Ctrl+L → Ctrl+V', 'info');
-  }
+  _smartOpenFolder(v);
 }
 async function copyProjectFolder(){
   const v = _readFolderInput(); if(!v) return;
@@ -4706,15 +4736,7 @@ async function copyProjectFolder(){
 function openFolderByProjectId(pid){
   const p = projects.find(x=>x.id===pid);
   if(!p?.folder_path){ toast('Bu projeye klasör linki eklenmemiş','err'); return; }
-  let url = p.folder_path.trim();
-  if(/^\\\\/.test(url)) url = 'file:' + url.replace(/\\/g,'/');
-  else if(/^[A-Za-z]:\\/.test(url)) url = 'file:///' + url.replace(/\\/g,'/');
-  let opened = null;
-  try { opened = window.open(url, '_blank'); } catch(e){}
-  if(!opened){
-    try { navigator.clipboard.writeText(p.folder_path); } catch(e){}
-    toast('Yol panoya kopyalandı (yerel klasörler için Dosya Gezgini → Ctrl+L → Ctrl+V)', 'info');
-  }
+  _smartOpenFolder(p.folder_path);
 }
 async function delProj(){
   // YETKİ: Sadece yönetici proje silebilir
@@ -5775,7 +5797,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v95';
+const APP_VERSION = 'v96';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
