@@ -2388,10 +2388,27 @@ function _procCalc(item){
   // Toplam kg hesabı:
   //   birim 'kg' ise miktar zaten kg
   //   birim 'ton' ise miktar × 1000
+  //   SAÇ ise: adet × en(mm) × boy(mm) × kalınlık(mm) × 7.85 / 1,000,000
   //   diğer (m/adet) ise miktar × kg_per_meter
   let toplamKg = 0;
+  const isSacItem = (item.malzeme||'').toUpperCase().startsWith('SAÇ') || (item.malzeme||'').toUpperCase().startsWith('SAC');
   if(isKgUnit) toplamKg = miktar;
   else if((item.birim||'').toLowerCase() === 'ton') toplamKg = miktar * 1000;
+  else if(isSacItem && item.ebat){
+    // ebat formatı: "1500×6000 mm" veya "1500x6000" veya "1500 mm"
+    const m = String(item.ebat).match(/(\d+(?:\.\d+)?)\s*[×x]\s*(\d+(?:\.\d+)?)/i);
+    // kalınlık ürün adından (örn "SAÇ 10 mm" → 10)
+    const km = String(item.malzeme||'').match(/(\d+(?:\.\d+)?)\s*mm/i);
+    const kalinlik = km ? parseFloat(km[1]) : 0;
+    if(m && kalinlik > 0){
+      const en = parseFloat(m[1]);
+      const boy = parseFloat(m[2]);
+      // birim adetse miktarı adet olarak kullan
+      toplamKg = miktar * en * boy * kalinlik * 7.85 / 1000000;
+    } else {
+      toplamKg = miktar * kgPm;
+    }
+  }
   else toplamKg = miktar * kgPm;
   // Tutar hesabı:
   //   fb='kg' → toplam_kg × birim_fiyat (TL/kg)
@@ -2406,6 +2423,10 @@ function _procCalc(item){
     if(d.gercek_kg) return s + parseFloat(d.gercek_kg);
     if(isKgUnit) return s + parseFloat(d.miktar||0);
     if((item.birim||'').toLowerCase() === 'ton') return s + parseFloat(d.miktar||0) * 1000;
+    if(isSacItem && miktar > 0 && toplamKg > 0){
+      // saç birim kg/adet oranını kullan
+      return s + (parseFloat(d.miktar||0) * (toplamKg / miktar));
+    }
     return s + (parseFloat(d.miktar||0) * kgPm);
   }, 0);
   return { gelen, kalan, tutar, kdv, tevkifat, net, durum, delvCount: dl.length, toplamKg, gelenKg, fiyatBirimi: fb };
@@ -2445,15 +2466,16 @@ function renderProcList(){
         <div style="text-align:right;color:#666;font-size:11px">%${it.kdv_orani}</div>
         <div style="text-align:right;font-weight:700;color:#1f4e8c;font-size:13px">${fmtTL(c.net)}</div>` : '';
     const gridCols = canSeePrice
-      ? '32px minmax(180px,1.4fr) 95px 90px 105px 85px 55px 115px 85px 100px'
-      : '32px minmax(220px,1.6fr) 110px 100px 120px 100px 110px';
+      ? '32px minmax(180px,1.4fr) 95px 90px 105px 95px 85px 55px 115px 85px 100px'
+      : '32px minmax(220px,1.6fr) 110px 100px 120px 105px 100px 110px';
     return `<div style="border-bottom:1px solid #eef0f5">
       <div style="display:grid;grid-template-columns:${gridCols};gap:14px;align-items:center;padding:12px 16px;cursor:pointer;font-size:13px" onclick="toggleProcExpand('${it.id}')">
         <div style="text-align:center;color:#888;font-size:12px">${expanded?'▼':'▶'}<br><small style="font-weight:700">${i+1}</small></div>
         <div style="font-weight:600;font-size:13px;line-height:1.4">${esc(it.malzeme)}${it.ebat?` <span style="font-size:11px;color:#888">(${esc(it.ebat)})</span>`:''}</div>
-        <div style="text-align:right;color:#1f4e8c;font-weight:700;line-height:1.4">🎯 ${fmt(ihtiyac)}<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} ihtiyaç</small></div>
-        <div style="text-align:right;color:#0a7;font-weight:700;line-height:1.4">${stokDusum>0?`📦 ${fmt(stokDusum)}`:'<span style="color:#bbb;font-weight:400">—</span>'}${stokDusum>0?`<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} stoktan</small>`:''}</div>
-        <div style="text-align:right;font-weight:700;line-height:1.4">${fmt(siparis)} ${esc(it.birim)}${yuvarlama>0.01?`<br><small style="color:#0a7;font-size:10px;font-weight:700" title="Yuvarlama fazlası otomatik olarak stoğa eklendi">📥 +${fmt(yuvarlama)} stoğa</small>`:''}${c.fiyatBirimi==='kg' && c.toplamKg>0?`<br><small style="color:#888;font-size:10px">${c.toplamKg.toLocaleString('en-US',{maximumFractionDigits:1})} kg</small>`:''}</div>
+        <div style="text-align:right;color:#1f4e8c;font-weight:700;line-height:1.4">${fmt(ihtiyac)}<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} ihtiyaç</small></div>
+        <div style="text-align:right;color:#0a7;font-weight:700;line-height:1.4">${stokDusum>0?fmt(stokDusum):'<span style="color:#bbb;font-weight:400">—</span>'}${stokDusum>0?`<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} stoktan</small>`:''}</div>
+        <div style="text-align:right;font-weight:700;line-height:1.4">${fmt(siparis)} ${esc(it.birim)}${yuvarlama>0.01?`<br><small style="color:#0a7;font-size:10px;font-weight:700">+${fmt(yuvarlama)} stoğa</small>`:''}</div>
+        <div style="text-align:right;font-weight:700;color:#b91c1c;line-height:1.4">${c.toplamKg>0?fmt(c.toplamKg)+' <small style=\"color:#888;font-weight:400;font-size:10px\">kg</small>':'<span style=\"color:#bbb;font-weight:400\">—</span>'}</div>
         ${priceCells}
         <div style="text-align:right;color:#0a7;font-size:12px">${c.gelen.toLocaleString('en-US')} ${esc(it.birim)}</div>
         <div style="text-align:center">${_statusBadge(c.durum, c.gelen, parseFloat(it.miktar))}</div>
@@ -2464,12 +2486,12 @@ function renderProcList(){
   // Header için aynı yetki kontrolü
   const canSeePriceHdr = me?.role === 'yonetici' || me?.role === 'satinalma' || me?.role === 'muhasebe';
   const hdrCols = canSeePriceHdr
-    ? '32px minmax(180px,1.4fr) 95px 90px 105px 85px 55px 115px 85px 100px'
-    : '32px minmax(220px,1.6fr) 110px 100px 120px 100px 110px';
+    ? '32px minmax(180px,1.4fr) 95px 90px 105px 95px 85px 55px 115px 85px 100px'
+    : '32px minmax(220px,1.6fr) 110px 100px 120px 105px 100px 110px';
   const priceHdrs = canSeePriceHdr ? '<div style="text-align:right">Br.Fiy</div><div style="text-align:right">KDV</div><div style="text-align:right">Net Tutar</div>' : '';
   el.innerHTML = `
     <div style="background:#f1f4f8;padding:10px 16px;display:grid;grid-template-columns:${hdrCols};gap:14px;font-size:11px;font-weight:800;color:#1f4e8c;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #1f4e8c">
-      <div></div><div>Malzeme</div><div style="text-align:right">🎯 İhtiyaç</div><div style="text-align:right">📦 Stoktan</div><div style="text-align:right">Sipariş</div>${priceHdrs}<div style="text-align:right">Gelen</div><div style="text-align:center">Durum</div>
+      <div></div><div>Malzeme</div><div style="text-align:right">İhtiyaç</div><div style="text-align:right">Stoktan</div><div style="text-align:right">Sipariş</div><div style="text-align:right">Ağırlık</div>${priceHdrs}<div style="text-align:right">Gelen</div><div style="text-align:center">Durum</div>
     </div>
     ${rows}`;
   const bar = document.getElementById('procSummaryBar');
@@ -3258,7 +3280,8 @@ function printProcurement(){
       <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <small>(${esc(it.ebat)})</small>`:''}</td>
       <td><b style="color:#1f4e8c">${_fmt(_ihtiyac)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small></td>
       <td>${_stokDusum>0?`<b style="color:#0a7">${_fmt(_stokDusum)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small>`:'<span style="color:#bbb">—</span>'}</td>
-      <td><b>${_fmt(_siparis)} ${esc(it.birim)}</b>${_yuvarlama>0.01?`<br><small style="color:#0a7;font-size:8pt;font-weight:600">📥 +${_fmt(_yuvarlama)} stoğa</small>`:''}${c.toplamKg>0?`<br><small style="font-size:8pt">${c.toplamKg.toLocaleString('en-US',{maximumFractionDigits:1})} kg</small>`:''}</td>
+      <td><b>${_fmt(_siparis)} ${esc(it.birim)}</b>${_yuvarlama>0.01?`<br><small style="color:#0a7;font-size:8pt;font-weight:600">+${_fmt(_yuvarlama)} stoğa</small>`:''}</td>
+      <td><b style="color:#b91c1c">${c.toplamKg>0?_fmt(c.toplamKg)+' kg':'—'}</b></td>
       <td>${fmtTL(it.birim_fiyat)}/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</td>
       <td>${fmtTL(c.tutar)}</td>
       <td>%${it.kdv_orani}<br>${fmtTL(c.kdv)}</td>
@@ -5281,27 +5304,22 @@ function _liveFormatInput(el){
   if(el.type === 'number') el.type = 'text';
   const fmt = (raw) => {
     if(!raw) return '';
-    // Yalnızca rakam, virgül, nokta ve eksi tut
-    let s = String(raw).replace(/[^\d.,-]/g, '');
-    // İlk eksi koru
+    // Yalnızca rakam, nokta ve eksi tut. Virgül binlik ayırıcıdır → sil.
+    let s = String(raw).replace(/,/g, '').replace(/[^\d.-]/g, '');
     const neg = s.startsWith('-');
     s = s.replace(/-/g, '');
-    // Türkçe yazımı normalize et: son nokta veya virgül ondalıktır
-    const lastDot = s.lastIndexOf('.');
-    const lastCom = s.lastIndexOf(',');
+    // Çoklu nokta varsa sadece ilkini ondalık olarak al
+    const firstDot = s.indexOf('.');
     let intPart = s, decPart = '';
-    if(lastDot > -1 || lastCom > -1){
-      const decSep = (lastDot > lastCom) ? '.' : ',';
-      const decIdx = s.lastIndexOf(decSep);
-      intPart = s.slice(0, decIdx).replace(/[.,]/g,'');
-      decPart = s.slice(decIdx + 1).replace(/[.,]/g,'');
+    if(firstDot > -1){
+      intPart = s.slice(0, firstDot);
+      decPart = s.slice(firstDot + 1).replace(/\./g, '').slice(0, 2);
     }
     intPart = intPart.replace(/^0+(?=\d)/, '');
     if(intPart === '') intPart = '0';
     const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     let out = grouped;
-    if(decPart) out += '.' + decPart.slice(0, 2);
-    else if(/[.,]$/.test(String(raw))) out += '.';
+    if(firstDot > -1) out += '.' + decPart;
     return (neg ? '-' : '') + out;
   };
   el.addEventListener('input', () => {
