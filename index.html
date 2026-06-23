@@ -753,6 +753,28 @@ body.proc-fullscreen{overflow:hidden}
   </div>
 </div>
 
+<!-- Cıvata Seti Modal — cıvata gir, otomatik somun+pul ekle -->
+<div class="modal-bg" id="bolusetModal">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-h"><h3>Cıvata Seti Ekle</h3><button class="x" onclick="closeBoluset()">✕</button></div>
+    <div class="modal-b">
+      <div style="background:#f1f7ff;border:1px solid #cdd2dc;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#444">
+        Her satıra cıvata bilgisini gir. Pul ve somun seçili ise eklediğin adet kadar otomatik olarak talep formuna eklenir. Yeni satır için "+ Satır" tıkla.
+      </div>
+      <div style="display:grid;grid-template-columns:90px 110px 110px 70px 70px 1fr 36px;gap:6px;font-size:10px;font-weight:700;color:#1f4e8c;text-transform:uppercase;letter-spacing:0.4px;padding:0 4px 4px">
+        <div>Çap</div><div>Boy (mm)</div><div>Adet</div><div>Pul</div><div>Somun</div><div>Not</div><div></div>
+      </div>
+      <div id="bs-rows"></div>
+      <button type="button" class="btn sec sm" onclick="addBolusetRow()" style="margin-top:6px">+ Satır</button>
+      <div style="margin-top:14px;border-top:1px dashed var(--bd);padding-top:10px;font-size:12px;color:#666" id="bs-preview"></div>
+    </div>
+    <div class="modal-f">
+      <button class="btn sec" onclick="closeBoluset()">Vazgeç</button>
+      <button class="btn ok" onclick="saveBoluset()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="procCatalogModal">
   <div class="modal" style="max-width:680px">
     <div class="modal-h"><h3>📚 Katalogtan Malzeme Seç</h3><button class="x" onclick="closeProcCatalog()">✕</button></div>
@@ -965,6 +987,7 @@ body.proc-fullscreen{overflow:hidden}
             <button class="btn sec sm" type="button" onclick="exportProcTalepFormu()" title="Tedarikçiye gönderilecek PDF Talep Formu">📋 Talep PDF</button>
             <button class="btn sec sm price-only" type="button" onclick="printProcurement()" title="Detaylı rapor — yazdır, PDF veya Excel indir">📊 Detaylı Rapor</button>
             <button class="btn sec sm" type="button" id="procCatBtn" onclick="openProcCatalog()">📚 Katalog</button>
+            <button class="btn sec sm" type="button" onclick="openBoluset()" title="Cıvata-somun-pul setini tek seferde ekle">Cıvata Seti</button>
             <button class="btn sm" type="button" id="procNewBtn" onclick="openProcNew()">+ Manuel</button>
           </div>
           <button type="button" class="pm-fs" onclick="pmToggleFs('proc')" title="Tam ekran">⛶</button>
@@ -2658,6 +2681,112 @@ function openProcNew(){
   document.getElementById('procNewModal').classList.add('show');
 }
 function closeProcNew(){ document.getElementById('procNewModal').classList.remove('show'); }
+
+/* ====== Cıvata Seti — tek girişle cıvata + somun + pul ====== */
+const BOLU_CAPLAR = ['M6','M8','M10','M12','M14','M16','M18','M20','M22','M24','M27','M30','M33','M36'];
+function openBoluset(){
+  if(!_procProjectId){ toast('Önce yukarıdan bir proje seç','err'); return; }
+  document.getElementById('bs-rows').innerHTML = '';
+  addBolusetRow();
+  document.getElementById('bolusetModal').classList.add('show');
+  _updateBolusetPreview();
+}
+function closeBoluset(){ document.getElementById('bolusetModal').classList.remove('show'); }
+function addBolusetRow(){
+  const box = document.getElementById('bs-rows');
+  const i = box.children.length;
+  const row = document.createElement('div');
+  row.style.cssText = 'display:grid;grid-template-columns:90px 110px 110px 70px 70px 1fr 36px;gap:6px;align-items:center;margin-bottom:6px';
+  row.innerHTML = `
+    <select class="bs-cap" oninput="_updateBolusetPreview()" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px">
+      ${BOLU_CAPLAR.map(c=>`<option value="${c}">${c}</option>`).join('')}
+    </select>
+    <input class="bs-boy" type="number" min="0" step="1" placeholder="60" oninput="_updateBolusetPreview()" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px">
+    <input class="bs-adet" type="number" min="0" step="1" placeholder="0" oninput="_updateBolusetPreview()" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px">
+    <label style="display:flex;align-items:center;justify-content:center"><input type="checkbox" class="bs-pul" checked onchange="_updateBolusetPreview()" style="width:18px;height:18px"></label>
+    <label style="display:flex;align-items:center;justify-content:center"><input type="checkbox" class="bs-somun" checked onchange="_updateBolusetPreview()" style="width:18px;height:18px"></label>
+    <input class="bs-not" type="text" placeholder="(opsiyonel)" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px">
+    <button type="button" onclick="this.parentElement.remove();_updateBolusetPreview()" style="background:#fee;border:1px solid #f5b;color:#c33;border-radius:6px;cursor:pointer;font-size:14px">×</button>
+  `;
+  box.appendChild(row);
+}
+function _bolusetReadRows(){
+  const rows = Array.from(document.querySelectorAll('#bs-rows > div'));
+  return rows.map(r => ({
+    cap:   r.querySelector('.bs-cap').value,
+    boy:   parseInt(r.querySelector('.bs-boy').value) || 0,
+    adet:  parseInt(r.querySelector('.bs-adet').value) || 0,
+    pul:   r.querySelector('.bs-pul').checked,
+    somun: r.querySelector('.bs-somun').checked,
+    not:   r.querySelector('.bs-not').value.trim()
+  })).filter(x => x.adet > 0);
+}
+function _updateBolusetPreview(){
+  const rows = _bolusetReadRows();
+  const el = document.getElementById('bs-preview'); if(!el) return;
+  if(rows.length === 0){ el.innerHTML = 'Henüz geçerli satır yok.'; return; }
+  let civata=0, somun=0, pul=0, kalemSayisi=0;
+  rows.forEach(r=>{
+    civata += r.adet; kalemSayisi++;
+    if(r.somun){ somun += r.adet; kalemSayisi++; }
+    if(r.pul){ pul += r.adet; kalemSayisi++; }
+  });
+  el.innerHTML = `<strong>${kalemSayisi} kalem</strong> eklenecek · Cıvata: <strong>${civata}</strong> adet · Somun: <strong>${somun}</strong> adet · Pul: <strong>${pul}</strong> adet`;
+}
+async function saveBoluset(){
+  if(!_procProjectId){ toast('Proje seçili değil','err'); return; }
+  const rows = _bolusetReadRows();
+  if(rows.length === 0){ toast('Geçerli satır yok (adet girilmeli)','err'); return; }
+  const inserts = [];
+  let sira = procItems.length;
+  for(const r of rows){
+    const boyStr = r.boy > 0 ? `×${r.boy} mm` : '';
+    inserts.push({
+      project_id: _procProjectId, sira: sira++,
+      malzeme: `Cıvata ${r.cap}${boyStr}`,
+      miktar: r.adet, birim: 'adet',
+      birim_fiyat: 0, kdv_orani: 20, fiyat_birimi: 'birim',
+      kg_per_meter: 0,
+      proc_kategori: 'civata',
+      original_ihtiyac: r.adet,
+      not_text: r.not || null,
+      created_by: me.id
+    });
+    if(r.somun){
+      inserts.push({
+        project_id: _procProjectId, sira: sira++,
+        malzeme: `Somun ${r.cap}`,
+        miktar: r.adet, birim: 'adet',
+        birim_fiyat: 0, kdv_orani: 20, fiyat_birimi: 'birim',
+        kg_per_meter: 0,
+        proc_kategori: 'civata',
+        original_ihtiyac: r.adet,
+        not_text: null,
+        created_by: me.id
+      });
+    }
+    if(r.pul){
+      inserts.push({
+        project_id: _procProjectId, sira: sira++,
+        malzeme: `Pul ${r.cap}`,
+        miktar: r.adet, birim: 'adet',
+        birim_fiyat: 0, kdv_orani: 20, fiyat_birimi: 'birim',
+        kg_per_meter: 0,
+        proc_kategori: 'civata',
+        original_ihtiyac: r.adet,
+        not_text: null,
+        created_by: me.id
+      });
+    }
+  }
+  const {error} = await sb.from('procurement_items').insert(inserts);
+  if(error){ toast('Hata: '+errTr(error),'err'); return; }
+  toast(`${inserts.length} kalem eklendi`,'ok');
+  closeBoluset();
+  _procFilterKat = 'civata';  // ekledikten sonra cıvata kategorisini göster
+  await loadProcurement(_procProjectId);
+  try { const proj = projects.find(p=>p.id===_procProjectId); await notify(`${me.full_name} "${proj?.no} ${proj?.customer}" projesine cıvata seti ekledi (${inserts.length} kalem)`, '🔩', 'satinalma', 'project', _procProjectId); } catch(e){}
+}
 async function saveProcNew(){
   if(!_procProjectId){toast('Önce yukarıdan bir proje seç','err');return}
   const d = {
