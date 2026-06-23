@@ -708,7 +708,7 @@ body.proc-fullscreen{overflow:hidden}
   <div class="modal" style="max-width:520px">
     <div class="modal-h"><h3>➕ Manuel Satın Alma Kalemi</h3><button class="x" onclick="closeProcNew()">✕</button></div>
     <div class="modal-b">
-      <div class="frow"><label>Malzeme Adı</label><input id="pn-malzeme" placeholder="örn. M16 cıvata + somun"></div>
+      <div class="frow"><label>Malzeme Adı</label><input id="pn-malzeme"></div>
       <div class="fgrid">
         <div class="frow"><label>Sipariş Miktarı</label><input id="pn-miktar" type="number" min="0" step="0.01" value="0"></div>
         <div class="frow"><label>Birim</label>
@@ -774,14 +774,14 @@ body.proc-fullscreen{overflow:hidden}
           <div class="frow"><label>Gelen Miktar</label><input id="pd-miktar" type="number" min="0" step="0.01" value="0"></div>
         </div>
         <div class="fgrid">
-          <div class="frow"><label>İrsaliye No</label><input id="pd-irs" placeholder="örn. SA6041"></div>
-          <div class="frow"><label>Fatura No</label><input id="pd-fat" placeholder="opsiyonel"></div>
+          <div class="frow"><label>İrsaliye No</label><input id="pd-irs"></div>
+          <div class="frow"><label>Fatura No</label><input id="pd-fat"></div>
         </div>
         <div class="fgrid">
-          <div class="frow"><label>Tedarikçi</label><input id="pd-ted" placeholder="örn. TORUNLAR"></div>
-          <div class="frow"><label>Fatura Tutarı (TL)</label><input id="pd-tutar" type="number" min="0" step="0.01" placeholder="opsiyonel"></div>
+          <div class="frow"><label>Tedarikçi</label><input id="pd-ted"></div>
+          <div class="frow"><label>Fatura Tutarı (TL)</label><input id="pd-tutar" type="number" min="0" step="0.01"></div>
         </div>
-        <div class="frow"><label>Not</label><input id="pd-not" placeholder="örn. 1.araba, sevkiyat"></div>
+        <div class="frow"><label>Not</label><input id="pd-not"></div>
       </div>
     </div>
     <div class="modal-f">
@@ -806,7 +806,7 @@ body.proc-fullscreen{overflow:hidden}
         <div class="frow"><label>Miktar (adet)</label><input id="sm-qty" type="number" min="1" value="1"></div>
       </div>
       <div class="frow"><label>Proje (opsiyonel)</label><select id="sm-proj"><option value="">— seçilmedi —</option></select></div>
-      <div class="frow"><label>Not (opsiyonel)</label><textarea id="sm-note" rows="2" placeholder="örn: KIYAMDER projesine kullanıldı, fire %3"></textarea></div>
+      <div class="frow"><label>Not</label><textarea id="sm-note" rows="2"></textarea></div>
       <div style="margin-top:14px;border-top:1px solid var(--bd);padding-top:10px">
         <div style="font-weight:700;color:var(--p);margin-bottom:6px">Geçmiş (son 10)</div>
         <div id="sm-history" style="font-size:11px;color:#444;max-height:160px;overflow:auto"></div>
@@ -887,13 +887,13 @@ body.proc-fullscreen{overflow:hidden}
         </div>
         <div class="pm-card-b">
           <div class="fgrid">
-            <div class="frow"><label>Proje No</label><input id="pf-no" placeholder="2026-027"></div>
-            <div class="frow"><label>Müşteri</label><input id="pf-cust" placeholder="ABC İnşaat"></div>
+            <div class="frow"><label>Proje No</label><input id="pf-no"></div>
+            <div class="frow"><label>Müşteri</label><input id="pf-cust"></div>
           </div>
-          <div class="frow"><label>Proje Adı</label><input id="pf-title" placeholder="Sancaktepe Depo Çatı"></div>
+          <div class="frow"><label>Proje Adı</label><input id="pf-title"></div>
           <div class="fgrid">
-            <div class="frow"><label>Lokasyon</label><input id="pf-loc" placeholder="İstanbul"></div>
-            <div class="frow amount-only"><label>Bedel (TL — kuruşlu yazabilirsin: 12420000.00)</label><input id="pf-amt" type="number" step="0.01" placeholder="0.00"></div>
+            <div class="frow"><label>Lokasyon</label><input id="pf-loc"></div>
+            <div class="frow amount-only"><label>Bedel (TL)</label><input id="pf-amt" type="number" step="0.01"></div>
             <div class="frow"><label>Tonaj (TON)</label><input id="pf-ton" type="number" step="0.1" placeholder="0"></div>
             <div class="frow"><label>Sevk Tarihi</label><input id="pf-ship" type="date"></div>
           </div>
@@ -970,7 +970,7 @@ body.proc-fullscreen{overflow:hidden}
   <div class="modal">
     <div class="modal-h"><h3 id="tmTitle">Yeni Görev</h3><button class="x" onclick="closeTask()">✕</button></div>
     <div class="modal-b">
-      <div class="frow"><label>Başlık</label><input id="tf-title" placeholder="Görev açıklaması"></div>
+      <div class="frow"><label>Başlık</label><input id="tf-title"></div>
       <div class="fgrid">
         <div class="frow"><label>Birim</label><select id="tf-dept">
           <option value="teklifproje">📐 Teklif & Projelendirme</option>
@@ -1007,15 +1007,15 @@ body.proc-fullscreen{overflow:hidden}
     <div class="modal-h"><h3 id="smTitle">🚚 Yeni Yükleme Kaydı</h3><button class="x" onclick="closeShipmentModal()">✕</button></div>
     <div class="modal-b">
       <div class="fgrid">
-        <div class="frow"><label>📅 Tarih</label><input id="sh-tarih" type="date"></div>
-        <div class="frow"><label>⚖️ Tonaj (kg)</label><input id="sh-tonaj" type="number" step="0.01" placeholder="0"></div>
-        <div class="frow"><label>🚛 Çekici Plakası</label><input id="sh-cekici" placeholder="34 ABC 123" maxlength="20" style="text-transform:uppercase"></div>
-        <div class="frow"><label>🚚 Dorse Plakası</label><input id="sh-dorse" placeholder="34 XYZ 456" maxlength="20" style="text-transform:uppercase"></div>
-        <div class="frow"><label>🕐 Giriş Saati</label><input id="sh-giris" type="datetime-local"></div>
-        <div class="frow"><label>🕑 Çıkış Saati</label><input id="sh-cikis" type="datetime-local"></div>
-        <div class="frow"><label>👤 Sürücü</label><input id="sh-surucu" placeholder="Ad Soyad"></div>
-        <div class="frow"><label>🏢 Nakliye Firması</label><input id="sh-tedarikci" placeholder="Tedarikçi adı"></div>
-        <div class="frow" style="grid-column:1/-1"><label>📋 Sevk İrsaliye No</label><input id="sh-irsno" placeholder="İrsaliye no"></div>
+        <div class="frow"><label>Tarih</label><input id="sh-tarih" type="date"></div>
+        <div class="frow"><label>Tonaj (kg)</label><input id="sh-tonaj" type="number" step="0.01"></div>
+        <div class="frow"><label>Çekici Plakası</label><input id="sh-cekici" maxlength="20" style="text-transform:uppercase"></div>
+        <div class="frow"><label>Dorse Plakası</label><input id="sh-dorse" maxlength="20" style="text-transform:uppercase"></div>
+        <div class="frow"><label>Giriş Saati</label><input id="sh-giris" type="datetime-local"></div>
+        <div class="frow"><label>Çıkış Saati</label><input id="sh-cikis" type="datetime-local"></div>
+        <div class="frow"><label>Sürücü</label><input id="sh-surucu"></div>
+        <div class="frow"><label>Nakliye Firması</label><input id="sh-tedarikci"></div>
+        <div class="frow" style="grid-column:1/-1"><label>Sevk İrsaliye No</label><input id="sh-irsno"></div>
         <div class="frow" style="grid-column:1/-1">
           <label>🖼 Yükleme Görselleri</label>
           <div style="border:1px solid var(--bd);border-radius:10px;padding:10px 12px;background:#fafbfd">
@@ -1027,7 +1027,7 @@ body.proc-fullscreen{overflow:hidden}
             <div id="sh-gallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px;min-height:30px"></div>
           </div>
         </div>
-        <div class="frow" style="grid-column:1/-1"><label>📝 Not</label><textarea id="sh-not" rows="2" placeholder="Yükleme notu / özel durum"></textarea></div>
+        <div class="frow" style="grid-column:1/-1"><label>Not</label><textarea id="sh-not" rows="2"></textarea></div>
       </div>
     </div>
     <div class="modal-f">
@@ -2513,7 +2513,7 @@ function renderProcDetail(it, c){
     </div>
     <div style="margin-bottom:10px;padding:10px 12px;background:#fff8e1;border-radius:8px;border:1px dashed #f1c40f">
       <label style="font-size:11px;color:#7a5a00;font-weight:700;display:block;margin-bottom:4px">📝 Talep Formu Notu (tedarikçiye PDF'te görünür):</label>
-      <textarea id="procnote-${it.id}" rows="2" placeholder="Bu malzemeye dair özel istek/açıklama..." style="width:100%;border:1px solid #f1c40f;border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box">${esc(it.not_text||'')}</textarea>
+      <textarea id="procnote-${it.id}" rows="2" style="width:100%;border:1px solid #f1c40f;border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box">${esc(it.not_text||'')}</textarea>
       <div style="display:flex;justify-content:flex-end;margin-top:6px">
         <button class="btn ok sm" onclick="saveProcItemNote('${it.id}')" style="padding:4px 12px;font-size:11px">💾 Notu Kaydet</button>
       </div>
