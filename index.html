@@ -400,7 +400,7 @@ body.proc-fullscreen{overflow:hidden}
       <div class="sidebar-item" data-page="mytasks" data-perm="*" onclick="goto('mytasks')"><span class="ico">✓</span> Görevlerim <span class="sidebar-badge ok" id="bM">0</span></div>
       <div class="sidebar-section">Birimler</div>
       <div class="sidebar-item" data-page="d-teklifproje" data-perm="yonetici,teklifproje" onclick="goto('d-teklifproje')"><span class="ico">📐</span> Teklif & Projelendirme</div>
-      <div class="sidebar-item" data-page="d-satinalma" data-perm="yonetici,satinalma" onclick="goto('d-satinalma')"><span class="ico">🛒</span> Satın Alma</div>
+      <div class="sidebar-item" data-page="d-satinalma" data-perm="yonetici,satinalma,muhasebe" onclick="goto('d-satinalma')"><span class="ico">🛒</span> Satın Alma</div>
       <div class="sidebar-item" data-page="d-stok" data-perm="*" onclick="goto('d-stok')"><span class="ico">📦</span> Stok</div>
       <div class="sidebar-item" data-page="d-uretim" data-perm="yonetici,uretim" onclick="goto('d-uretim')"><span class="ico">🔧</span> Üretim</div>
       <div class="sidebar-item" data-page="d-sevk" data-perm="yonetici,sevk,uretim" onclick="goto('d-sevk')"><span class="ico">🚚</span> Sevkiyat</div>
@@ -2860,15 +2860,29 @@ function openProcCatalog(){
   document.getElementById('procCatalogModal').classList.add('show');
 }
 function closeProcCatalog(){ document.getElementById('procCatalogModal').classList.remove('show'); }
+// Bir stok kalemini hangi satın alma kategorisine sokarız (tek doğruluk kaynağı)
+function _catalogToProcKat(catItem){
+  const _katU  = (catItem?.kategori||'').toUpperCase();
+  const _urunU = (catItem?.urun||'').toUpperCase();
+  if(/CIVATA|CİVATA|SOMUN|PUL|RONDELA|VIDA|VİDA/.test(_katU)) return 'civata';
+  if(/BOYA|VERN|ASTAR/.test(_katU)) return 'boya';
+  if(/^C |^Z |C PROFI|Z PROFI|C-Z|CZ/.test(_katU)) return 'cz_profil';
+  if(/SARF|ELEKTROD|KAYNAK|TAS|TAŞ/.test(_katU)) return 'sarf';
+  if(/SAÇ|^SAC$|^SAC /.test(_katU) || /^SAÇ|^SAC /.test(_urunU)) return 'sac';
+  if(/HEA|HEB|IPE|UNP|KUTU|BORU|PROFIL/.test(_katU)) return 'ana_yapi';
+  return 'diger';
+}
 function renderProcCatalog(){
   const q = normSearch(document.getElementById('pc-search').value);
   const cat = document.getElementById('pc-cat').value;
+  const procKat = _procFilterKat; // Aktif filtre kategorisini katalogda da uygula
   const list = stockItems.filter(it=>{
     if(cat && it.kategori !== cat) return false;
+    if(procKat && procKat !== 'all' && _catalogToProcKat(it) !== procKat) return false;
     if(q && !normSearch(it.kategori+' '+it.urun).includes(q)) return false;
     return true;
   }).sort(_byCatOrder);
-  const canMod = me?.role === 'yonetici' || me?.role === 'satinalma' || me?.role === 'teklifproje';
+  const canMod = me?.role === 'yonetici' || me?.role === 'satinalma' || me?.role === 'teklifproje' || me?.role === 'muhasebe';
   const html = list.map(it=>{
     const sel = _procSelected.has(it.id);
     const defBirim = _procPickedBirim.get(it.id) || it.birim || 'm';
@@ -3151,16 +3165,8 @@ async function saveProcCatalog(){
       else if(en > 0) ebat = `${en} mm`;
       else if(boy > 0) ebat = `${boy} mm`;
     }
-    // Katalog kategorisinden satın alma kategorisine eşle
-    const _catKatU = (cat.kategori||'').toUpperCase();
-    const _urunU = (cat.urun||'').toUpperCase();
-    let _procKat = 'ana_yapi';
-    if(/CIVATA|CİVATA|SOMUN|PUL|VIDA|VİDA/.test(_catKatU)) _procKat = 'civata';
-    else if(/BOYA|VERN|ASTAR/.test(_catKatU)) _procKat = 'boya';
-    else if(/^C |^Z |C PROFI|Z PROFI|C-Z|CZ/.test(_catKatU)) _procKat = 'cz_profil';
-    else if(/SARF|ELEKTROD|TEL|KAYNAK|TAS|TAŞ/.test(_catKatU)) _procKat = 'sarf';
-    else if(/SAÇ|^SAC$|^SAC /.test(_catKatU) || /^SAÇ|^SAC /.test(_urunU)) _procKat = 'sac';
-    else if(/HEA|HEB|IPE|UNP|KUTU|BORU|PROFIL/.test(_catKatU)) _procKat = 'ana_yapi';
+    // Katalog kategorisinden satın alma kategorisine eşle (helper kullan)
+    const _procKat = _catalogToProcKat(cat);
     const row = {
       project_id: _procProjectId, sira: sira++,
       malzeme: cat.urun, miktar, birim: pickedBirim,
@@ -3529,9 +3535,21 @@ function printProcurement(){
     const _ihtiyac = (+it.original_ihtiyac) || (_siparis + _stokDusum);
     const _yuvarlama = (_siparis + _stokDusum) - _ihtiyac;
     const _fmt = v=>(+v).toLocaleString('en-US',{maximumFractionDigits:2});
-    return `<tr>
-      <td class="ctr">${i+1}</td>
-      <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <small>(${esc(it.ebat)})</small>`:''}</td>
+    // Kategoriye göre satır arkaplanı (yumuşak/soluk renkler)
+    const _katBg = {
+      ana_yapi:  '#eaf0f8',  // soluk mavi
+      sac:       '#fbe9e9',  // soluk kırmızı
+      civata:    '#f0e8f5',  // soluk mor
+      boya:      '#fbecd9',  // soluk turuncu
+      cz_profil: '#dcf1f6',  // soluk cyan
+      sarf:      '#e3f1e3',  // soluk yeşil
+      diger:     '#f1f4f8'   // gri
+    }[it.proc_kategori || 'ana_yapi'] || '#fff';
+    const _katBorder = PROC_KAT_COLOR[it.proc_kategori || 'ana_yapi'] || '#cdd2dc';
+    const _katLabel  = PROC_KAT_LABEL[it.proc_kategori || 'ana_yapi'] || '';
+    return `<tr style="background:${_katBg}">
+      <td class="ctr" style="border-left:3px solid ${_katBorder}">${i+1}</td>
+      <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <small>(${esc(it.ebat)})</small>`:''}<br><small style="color:${_katBorder};font-weight:700;font-size:8pt">${esc(_katLabel)}</small></td>
       <td><b style="color:#1f4e8c">${_fmt(_ihtiyac)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small></td>
       <td>${_stokDusum>0?`<b style="color:#0a7">${_fmt(_stokDusum)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small>`:'<span style="color:#bbb">—</span>'}</td>
       <td><b>${_fmt(_siparis)} ${esc(it.birim)}</b>${_yuvarlama>0.01?`<br><small style="color:#0a7;font-size:8pt;font-weight:600">+${_fmt(_yuvarlama)} stoğa</small>`:''}</td>
@@ -3555,11 +3573,10 @@ function printProcurement(){
       .addr-bar{margin:8px -10mm 0}
       table.frm{font-size:9.5pt}
       table.frm th{padding:6px 4px;font-size:9pt}
-      table.frm td{padding:5px 6px;font-size:9pt;text-align:right}
+      table.frm td{padding:5px 6px;font-size:9pt;text-align:right;background:transparent}
       table.frm td.lft{text-align:left}
       table.frm td.ctr{text-align:center}
-      tr:nth-child(even) td{background:#fafbfd}
-      tfoot td{background:#fff8e1;font-weight:800;border-top:2px solid #1f4e8c}
+      tfoot td{background:#fff8e1 !important;font-weight:800;border-top:2px solid #1f4e8c}
     </style></head><body>
     <div class="pdf-toolbar no-print">
       <div style="font-weight:700;font-size:14px">📊 Satın Alma Takip Raporu — ${esc(proj?.no||'')}</div>
@@ -5851,7 +5868,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v99';
+const APP_VERSION = 'v100';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
