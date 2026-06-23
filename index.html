@@ -1008,7 +1008,7 @@ body.proc-fullscreen{overflow:hidden}
     <div class="modal-b">
       <div class="fgrid">
         <div class="frow"><label>Tarih</label><input id="sh-tarih" type="date"></div>
-        <div class="frow"><label>Tonaj (kg)</label><input id="sh-tonaj" type="number" step="0.01"></div>
+        <div class="frow"><label>Tonaj (kg)</label><input id="sh-tonaj" type="text" inputmode="decimal" class="num-input"></div>
         <div class="frow"><label>Çekici Plakası</label><input id="sh-cekici" maxlength="20" style="text-transform:uppercase"></div>
         <div class="frow"><label>Dorse Plakası</label><input id="sh-dorse" maxlength="20" style="text-transform:uppercase"></div>
         <div class="frow"><label>Giriş Saati</label><input id="sh-giris" type="datetime-local"></div>
@@ -4895,7 +4895,7 @@ function openShipmentModal(id){
   if(id){
     const s = shipments.find(x=>x.id===id); if(!s) return;
     document.getElementById('sh-tarih').value = s.tarih || '';
-    document.getElementById('sh-tonaj').value = s.tonaj || '';
+    document.getElementById('sh-tonaj').value = s.tonaj ? Number(s.tonaj).toLocaleString('en-US',{minimumFractionDigits:0, maximumFractionDigits:2}) : '';
     document.getElementById('sh-cekici').value = s.cekici_plaka || '';
     document.getElementById('sh-dorse').value = s.dorse_plaka || '';
     document.getElementById('sh-giris').value = s.giris_saati ? new Date(s.giris_saati).toISOString().slice(0,16) : '';
@@ -4927,6 +4927,7 @@ function openShipmentModal(id){
   };
   _renderShipGallery();
   document.getElementById('shipModal').classList.add('show');
+  bindMoneyInputs(document.getElementById('shipModal'));
 }
 
 function closeShipmentModal(){
@@ -4951,7 +4952,7 @@ async function saveShipment(){
   const row = {
     project_id: pid,
     tarih: document.getElementById('sh-tarih').value || null,
-    tonaj: parseFloat(document.getElementById('sh-tonaj').value) || null,
+    tonaj: parseTR(document.getElementById('sh-tonaj').value) || null,
     cekici_plaka: document.getElementById('sh-cekici').value.toUpperCase().trim() || null,
     dorse_plaka: document.getElementById('sh-dorse').value.toUpperCase().trim() || null,
     giris_saati: document.getElementById('sh-giris').value || null,
