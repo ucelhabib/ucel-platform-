@@ -708,6 +708,16 @@ body.proc-fullscreen{overflow:hidden}
   <div class="modal" style="max-width:520px">
     <div class="modal-h"><h3>➕ Manuel Satın Alma Kalemi</h3><button class="x" onclick="closeProcNew()">✕</button></div>
     <div class="modal-b">
+      <div class="frow"><label>Kategori</label>
+        <select id="pn-kategori">
+          <option value="ana_yapi">Ana Yapı</option>
+          <option value="civata">Cıvata-Somun</option>
+          <option value="boya">Boya</option>
+          <option value="cz_profil">C/Z Profil</option>
+          <option value="sarf">Sarf</option>
+          <option value="diger">Diğer</option>
+        </select>
+      </div>
       <div class="frow"><label>Malzeme Adı</label><input id="pn-malzeme"></div>
       <div class="fgrid">
         <div class="frow"><label>Sipariş Miktarı</label><input id="pn-miktar" type="number" min="0" step="0.01" value="0"></div>
@@ -715,7 +725,9 @@ body.proc-fullscreen{overflow:hidden}
           <select id="pn-birim">
             <option value="m">m</option><option value="adet">adet</option>
             <option value="kg">kg</option><option value="ton">ton</option>
-            <option value="m²">m²</option><option value="paket">paket</option>
+            <option value="m²">m²</option><option value="litre">litre</option>
+            <option value="paket">paket</option><option value="takım">takım</option>
+            <option value="kutu">kutu</option><option value="rulo">rulo</option>
           </select>
         </div>
       </div>
@@ -959,6 +971,7 @@ body.proc-fullscreen{overflow:hidden}
         </div>
         <div class="pm-card-b" style="padding:0">
           <div id="procureBox" style="display:none">
+            <div id="procKatTabs" style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 12px 6px;background:#f8fafc;border-bottom:1px solid var(--bd)"></div>
             <div id="procSummaryBar" style="padding:6px 14px;background:#fcfdff;border-bottom:1px solid var(--bd);font-size:11px;color:#666"></div>
             <div id="procList" style="padding:4px;min-height:60px;overflow:auto"></div>
           </div>
@@ -1123,6 +1136,19 @@ const SP = {teklifproje:'pl-purple',satinalma:'pl-cyan',uretim:'pl-orange',sevk:
 const PRI = {low:'pl-gray',medium:'pl-blue',high:'pl-orange',urgent:'pl-red'};
 const PRL = {low:'Düşük',medium:'Normal',high:'Yüksek',urgent:'Acil'};
 const DCH = {teklifproje:'dh-tp',satinalma:'dh-sa',stok:'dh-st',uretim:'dh-ur',sevk:'dh-sv',montaj:'dh-mn',muhasebe:'dh-mu'};
+
+// Satın alma kategorileri — ana yapı, sarf, cıvata vb.
+const PROC_KAT = [
+  {k:'ana_yapi',  l:'Ana Yapı',     color:'#1f4e8c'},
+  {k:'civata',    l:'Cıvata-Somun', color:'#6b3fa0'},
+  {k:'boya',      l:'Boya',         color:'#d97706'},
+  {k:'cz_profil', l:'C/Z Profil',   color:'#0aa3c7'},
+  {k:'sarf',      l:'Sarf',         color:'#15803d'},
+  {k:'diger',     l:'Diğer',        color:'#64748b'}
+];
+const PROC_KAT_LABEL = Object.fromEntries(PROC_KAT.map(x=>[x.k,x.l]));
+const PROC_KAT_COLOR = Object.fromEntries(PROC_KAT.map(x=>[x.k,x.color]));
+let _procFilterKat = 'all'; // Filtre durumu (all veya kategori key)
 
 // State (Supabase'ten gelen veriler)
 let me = null;
@@ -2447,15 +2473,48 @@ function _statusBadge(durum, gelen, miktar){
   }
   return '<span style="background:#fee;color:#c33;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">🔴 Bekliyor</span>';
 }
+function _renderProcKatTabs(){
+  const tabs = document.getElementById('procKatTabs'); if(!tabs) return;
+  // Kategori bazında kalem sayısı
+  const counts = {all: procItems.length};
+  PROC_KAT.forEach(k => counts[k.k] = procItems.filter(it => (it.proc_kategori||'ana_yapi') === k.k).length);
+  const mkChip = (key, label, color, n) => {
+    const active = _procFilterKat === key;
+    const bg = active ? (color||'#1f4e8c') : '#fff';
+    const fg = active ? '#fff' : (color||'#1f4e8c');
+    const bd = active ? bg : (color||'#cbd5e1');
+    return `<button type="button" onclick="_setProcFilterKat('${key}')" style="background:${bg};color:${fg};border:1.5px solid ${bd};border-radius:14px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px">
+      ${esc(label)} <span style="background:${active?'rgba(255,255,255,.25)':'#f1f4f8'};color:${active?'#fff':'#1f4e8c'};padding:1px 7px;border-radius:9px;font-size:10px">${n||0}</span>
+    </button>`;
+  };
+  const html = [
+    mkChip('all','Tümü','#1f4e8c', counts.all),
+    ...PROC_KAT.map(k => mkChip(k.k, k.l, k.color, counts[k.k]))
+  ].join('');
+  tabs.innerHTML = html;
+}
+function _setProcFilterKat(k){
+  _procFilterKat = k;
+  renderProcList();
+}
 function renderProcList(){
   const el = document.getElementById('procList'); if(!el) return;
+  _renderProcKatTabs();
   if(procItems.length === 0){
     el.innerHTML = '<div style="padding:30px;text-align:center;color:var(--m)">Bu projede henüz satın alma kalemi yok. <br>"📚 Katalog" veya "+ Manuel" ile başla.</div>';
     document.getElementById('procSummary').textContent = '';
     return;
   }
+  // Filtreyi uygula — görünür kalemler
+  const items = _procFilterKat === 'all'
+    ? procItems
+    : procItems.filter(it => (it.proc_kategori||'ana_yapi') === _procFilterKat);
+  if(items.length === 0){
+    el.innerHTML = `<div style="padding:30px;text-align:center;color:var(--m)">Bu kategoride kalem yok.<br><small>Üstteki "Tümü" sekmesine dönebilirsin.</small></div>`;
+    return;
+  }
   let totalTutar = 0, totalNet = 0, gelenSayi = 0, eksikSayi = 0;
-  const rows = procItems.map((it,i)=>{
+  const rows = items.map((it,i)=>{
     const c = _procCalc(it);
     totalTutar += c.tutar;
     totalNet += c.net;
@@ -2479,7 +2538,10 @@ function renderProcList(){
     return `<div style="border-bottom:1px solid #eef0f5">
       <div style="display:grid;grid-template-columns:${gridCols};gap:14px;align-items:center;padding:12px 16px;cursor:pointer;font-size:13px" onclick="toggleProcExpand('${it.id}')">
         <div style="text-align:center;color:#888;font-size:12px">${expanded?'▼':'▶'}<br><small style="font-weight:700">${i+1}</small></div>
-        <div style="font-weight:600;font-size:13px;line-height:1.4">${esc(it.malzeme)}${it.ebat?` <span style="font-size:11px;color:#888">(${esc(it.ebat)})</span>`:''}</div>
+        <div style="font-weight:600;font-size:13px;line-height:1.4">
+          ${(()=>{ const k=it.proc_kategori||'ana_yapi'; const c=PROC_KAT_COLOR[k]||'#64748b'; return `<span style="display:inline-block;background:${c};color:#fff;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:700;vertical-align:middle;margin-right:4px">${esc(PROC_KAT_LABEL[k]||k)}</span>`; })()}
+          ${esc(it.malzeme)}${it.ebat?` <span style="font-size:11px;color:#888">(${esc(it.ebat)})</span>`:''}
+        </div>
         <div style="text-align:right;color:#1f4e8c;font-weight:700;line-height:1.4">${fmt(ihtiyac)}<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} ihtiyaç</small></div>
         <div style="text-align:right;color:#0a7;font-weight:700;line-height:1.4">${stokDusum>0?fmt(stokDusum):'<span style="color:#bbb;font-weight:400">—</span>'}${stokDusum>0?`<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} stoktan</small>`:''}</div>
         <div style="text-align:right;font-weight:700;line-height:1.4">${fmt(siparis)} ${esc(it.birim)}${yuvarlama>0.01?`<br><small style="color:#0a7;font-size:10px;font-weight:700">+${fmt(yuvarlama)} stoğa</small>`:''}</div>
@@ -2504,10 +2566,15 @@ function renderProcList(){
     ${rows}`;
   const bar = document.getElementById('procSummaryBar');
   if(bar){
-    bar.innerHTML = `<strong>${procItems.length} kalem</strong> · Toplam Net: <strong style="color:#1f4e8c">${fmtTL(totalNet)}</strong> · ${gelenSayi} tamam / ${eksikSayi} eksik`;
+    const filtTxt = _procFilterKat === 'all' ? '' : ` · Filtre: <strong style="color:${PROC_KAT_COLOR[_procFilterKat]||'#1f4e8c'}">${esc(PROC_KAT_LABEL[_procFilterKat]||_procFilterKat)}</strong>`;
+    bar.innerHTML = `<strong>${items.length} kalem</strong> · Net: <strong style="color:#1f4e8c">${fmtTL(totalNet)}</strong> · ${gelenSayi} tamam / ${eksikSayi} eksik${filtTxt}${_procFilterKat==='all'?'':` · <small>(toplam ${procItems.length} kalem)</small>`}`;
   }
+  // Üst başlıktaki özet — proje kart başlığında daima tüm kalemler
   const sumEl = document.getElementById('procSummary');
-  if(sumEl) sumEl.textContent = `· ${procItems.length} kalem · ${fmtTL(totalNet)} · ${gelenSayi} tamam / ${eksikSayi} eksik`;
+  if(sumEl){
+    const allNet = procItems.reduce((s,it)=>s + _procCalc(it).net, 0);
+    sumEl.textContent = `· ${procItems.length} kalem · ${fmtTL(allNet)}`;
+  }
 }
 function renderProcDetail(it, c){
   const dl = _procDelvOf(it.id);
@@ -2585,6 +2652,9 @@ function openProcNew(){
   document.getElementById('pn-birim').value='m';
   document.getElementById('pn-fb').value='birim';
   document.getElementById('pn-kgpm').value=0;
+  // Aktif kategori filtresi varsa onu seç (kullanıcı sarftayken Manuel açtığında otomatik Sarf)
+  const k = document.getElementById('pn-kategori');
+  if(k) k.value = (_procFilterKat && _procFilterKat !== 'all') ? _procFilterKat : 'ana_yapi';
   document.getElementById('procNewModal').classList.add('show');
 }
 function closeProcNew(){ document.getElementById('procNewModal').classList.remove('show'); }
@@ -2600,6 +2670,7 @@ async function saveProcNew(){
     kg_per_meter: +document.getElementById('pn-kgpm').value||0,
     kdv_orani: +document.getElementById('pn-kdv').value||20,
     not_text: document.getElementById('pn-not').value.trim()||null,
+    proc_kategori: document.getElementById('pn-kategori').value || 'ana_yapi',
     created_by: me.id,
     sira: procItems.length
   };
@@ -2916,6 +2987,14 @@ async function saveProcCatalog(){
       else if(en > 0) ebat = `${en} mm`;
       else if(boy > 0) ebat = `${boy} mm`;
     }
+    // Katalog kategorisinden satın alma kategorisine eşle
+    const _catKatU = (cat.kategori||'').toUpperCase();
+    let _procKat = 'ana_yapi';
+    if(/CIVATA|CİVATA|SOMUN|PUL|VIDA|VİDA/.test(_catKatU)) _procKat = 'civata';
+    else if(/BOYA|VERN|ASTAR/.test(_catKatU)) _procKat = 'boya';
+    else if(/^C |^Z |C PROFI|Z PROFI|C-Z|CZ/.test(_catKatU)) _procKat = 'cz_profil';
+    else if(/SARF|ELEKTROD|TEL|KAYNAK|TAS|TAŞ/.test(_catKatU)) _procKat = 'sarf';
+    else if(/HEA|HEB|IPE|UNP|KUTU|BORU|SAÇ|SAC|PROFIL/.test(_catKatU)) _procKat = 'ana_yapi';
     const row = {
       project_id: _procProjectId, sira: sira++,
       malzeme: cat.urun, miktar, birim: pickedBirim,
@@ -2923,7 +3002,8 @@ async function saveProcCatalog(){
       fiyat_birimi: fb,
       catalog_id: id, kg_per_meter: cat.kg_per_meter || 0,
       ebat: ebat || null,
-      original_ihtiyac: miktar,   // kullanıcının girdiği gerçek ihtiyaç (yuvarlama/stok düşümünden önce)
+      original_ihtiyac: miktar,
+      proc_kategori: _procKat,
       created_by: me.id
     };
     rows.push(row);
@@ -3387,7 +3467,11 @@ function exportProcTalepFormu(){
   if(!_procProjectId || procItems.length === 0){toast('Önce proje seç ve kalem ekle','err');return}
   const proj = projects.find(p=>p.id===_procProjectId);
   const today = new Date().toLocaleDateString('tr-TR');
-  const rows = procItems.map((it,i)=>`
+  // Aktif kategori filtresine göre PDF'i çıkar
+  const filtered = _procFilterKat === 'all' ? procItems : procItems.filter(it => (it.proc_kategori||'ana_yapi') === _procFilterKat);
+  if(filtered.length === 0){ toast('Bu kategoride kalem yok','err'); return; }
+  const katLabel = _procFilterKat === 'all' ? '' : ` — ${PROC_KAT_LABEL[_procFilterKat]||_procFilterKat}`;
+  const rows = filtered.map((it,i)=>`
     <tr>
       <td class="no">${i+1}.</td>
       <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <span style="font-size:9pt;color:#1f4e8c">— ${esc(it.ebat)}</span>`:''}</td>
@@ -3405,9 +3489,9 @@ function exportProcTalepFormu(){
       </div>
     </div>
     <div class="page">
-      ${_pdfHeader('TEKLİF', 'TALEP FORMU')}
+      ${_pdfHeader('TEKLİF', 'TALEP FORMU' + katLabel.toUpperCase())}
       <div class="meta">
-        <span>PROJE NO: ${esc(proj?.no||'')}</span>
+        <span>PROJE NO: ${esc(proj?.no||'')}${katLabel ? ` · ${esc(katLabel.replace(' — ',''))}` : ''}</span>
         <span>TARİH: ${today}</span>
       </div>
       <div class="desc">Aşağıda belirtilen malzeme listesi için fiyat teklifinizi ve termin sürenizi bekliyoruz.</div>
