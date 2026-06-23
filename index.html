@@ -711,6 +711,7 @@ body.proc-fullscreen{overflow:hidden}
       <div class="frow"><label>Kategori</label>
         <select id="pn-kategori">
           <option value="ana_yapi">Ana Yapı</option>
+          <option value="sac">Saçlar</option>
           <option value="civata">Cıvata-Somun</option>
           <option value="boya">Boya</option>
           <option value="cz_profil">C/Z Profil</option>
@@ -761,8 +762,8 @@ body.proc-fullscreen{overflow:hidden}
       <div style="background:#f1f7ff;border:1px solid #cdd2dc;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#444">
         Her satıra cıvata bilgisini gir. Pul ve somun seçili ise eklediğin adet kadar otomatik olarak talep formuna eklenir. Yeni satır için "+ Satır" tıkla.
       </div>
-      <div style="display:grid;grid-template-columns:90px 110px 110px 70px 70px 1fr 36px;gap:6px;font-size:10px;font-weight:700;color:#1f4e8c;text-transform:uppercase;letter-spacing:0.4px;padding:0 4px 4px">
-        <div>Çap</div><div>Boy (mm)</div><div>Adet</div><div>Pul</div><div>Somun</div><div>Not</div><div></div>
+      <div style="display:grid;grid-template-columns:80px 90px 90px 75px 50px 50px 60px 1fr 32px;gap:6px;font-size:10px;font-weight:700;color:#1f4e8c;text-transform:uppercase;letter-spacing:0.4px;padding:0 4px 4px">
+        <div>Çap</div><div>Boy (mm)</div><div>Adet</div><div title="Fire/yedek payı yüzdesi">Fire %</div><div>Pul</div><div>Somun</div><div>Rondela</div><div>Not</div><div></div>
       </div>
       <div id="bs-rows"></div>
       <button type="button" class="btn sec sm" onclick="addBolusetRow()" style="margin-top:6px">+ Satır</button>
@@ -1159,9 +1160,10 @@ const PRI = {low:'pl-gray',medium:'pl-blue',high:'pl-orange',urgent:'pl-red'};
 const PRL = {low:'Düşük',medium:'Normal',high:'Yüksek',urgent:'Acil'};
 const DCH = {teklifproje:'dh-tp',satinalma:'dh-sa',stok:'dh-st',uretim:'dh-ur',sevk:'dh-sv',montaj:'dh-mn',muhasebe:'dh-mu'};
 
-// Satın alma kategorileri — ana yapı, sarf, cıvata vb.
+// Satın alma kategorileri — ana yapı, saçlar, sarf, cıvata vb.
 const PROC_KAT = [
   {k:'ana_yapi',  l:'Ana Yapı',     color:'#1f4e8c'},
+  {k:'sac',       l:'Saçlar',       color:'#b91c1c'},
   {k:'civata',    l:'Cıvata-Somun', color:'#6b3fa0'},
   {k:'boya',      l:'Boya',         color:'#d97706'},
   {k:'cz_profil', l:'C/Z Profil',   color:'#0aa3c7'},
@@ -2701,15 +2703,17 @@ function addBolusetRow(){
   const box = document.getElementById('bs-rows');
   const i = box.children.length;
   const row = document.createElement('div');
-  row.style.cssText = 'display:grid;grid-template-columns:90px 110px 110px 70px 70px 1fr 36px;gap:6px;align-items:center;margin-bottom:6px';
+  row.style.cssText = 'display:grid;grid-template-columns:80px 90px 90px 75px 50px 50px 60px 1fr 32px;gap:6px;align-items:center;margin-bottom:6px';
   row.innerHTML = `
     <select class="bs-cap" oninput="_updateBolusetPreview()" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px">
       ${BOLU_CAPLAR.map(c=>`<option value="${c}">${c}</option>`).join('')}
     </select>
     <input class="bs-boy" type="number" min="0" step="1" placeholder="60" oninput="_updateBolusetPreview()" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px">
     <input class="bs-adet" type="number" min="0" step="1" placeholder="0" oninput="_updateBolusetPreview()" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px">
+    <input class="bs-fire" type="number" min="0" max="100" step="0.1" value="0" title="Fire/yedek %" oninput="_updateBolusetPreview()" style="padding:6px 6px;border:1px solid var(--bd);border-radius:6px;font-size:13px;text-align:center">
     <label style="display:flex;align-items:center;justify-content:center"><input type="checkbox" class="bs-pul" checked onchange="_updateBolusetPreview()" style="width:18px;height:18px"></label>
     <label style="display:flex;align-items:center;justify-content:center"><input type="checkbox" class="bs-somun" checked onchange="_updateBolusetPreview()" style="width:18px;height:18px"></label>
+    <label style="display:flex;align-items:center;justify-content:center"><input type="checkbox" class="bs-rondela" onchange="_updateBolusetPreview()" style="width:18px;height:18px"></label>
     <input class="bs-not" type="text" placeholder="(opsiyonel)" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px">
     <button type="button" onclick="this.parentElement.remove();_updateBolusetPreview()" style="background:#fee;border:1px solid #f5b;color:#c33;border-radius:6px;cursor:pointer;font-size:14px">×</button>
   `;
@@ -2717,26 +2721,37 @@ function addBolusetRow(){
 }
 function _bolusetReadRows(){
   const rows = Array.from(document.querySelectorAll('#bs-rows > div'));
-  return rows.map(r => ({
-    cap:   r.querySelector('.bs-cap').value,
-    boy:   parseInt(r.querySelector('.bs-boy').value) || 0,
-    adet:  parseInt(r.querySelector('.bs-adet').value) || 0,
-    pul:   r.querySelector('.bs-pul').checked,
-    somun: r.querySelector('.bs-somun').checked,
-    not:   r.querySelector('.bs-not').value.trim()
-  })).filter(x => x.adet > 0);
+  return rows.map(r => {
+    const adet = parseInt(r.querySelector('.bs-adet').value) || 0;
+    const fire = parseFloat(r.querySelector('.bs-fire').value) || 0;
+    const finalAdet = adet > 0 ? Math.ceil(adet * (1 + fire/100)) : 0;
+    return {
+      cap:       r.querySelector('.bs-cap').value,
+      boy:       parseInt(r.querySelector('.bs-boy').value) || 0,
+      adet,
+      fire,
+      finalAdet, // fire ile çarpılmış sipariş edilecek adet
+      pul:       r.querySelector('.bs-pul').checked,
+      somun:     r.querySelector('.bs-somun').checked,
+      rondela:   r.querySelector('.bs-rondela').checked,
+      not:       r.querySelector('.bs-not').value.trim()
+    };
+  }).filter(x => x.adet > 0);
 }
 function _updateBolusetPreview(){
   const rows = _bolusetReadRows();
   const el = document.getElementById('bs-preview'); if(!el) return;
   if(rows.length === 0){ el.innerHTML = 'Henüz geçerli satır yok.'; return; }
-  let civata=0, somun=0, pul=0, kalemSayisi=0;
+  let civata=0, somun=0, pul=0, rondela=0, kalemSayisi=0;
   rows.forEach(r=>{
-    civata += r.adet; kalemSayisi++;
-    if(r.somun){ somun += r.adet; kalemSayisi++; }
-    if(r.pul){ pul += r.adet; kalemSayisi++; }
+    civata += r.finalAdet; kalemSayisi++;
+    if(r.somun){ somun += r.finalAdet; kalemSayisi++; }
+    if(r.pul){ pul += r.finalAdet; kalemSayisi++; }
+    if(r.rondela){ rondela += r.finalAdet; kalemSayisi++; }
   });
-  el.innerHTML = `<strong>${kalemSayisi} kalem</strong> eklenecek · Cıvata: <strong>${civata}</strong> adet · Somun: <strong>${somun}</strong> adet · Pul: <strong>${pul}</strong> adet`;
+  const fireGosterimi = rows.some(r => r.fire > 0)
+    ? `<br><small style="color:#888">(Fire %'leri uygulanmış, yukarı yuvarlanmış adetler)</small>` : '';
+  el.innerHTML = `<strong>${kalemSayisi} kalem</strong> eklenecek · Cıvata: <strong>${civata}</strong> · Somun: <strong>${somun}</strong> · Pul: <strong>${pul}</strong> · Rondela: <strong>${rondela}</strong>${fireGosterimi}`;
 }
 async function saveBoluset(){
   if(!_procProjectId){ toast('Proje seçili değil','err'); return; }
@@ -2747,14 +2762,15 @@ async function saveBoluset(){
   for(const r of rows){
     const boyStr = r.boy > 0 ? ` × ${r.boy} mm` : '';
     const sharedNote = r.not || null;
+    const useAdet = r.finalAdet; // fire payı dahil
     inserts.push({
       project_id: _procProjectId, sira: sira++,
       malzeme: `${r.cap} mm Cıvata${boyStr}`,
-      miktar: r.adet, birim: 'adet',
+      miktar: useAdet, birim: 'adet',
       birim_fiyat: 0, kdv_orani: 20, fiyat_birimi: 'birim',
       kg_per_meter: 0,
       proc_kategori: 'civata',
-      original_ihtiyac: r.adet,
+      original_ihtiyac: r.adet,  // fire öncesi gerçek ihtiyaç
       not_text: sharedNote,
       created_by: me.id
     });
@@ -2762,7 +2778,7 @@ async function saveBoluset(){
       inserts.push({
         project_id: _procProjectId, sira: sira++,
         malzeme: `${r.cap} mm Somun`,
-        miktar: r.adet, birim: 'adet',
+        miktar: useAdet, birim: 'adet',
         birim_fiyat: 0, kdv_orani: 20, fiyat_birimi: 'birim',
         kg_per_meter: 0,
         proc_kategori: 'civata',
@@ -2775,7 +2791,20 @@ async function saveBoluset(){
       inserts.push({
         project_id: _procProjectId, sira: sira++,
         malzeme: `${r.cap} mm Pul`,
-        miktar: r.adet, birim: 'adet',
+        miktar: useAdet, birim: 'adet',
+        birim_fiyat: 0, kdv_orani: 20, fiyat_birimi: 'birim',
+        kg_per_meter: 0,
+        proc_kategori: 'civata',
+        original_ihtiyac: r.adet,
+        not_text: sharedNote,
+        created_by: me.id
+      });
+    }
+    if(r.rondela){
+      inserts.push({
+        project_id: _procProjectId, sira: sira++,
+        malzeme: `${r.cap} mm Rondela`,
+        miktar: useAdet, birim: 'adet',
         birim_fiyat: 0, kdv_orani: 20, fiyat_birimi: 'birim',
         kg_per_meter: 0,
         proc_kategori: 'civata',
@@ -3124,12 +3153,14 @@ async function saveProcCatalog(){
     }
     // Katalog kategorisinden satın alma kategorisine eşle
     const _catKatU = (cat.kategori||'').toUpperCase();
+    const _urunU = (cat.urun||'').toUpperCase();
     let _procKat = 'ana_yapi';
     if(/CIVATA|CİVATA|SOMUN|PUL|VIDA|VİDA/.test(_catKatU)) _procKat = 'civata';
     else if(/BOYA|VERN|ASTAR/.test(_catKatU)) _procKat = 'boya';
     else if(/^C |^Z |C PROFI|Z PROFI|C-Z|CZ/.test(_catKatU)) _procKat = 'cz_profil';
     else if(/SARF|ELEKTROD|TEL|KAYNAK|TAS|TAŞ/.test(_catKatU)) _procKat = 'sarf';
-    else if(/HEA|HEB|IPE|UNP|KUTU|BORU|SAÇ|SAC|PROFIL/.test(_catKatU)) _procKat = 'ana_yapi';
+    else if(/SAÇ|^SAC$|^SAC /.test(_catKatU) || /^SAÇ|^SAC /.test(_urunU)) _procKat = 'sac';
+    else if(/HEA|HEB|IPE|UNP|KUTU|BORU|PROFIL/.test(_catKatU)) _procKat = 'ana_yapi';
     const row = {
       project_id: _procProjectId, sira: sira++,
       malzeme: cat.urun, miktar, birim: pickedBirim,
@@ -3607,13 +3638,35 @@ function exportProcTalepFormu(){
   const filtered = _procFilterKat === 'all' ? procItems : procItems.filter(it => (it.proc_kategori||'ana_yapi') === _procFilterKat);
   if(filtered.length === 0){ toast('Bu kategoride kalem yok','err'); return; }
   const katLabel = _procFilterKat === 'all' ? '' : ` — ${PROC_KAT_LABEL[_procFilterKat]||_procFilterKat}`;
-  const rows = filtered.map((it,i)=>`
+  // Aynı cins+ölçü+birim kalemleri tedarikçi formunda birleştir (Cıvata/Somun/Pul/Rondela)
+  const groupMap = new Map();
+  filtered.forEach(it => {
+    const key = `${(it.malzeme||'').trim().toLowerCase()}|${(it.ebat||'').trim().toLowerCase()}|${(it.birim||'').trim().toLowerCase()}`;
+    if(groupMap.has(key)){
+      const g = groupMap.get(key);
+      g.miktar += parseFloat(it.miktar||0);
+      // notları da birleştir (benzersiz)
+      const newNote = _cleanSupplierNote(it.not_text);
+      if(newNote && !g.notes.includes(newNote)) g.notes.push(newNote);
+    } else {
+      const cleanNote = _cleanSupplierNote(it.not_text);
+      groupMap.set(key, {
+        malzeme: it.malzeme,
+        ebat: it.ebat,
+        birim: it.birim,
+        miktar: parseFloat(it.miktar||0),
+        notes: cleanNote ? [cleanNote] : []
+      });
+    }
+  });
+  const grouped = Array.from(groupMap.values());
+  const rows = grouped.map((it,i)=>`
     <tr>
       <td class="no">${i+1}.</td>
       <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <span style="font-size:9pt;color:#1f4e8c">— ${esc(it.ebat)}</span>`:''}</td>
       <td>${fmtNum(it.miktar,2)}</td>
       <td>${esc(it.birim||'mt')}</td>
-      <td class="lft">${esc(_cleanSupplierNote(it.not_text))}</td>
+      <td class="lft">${esc(it.notes.join(' · '))}</td>
     </tr>`).join('');
   const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Talep Formu - ${esc(proj?.no||'')}</title>
     <style>${_pdfStyle()}</style></head><body>
@@ -5798,7 +5851,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v97';
+const APP_VERSION = 'v99';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
