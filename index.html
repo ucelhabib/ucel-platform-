@@ -5775,17 +5775,17 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v94';
+const APP_VERSION = 'v95';
 
-// Sağ alt köşede sabit, küçük, tıklanabilir sürüm rozeti (tıkla → güncel kontrolü tetikle)
+// Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
-  if(document.getElementById('verBadge')) return;
   const init = () => {
     if(document.getElementById('verBadge')) return;
-    const b = document.createElement('div');
+    const target = document.getElementById('topbarRefreshBtn');
+    const b = document.createElement('span');
     b.id = 'verBadge';
     b.title = 'Tıkla: güncel sürüm kontrolü';
-    b.style.cssText = 'position:fixed;right:8px;bottom:8px;background:rgba(31,78,140,.9);color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:10px;z-index:5000;cursor:pointer;font-family:inherit;box-shadow:0 2px 6px rgba(0,0,0,.2);user-select:none';
+    b.style.cssText = 'display:inline-flex;align-items:center;background:rgba(255,255,255,.18);color:#fff;font-size:11px;font-weight:700;padding:4px 9px;border-radius:10px;margin-left:6px;cursor:pointer;font-family:inherit;border:1px solid rgba(255,255,255,.25);user-select:none';
     b.textContent = APP_VERSION;
     b.onclick = async () => {
       try {
@@ -5794,9 +5794,16 @@ const APP_VERSION = 'v94';
         if(typeof toast === 'function') toast('Güncel sürüm kontrol edildi — yeni sürüm varsa otomatik yüklenir','info');
       } catch(e){}
     };
-    document.body.appendChild(b);
+    if(target && target.parentNode){
+      target.parentNode.insertBefore(b, target.nextSibling);
+    } else {
+      // Yedek konum: üst bar yoksa sağ üst sabit
+      b.style.cssText = 'position:fixed;right:8px;top:8px;background:rgba(31,78,140,.9);color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:10px;z-index:5000;cursor:pointer;border:0';
+      document.body.appendChild(b);
+    }
   };
-  if(document.body) init(); else document.addEventListener('DOMContentLoaded', init);
+  if(document.body && document.getElementById('topbarRefreshBtn')) init();
+  else document.addEventListener('DOMContentLoaded', init);
 })();
 
 // Otomatik güncelleme: yeni SW gelirse beklenmeden devreye alınır, sayfa otomatik yenilenir
