@@ -897,6 +897,14 @@ body.proc-fullscreen{overflow:hidden}
             <div class="frow"><label>Tonaj (TON)</label><input id="pf-ton" type="text" inputmode="decimal" class="num-input"></div>
             <div class="frow"><label>Sevk Tarihi</label><input id="pf-ship" type="date"></div>
           </div>
+          <div class="frow">
+            <label>Ortak Klasör Linki</label>
+            <div style="display:flex;gap:6px;align-items:stretch">
+              <input id="pf-folder" placeholder="Drive linki, ağ yolu (\\sunucu\..) veya yerel klasör" style="flex:1">
+              <button type="button" class="btn sec sm" id="pfFolderOpen" onclick="openProjectFolder()" title="Klasörü aç">📁 Aç</button>
+              <button type="button" class="btn sec sm" id="pfFolderCopy" onclick="copyProjectFolder()" title="Linki kopyala">📋</button>
+            </div>
+          </div>
           <div class="frow"><label>Aşamalar (çoklu seçim — sadece yönetici)</label>
             <div id="pf-stages-box" style="display:flex;flex-wrap:wrap;gap:6px;padding:6px;border:1px solid var(--bd);border-radius:8px;background:#fff;min-height:38px"></div>
             <small style="color:var(--m);margin-top:4px;display:block">Birden fazla aşama seçebilirsin. İlk seçilen aşamaya göre Sorumlu otomatik atanır.</small>
@@ -1876,7 +1884,7 @@ function renderProjects(){
         <div style="display:flex;gap:2px" title="Faz durumu: Teklif·Satınalma·Üretim·Sevk·Montaj·Muhasebe">${['teklifproje','satinalma','uretim','sevk','montaj','muhasebe'].map(k=>{const v=parseInt((p.phases||{})[k]||0);const c=v===100?'#0a7':v>0?'#1f4e8c':'#dde2e9';return `<span style="flex:1;height:6px;background:${c};border-radius:2px" title="${DI[k]||''} ${DN[k]||k}: %${v}"></span>`}).join('')}</div>
       </div></td>
       <td><span class="av-mini" style="background:${o.color}">${o.initials}</span></td>
-      <td><button class="icon-btn" onclick="event.stopPropagation();openFiles('${p.id}')" title="Dosyalar">📎</button><button class="icon-btn" onclick="event.stopPropagation();openProj('${p.id}')">✏️</button></td>
+      <td><button class="icon-btn" onclick="event.stopPropagation();openFiles('${p.id}')" title="Dosyalar">📎</button>${p.folder_path?`<button class="icon-btn" onclick="event.stopPropagation();openFolderByProjectId('${p.id}')" title="Ortak klasörü aç">📁</button>`:''}<button class="icon-btn" onclick="event.stopPropagation();openProj('${p.id}')">✏️</button></td>
     </tr>`;
   }).join('');
   document.getElementById('pCount').textContent=projects.length;
@@ -4141,6 +4149,11 @@ function openProj(id){
     document.getElementById('pf-loc').value=p.location||'';
     document.getElementById('pf-amt').value = p.amount ? Number(p.amount).toLocaleString('en-US',{minimumFractionDigits:0, maximumFractionDigits:2}) : '';
     document.getElementById('pf-ton').value = p.tonnage ? Number(p.tonnage).toLocaleString('en-US',{minimumFractionDigits:0, maximumFractionDigits:3}) : '';
+    document.getElementById('pf-folder').value = p.folder_path || '';
+    // Sadece teklif/projeler ve yönetici girip değiştirebilir; diğerleri okur + açar
+    const canEditFolder = (me?.role === 'yonetici' || me?.role === 'teklifproje');
+    document.getElementById('pf-folder').readOnly = !canEditFolder;
+    document.getElementById('pf-folder').style.background = canEditFolder ? '#fff' : '#f5f7fa';
     document.getElementById('pf-ship').value=p.shipdate||'';
     renderStageChips(p.stages || (p.stage ? [p.stage] : []));
     document.getElementById('pf-own').value=p.owner_id||'';
@@ -4371,6 +4384,10 @@ async function saveProj(){
     const ownVal = document.getElementById('pf-own').value;
     d.owner_id = (ownVal && ownVal.trim()) ? ownVal : null;
   }
+  // Klasör linkini sadece teklifproje birimi ve yönetici düzenleyebilir
+  if(me?.role === 'yonetici' || me?.role === 'teklifproje'){
+    d.folder_path = (document.getElementById('pf-folder').value || '').trim() || null;
+  }
   // Aşamayı sadece yönetici ana update'e dahil eder
   if(me?.role === 'yonetici'){
     d.stage = stagesSelected[0] || null;
@@ -4440,6 +4457,50 @@ function toggleStage(s){
   if(idx >= 0) arr.splice(idx, 1);
   else arr.push(s);
   renderStageChips(arr);
+}
+function _readFolderInput(){
+  const v = (document.getElementById('pf-folder')?.value || '').trim();
+  if(!v){ toast('Önce klasör linki gir','err'); return null; }
+  return v;
+}
+function openProjectFolder(){
+  const v = _readFolderInput(); if(!v) return;
+  // http/https → yeni sekme; file:// veya ağ yolu \\sunucu → yeni sekmede dene
+  let url = v;
+  // \\sunucu\... pattern'i için file: önek ekle
+  if(/^\\\\/.test(url)) url = 'file:' + url.replace(/\\/g,'/');
+  else if(/^[A-Za-z]:\\/.test(url)) url = 'file:///' + url.replace(/\\/g,'/');
+  // Tarayıcı engellerse fallback: panoya kopyala
+  let opened = null;
+  try { opened = window.open(url, '_blank'); } catch(e){}
+  if(!opened){
+    // file:// genelde engellenir — panoya kopyala + kullanıcıya söyle
+    try { navigator.clipboard.writeText(v); } catch(e){}
+    toast('Tarayıcı yerel klasörü doğrudan açamadı. Yol panoya kopyalandı, Dosya Gezgini → Ctrl+L → Ctrl+V', 'info');
+  }
+}
+async function copyProjectFolder(){
+  const v = _readFolderInput(); if(!v) return;
+  try {
+    await navigator.clipboard.writeText(v);
+    toast('Link panoya kopyalandı','ok');
+  } catch(e){
+    toast('Kopyalama hatası: '+errTr(e),'err');
+  }
+}
+// Proje listesinden / başka yerden hızlı açma
+function openFolderByProjectId(pid){
+  const p = projects.find(x=>x.id===pid);
+  if(!p?.folder_path){ toast('Bu projeye klasör linki eklenmemiş','err'); return; }
+  let url = p.folder_path.trim();
+  if(/^\\\\/.test(url)) url = 'file:' + url.replace(/\\/g,'/');
+  else if(/^[A-Za-z]:\\/.test(url)) url = 'file:///' + url.replace(/\\/g,'/');
+  let opened = null;
+  try { opened = window.open(url, '_blank'); } catch(e){}
+  if(!opened){
+    try { navigator.clipboard.writeText(p.folder_path); } catch(e){}
+    toast('Yol panoya kopyalandı (yerel klasörler için Dosya Gezgini → Ctrl+L → Ctrl+V)', 'info');
+  }
 }
 async function delProj(){
   // YETKİ: Sadece yönetici proje silebilir
