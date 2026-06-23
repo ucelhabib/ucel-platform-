@@ -5774,27 +5774,68 @@ async function setupWebPush(){
   } catch(e){ console.warn('[Push] subscribe failed', e); }
 }
 
+// Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
+const APP_VERSION = 'v94';
+
+// Sağ alt köşede sabit, küçük, tıklanabilir sürüm rozeti (tıkla → güncel kontrolü tetikle)
+(function _mountVersionBadge(){
+  if(document.getElementById('verBadge')) return;
+  const init = () => {
+    if(document.getElementById('verBadge')) return;
+    const b = document.createElement('div');
+    b.id = 'verBadge';
+    b.title = 'Tıkla: güncel sürüm kontrolü';
+    b.style.cssText = 'position:fixed;right:8px;bottom:8px;background:rgba(31,78,140,.9);color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:10px;z-index:5000;cursor:pointer;font-family:inherit;box-shadow:0 2px 6px rgba(0,0,0,.2);user-select:none';
+    b.textContent = APP_VERSION;
+    b.onclick = async () => {
+      try {
+        const reg = await navigator.serviceWorker?.getRegistration();
+        if(reg){ await reg.update(); }
+        if(typeof toast === 'function') toast('Güncel sürüm kontrol edildi — yeni sürüm varsa otomatik yüklenir','info');
+      } catch(e){}
+    };
+    document.body.appendChild(b);
+  };
+  if(document.body) init(); else document.addEventListener('DOMContentLoaded', init);
+})();
+
+// Otomatik güncelleme: yeni SW gelirse beklenmeden devreye alınır, sayfa otomatik yenilenir
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
-    navigator.serviceWorker.register('service-worker.js')
+    navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' })
       .then((reg) => {
         console.log('[SW] registered');
-        // Yeni sürüm var mı diye periyodik kontrol
-        setInterval(() => { try{ reg.update(); }catch(e){} }, 5*60*1000); // her 5 dk
-        // Yeni SW yüklendiğinde uyarı göster
+        // Sayfa açılır açılmaz güncelleme kontrolü
+        try { reg.update(); } catch(e){}
+        // Sekme öne geldiğinde de kontrol (gün boyu açık kalan tablar için)
+        document.addEventListener('visibilitychange', () => {
+          if(document.visibilityState === 'visible'){ try { reg.update(); } catch(e){} }
+        });
+        // Periyodik kontrol — daha sık (1 dk)
+        setInterval(() => { try{ reg.update(); }catch(e){} }, 60*1000);
+        // Yeni SW yüklendiğinde OTOMATİK skipWaiting → activate → controllerchange → reload
+        const _activate = (worker) => {
+          if(!worker) return;
+          // Mini bilgi şeridi — sadece "güncelleniyor"
+          _showUpdatingStrip();
+          try { worker.postMessage('SKIP_WAITING'); } catch(e){}
+        };
+        // Sayfa açıldığında zaten waiting bir SW varsa hemen devreye al
+        if(reg.waiting && navigator.serviceWorker.controller){
+          _activate(reg.waiting);
+        }
         reg.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
-          if (!newWorker) return;
+          if(!newWorker) return;
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // Yeni sürüm hazır — kullanıcıya bildir
-              showUpdateBanner(newWorker);
+              _activate(newWorker);
             }
           });
         });
       })
       .catch(e=>console.warn('[SW] failed', e));
-    // Controller değişince sayfayı yenile (yeni SW devreye girdi)
+    // Yeni SW kontrolü ele alınca sayfayı bir kez yenile
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (refreshing) return;
@@ -5803,17 +5844,13 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
-function showUpdateBanner(newWorker){
-  if(document.getElementById('updateBanner')) return;
-  const banner = document.createElement('div');
-  banner.id = 'updateBanner';
-  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1f4e8c;color:#fff;padding:10px 16px;text-align:center;z-index:9999;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.2)';
-  banner.innerHTML = '🔔 Yeni sürüm hazır. <button id="updateNowBtn" style="background:#fff;color:#1f4e8c;border:none;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer;margin-left:10px">Şimdi Güncelle</button>';
-  document.body.appendChild(banner);
-  document.getElementById('updateNowBtn').onclick = () => {
-    if(newWorker) newWorker.postMessage('SKIP_WAITING');
-    setTimeout(()=>window.location.reload(), 500);
-  };
+function _showUpdatingStrip(){
+  if(document.getElementById('updatingStrip')) return;
+  const s = document.createElement('div');
+  s.id = 'updatingStrip';
+  s.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1f4e8c;color:#fff;padding:6px 16px;text-align:center;z-index:9999;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.2)';
+  s.textContent = 'Yeni sürüm yükleniyor…';
+  document.body.appendChild(s);
 }
 
 // --- Sesli bildirim (Web Audio API ile beep) ---
