@@ -2,7 +2,7 @@
 // Strateji: HTML/JS için NETWORK-FIRST → her zaman taze sürüm, offline ise cache.
 // Görseller için CACHE-FIRST (statik).
 
-const CACHE_NAME = 'ucel-v88';
+const CACHE_NAME = 'ucel-v89';
 const STATIC_ASSETS = [
   './manifest.json',
   './icon-192.png',

@@ -3329,6 +3329,7 @@ function printProcurement(){
           <th>İhtiyaç</th>
           <th>Stoktan</th>
           <th>Sipariş</th>
+          <th>Ağırlık</th>
           <th>Br. Fiyat</th>
           <th>Tutar</th>
           <th>KDV</th>
@@ -3340,7 +3341,7 @@ function printProcurement(){
         </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr>
-          <td colspan="6" style="text-align:right">TOPLAM</td>
+          <td colspan="7" style="text-align:right">TOPLAM</td>
           <td>${fmtTL(totT)}</td>
           <td>${fmtTL(totK)}</td>
           <td>−${fmtTL(totTv)}</td>
