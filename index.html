@@ -756,7 +756,7 @@ body.proc-fullscreen{overflow:hidden}
 
 <!-- Cıvata Seti Modal — cıvata gir, otomatik somun+pul ekle -->
 <div class="modal-bg" id="bolusetModal">
-  <div class="modal" style="max-width:720px">
+  <div class="modal" style="max-width:820px">
     <div class="modal-h"><h3>Cıvata Seti Ekle</h3><button class="x" onclick="closeBoluset()">✕</button></div>
     <div class="modal-b">
       <div style="background:#f1f7ff;border:1px solid #cdd2dc;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#444">
@@ -2574,7 +2574,7 @@ function renderProcList(){
         </div>
         <div style="text-align:right;color:#1f4e8c;font-weight:700;line-height:1.4">${fmt(ihtiyac)}<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} ihtiyaç</small></div>
         <div style="text-align:right;color:#0a7;font-weight:700;line-height:1.4">${stokDusum>0?fmt(stokDusum):'<span style="color:#bbb;font-weight:400">—</span>'}${stokDusum>0?`<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} stoktan</small>`:''}</div>
-        <div style="text-align:right;font-weight:700;line-height:1.4">${fmt(siparis)} ${esc(it.birim)}${yuvarlama>0.01?`<br><small style="color:#0a7;font-size:10px;font-weight:700">+${fmt(yuvarlama)} stoğa</small>`:''}</div>
+        <div style="text-align:right;font-weight:700;line-height:1.4">${fmt(siparis)} ${esc(it.birim)}${yuvarlama>0.01?`<br><small style="color:${(it.proc_kategori||'')==='civata'||(it.proc_kategori||'')==='sarf'?'#b45309':'#0a7'};font-size:10px;font-weight:700">+${fmt(yuvarlama)} ${(it.proc_kategori||'')==='civata'||(it.proc_kategori||'')==='sarf'?'fire':'stoğa'}</small>`:''}</div>
         <div style="text-align:right;font-weight:700;color:#b91c1c;line-height:1.4">${c.toplamKg>0?fmt(c.toplamKg)+' <small style=\"color:#888;font-weight:400;font-size:10px\">kg</small>':'<span style=\"color:#bbb;font-weight:400\">—</span>'}</div>
         ${priceCells}
         <div style="text-align:right;color:#0a7;font-size:12px">${c.gelen.toLocaleString('en-US')} ${esc(it.birim)}</div>
@@ -2714,7 +2714,7 @@ function addBolusetRow(){
     <label style="display:flex;align-items:center;justify-content:center"><input type="checkbox" class="bs-pul" checked onchange="_updateBolusetPreview()" style="width:18px;height:18px"></label>
     <label style="display:flex;align-items:center;justify-content:center"><input type="checkbox" class="bs-somun" checked onchange="_updateBolusetPreview()" style="width:18px;height:18px"></label>
     <label style="display:flex;align-items:center;justify-content:center"><input type="checkbox" class="bs-rondela" onchange="_updateBolusetPreview()" style="width:18px;height:18px"></label>
-    <input class="bs-not" type="text" placeholder="(opsiyonel)" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px">
+    <input class="bs-not" type="text" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px;min-width:0;width:100%">
     <button type="button" onclick="this.parentElement.remove();_updateBolusetPreview()" style="background:#fee;border:1px solid #f5b;color:#c33;border-radius:6px;cursor:pointer;font-size:14px">×</button>
   `;
   box.appendChild(row);
@@ -3656,27 +3656,71 @@ function exportProcTalepFormu(){
   if(filtered.length === 0){ toast('Bu kategoride kalem yok','err'); return; }
   const katLabel = _procFilterKat === 'all' ? '' : ` — ${PROC_KAT_LABEL[_procFilterKat]||_procFilterKat}`;
   // Aynı cins+ölçü+birim kalemleri tedarikçi formunda birleştir (Cıvata/Somun/Pul/Rondela)
+  // Türkçe locale ile büyük harfe çevirerek karşılaştır (BEYAZ vs beyaz tek sayılır)
+  const _normTR = (s) => (s||'').toString().trim().replace(/\s+/g,' ').toLocaleUpperCase('tr-TR');
   const groupMap = new Map();
   filtered.forEach(it => {
-    const key = `${(it.malzeme||'').trim().toLowerCase()}|${(it.ebat||'').trim().toLowerCase()}|${(it.birim||'').trim().toLowerCase()}`;
+    const key = `${_normTR(it.malzeme)}|${_normTR(it.ebat)}|${_normTR(it.birim)}`;
+    const cleanRaw = _cleanSupplierNote(it.not_text);
     if(groupMap.has(key)){
       const g = groupMap.get(key);
       g.miktar += parseFloat(it.miktar||0);
-      // notları da birleştir (benzersiz)
-      const newNote = _cleanSupplierNote(it.not_text);
-      if(newNote && !g.notes.includes(newNote)) g.notes.push(newNote);
+      // notları da birleştir — büyük/küçük farkı önemli değil
+      if(cleanRaw){
+        const normNote = _normTR(cleanRaw);
+        if(!g.notesNorm.has(normNote)){
+          g.notesNorm.add(normNote);
+          g.notes.push(normNote);   // hep TR büyük harfle göster
+        }
+      }
     } else {
-      const cleanNote = _cleanSupplierNote(it.not_text);
+      const notesSet = new Set();
+      const notesArr = [];
+      if(cleanRaw){
+        const n = _normTR(cleanRaw);
+        notesSet.add(n); notesArr.push(n);
+      }
       groupMap.set(key, {
         malzeme: it.malzeme,
         ebat: it.ebat,
         birim: it.birim,
         miktar: parseFloat(it.miktar||0),
-        notes: cleanNote ? [cleanNote] : []
+        notesNorm: notesSet,
+        notes: notesArr
       });
     }
   });
   const grouped = Array.from(groupMap.values());
+  // Sıralama:
+  //   1) Cıvata-Somun kategorisinde: Cıvata > Somun > Pul > Rondela
+  //   Her tipte: çap (M sayısı), sonra boy
+  const _typeOrder = (name) => {
+    const u = (name||'').toLocaleUpperCase('tr-TR');
+    if(/CIVATA|CİVATA/.test(u)) return 1;
+    if(/SOMUN/.test(u)) return 2;
+    if(/PUL/.test(u)) return 3;
+    if(/RONDELA/.test(u)) return 4;
+    return 9;
+  };
+  const _capOrder = (name) => {
+    const m = String(name||'').match(/M(\d+)/i);
+    return m ? parseInt(m[1]) : 9999;
+  };
+  const _boyOrder = (name, ebat) => {
+    // Hem ad içindeki "× 60 mm" hem ebat alanından boy
+    const src = (name||'') + ' ' + (ebat||'');
+    const m = src.match(/[×x*]\s*(\d+)/i);
+    return m ? parseInt(m[1]) : 0;
+  };
+  grouped.sort((a,b) => {
+    const tA = _typeOrder(a.malzeme), tB = _typeOrder(b.malzeme);
+    if(tA !== tB) return tA - tB;
+    const cA = _capOrder(a.malzeme), cB = _capOrder(b.malzeme);
+    if(cA !== cB) return cA - cB;
+    const yA = _boyOrder(a.malzeme, a.ebat), yB = _boyOrder(b.malzeme, b.ebat);
+    if(yA !== yB) return yA - yB;
+    return (a.malzeme||'').localeCompare(b.malzeme||'','tr');
+  });
   const rows = grouped.map((it,i)=>`
     <tr>
       <td class="no">${i+1}.</td>
@@ -4761,24 +4805,32 @@ function _smartOpenFolder(raw){
     return true;
   }
   // 2) Yerel veya ağ yolu → 'ucelopen://' özel protokol ile dene
-  //    (UCEL_KlasorAc_Kurulum.reg dosyası bilgisayara 1 kez kurulduysa Explorer'da açar)
   const isNet   = /^\\\\/.test(v);
   const isLocal = /^[A-Za-z]:\\/.test(v);
   if(isNet || isLocal){
-    // ucelopen://C:/path/to  veya  ucelopen://server/share/path
-    const enc = v.replace(/\\/g,'/');
+    // Yolu URL encode et — Türkçe karakterler ve boşluklar için
+    const enc = encodeURI(v.replace(/\\/g,'/'));
     const proto = 'ucelopen://' + enc;
-    // Görünmez iframe ile tetikle (popup engellemez)
-    try {
-      const f = document.createElement('iframe');
-      f.style.display = 'none';
-      f.src = proto;
-      document.body.appendChild(f);
-      setTimeout(()=>f.remove(), 1500);
-    } catch(e){}
-    // Yine de panoya kopyala — protokol kurulu değilse manuel kullanılır
+    // Önce panoya yaz (fallback için)
     try { navigator.clipboard.writeText(v); } catch(e){}
-    toast('Klasör açılıyor… Açılmazsa "UCEL_KlasorAc_Kurulum.reg" dosyasını bir kez çalıştır (yol panoya kopyalandı: gezgin → Ctrl+L → Ctrl+V).', 'info');
+    // <a> linki oluştur ve programlı tıkla — Chrome'un user gesture'unu korur
+    let didOpen = false;
+    try {
+      const a = document.createElement('a');
+      a.href = proto;
+      a.style.display = 'none';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      // Chrome bazen ilk seferde "Open ucelopen?" diyaloğu sorar — kullanıcı kabul edince sessiz çalışır
+      a.click();
+      a.remove();
+      didOpen = true;
+    } catch(e){}
+    if(didOpen){
+      toast('Klasör açılıyor… İzin diyaloğu çıkarsa "Always open" / "İzin ver" seç.', 'info');
+    } else {
+      toast('Açılamadı. .reg dosyasını çalıştırdığından emin ol. Yol panoya kopyalandı.','err');
+    }
     return true;
   }
   // 3) Bilinmeyen → yeni sekme dene + clipboard
@@ -5868,7 +5920,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v100';
+const APP_VERSION = 'v102';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
