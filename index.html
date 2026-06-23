@@ -3429,14 +3429,15 @@ function printProcurement(){
         </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr>
-          <td colspan="7" style="text-align:right">TOPLAM</td>
+          <td colspan="5" style="text-align:right">TOPLAM</td>
+          <td style="color:#b91c1c"><b>${totKg>0?fmtNum(totKg,2)+' kg':'—'}</b></td>
+          <td></td>
           <td>${fmtTL(totT)}</td>
           <td>${fmtTL(totK)}</td>
           <td>−${fmtTL(totTv)}</td>
           <td>${fmtTL(totN)}</td>
           <td colspan="3"></td>
         </tr>
-        ${totKg>0?`<tr><td colspan="6" style="text-align:right">TOPLAM AĞIRLIK</td><td colspan="7" class="lft">${fmtNum(totKg,2)} kg</td></tr>`:''}
         </tfoot>
       </table>
       <div style="flex:1"></div>
