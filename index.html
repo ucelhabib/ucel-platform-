@@ -443,7 +443,17 @@ body.proc-fullscreen{overflow:hidden}
           <div class="toolbar"><button class="btn sec sm" onclick="window.print()">🖨</button><button class="btn" onclick="openProj()">+ Yeni Proje</button></div>
         </div>
         <div class="table-wrap"><table>
-          <thead><tr><th>No</th><th>Müşteri / Proje</th><th>Aşama</th><th>Tonaj (kg)</th><th class="amount-only">Bedel</th><th>Sevk</th><th>%</th><th>Sorumlu</th><th></th></tr></thead>
+          <thead><tr>
+            <th style="text-align:center">Proje No</th>
+            <th>Müşteri / Proje</th>
+            <th style="text-align:center">Aşama</th>
+            <th style="text-align:center">Tonaj (kg)</th>
+            <th class="amount-only" style="text-align:center">Proje Bedeli</th>
+            <th style="text-align:center">Sevk Tarihi</th>
+            <th style="text-align:center">Proje İlerleme</th>
+            <th style="text-align:center">Sorumlu</th>
+            <th></th>
+          </tr></thead>
           <tbody id="pList"></tbody>
         </table></div>
       </div>
@@ -1927,17 +1937,18 @@ function renderProjects(){
     const o=allProfiles[p.owner_id]||{initials:'?',color:'#999'};
     const lt=p.shipdate&&p.shipdate<td?'style="color:var(--err);font-weight:700"':'';
     return `<tr class="click compact" onclick="openProj('${p.id}')">
-      <td><strong>${esc(p.no)}</strong></td>
+      <td style="text-align:center"><strong>${esc(p.no)}</strong></td>
       <td><div style="line-height:1.25"><strong>${esc(p.customer)}</strong>${p.title?`<br><small style="color:#666;font-size:11px;font-weight:500">${esc(p.title)}</small>`:''}</div></td>
-      <td>${((p.stages&&p.stages.length)?p.stages:[p.stage]).filter(Boolean).map(s=>`<span class="pill ${SP[s]||'pl-gray'}" style="margin:1px">${DI[s]||''} ${DN[s]||s}</span>`).join('')}</td>
-      <td style="white-space:nowrap">${p.tonnage ? fmtNum(p.tonnage*1000, 0)+' kg' : '—'}</td><td class="amount-only" style="text-align:right;white-space:nowrap">${p.amount ? fmtTL(p.amount) : '—'}</td>
-      <td ${lt}>${p.shipdate||'-'}</td>
+      <td style="text-align:center">${((p.stages&&p.stages.length)?p.stages:[p.stage]).filter(Boolean).map(s=>`<span class="pill ${SP[s]||'pl-gray'}" style="margin:1px">${DI[s]||''} ${DN[s]||s}</span>`).join('')}</td>
+      <td style="white-space:nowrap;text-align:center">${p.tonnage ? fmtNum(p.tonnage*1000, 0)+' kg' : '—'}</td>
+      <td class="amount-only" style="text-align:center;white-space:nowrap">${p.amount ? fmtTL(p.amount) : '—'}</td>
+      <td ${lt} style="text-align:center;white-space:nowrap">${p.shipdate||'—'}</td>
       <td><div style="display:flex;flex-direction:column;gap:3px">
         <div style="display:flex;align-items:center;gap:6px"><div class="progress" style="flex:1"><div class="pbar" style="width:${p.progress}%"></div></div><span style="font-size:12px;font-weight:700;color:var(--p);min-width:34px;text-align:right">%${p.progress||0}</span></div>
         <div style="display:flex;gap:2px" title="Faz durumu: Teklif·Satınalma·Üretim·Sevk·Montaj·Muhasebe">${['teklifproje','satinalma','uretim','sevk','montaj','muhasebe'].map(k=>{const v=parseInt((p.phases||{})[k]||0);const c=v===100?'#0a7':v>0?'#1f4e8c':'#dde2e9';return `<span style="flex:1;height:6px;background:${c};border-radius:2px" title="${DI[k]||''} ${DN[k]||k}: %${v}"></span>`}).join('')}</div>
       </div></td>
-      <td><span class="av-mini" style="background:${o.color}">${o.initials}</span></td>
-      <td><button class="icon-btn" onclick="event.stopPropagation();openFiles('${p.id}')" title="Dosyalar">📎</button>${p.folder_path?`<button class="icon-btn" onclick="event.stopPropagation();openFolderByProjectId('${p.id}')" title="Ortak klasörü aç">📁</button>`:''}<button class="icon-btn" onclick="event.stopPropagation();openProj('${p.id}')">✏️</button></td>
+      <td style="text-align:center"><span class="av-mini" style="background:${o.color}">${o.initials}</span></td>
+      <td style="text-align:center;white-space:nowrap"><button class="icon-btn" onclick="event.stopPropagation();openFiles('${p.id}')" title="Dosyalar">📎</button>${p.folder_path?`<button class="icon-btn" onclick="event.stopPropagation();openFolderByProjectId('${p.id}')" title="Ortak klasörü aç">📁</button>`:''}<button class="icon-btn" onclick="event.stopPropagation();openProj('${p.id}')">✏️</button></td>
     </tr>`;
   }).join('');
   document.getElementById('pCount').textContent=projects.length;
@@ -5959,7 +5970,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v108';
+const APP_VERSION = 'v109';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
