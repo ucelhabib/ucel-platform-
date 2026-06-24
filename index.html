@@ -4668,6 +4668,57 @@ async function updatePhaseDate(projectId, phase, dateStr){
     renderPhases(proj);
   }
   toast('Hedef tarih kaydedildi','ok');
+  // Otomatik görev: o fazın birim sorumlusuna atama
+  try { await _ensurePhaseTask(projectId, phase, dateStr); } catch(e){ console.warn('phase task:', e); }
+}
+
+// Faz hedef tarihi girilince ilgili birime görev oluştur/güncelle
+// Aynı faz için tekrar tarih girilirse mevcut görevi günceller (duplicate olmaz)
+async function _ensurePhaseTask(projectId, phase, dateStr){
+  const proj = projects.find(p=>p.id===projectId); if(!proj) return;
+  // O birimin sorumlu kişisini bul (önce o birim rolünde olanlar, varsa proje sorumlusu)
+  const candidates = Object.values(allProfiles).filter(u => u.role === phase);
+  let assignee = candidates[0] || null;
+  // Yönetici yoksa proje sahibi
+  if(!assignee && proj.owner_id) assignee = allProfiles[proj.owner_id] || null;
+  if(!assignee){ console.warn('phase task: assignee bulunamadı', phase); return; }
+  const projLabel = `${proj.no} · ${proj.customer || ''}`.trim();
+  const phaseLabel = DN[phase] || phase;
+  const title = `${projLabel} — ${phaseLabel} fazını ${dateStr ? 'tamamla (' + _fmtTRDate(dateStr) + ')' : 'tamamla'}`;
+  const desc = dateStr
+    ? `Yönetici bu fazı ${_fmtTRDate(dateStr)} tarihine kadar tamamlamanı bekliyor.\n\nProje: ${projLabel}\nFaz: ${phaseLabel}`
+    : `Yönetici bu faza hedef tarih girmedi. Planlama bekliyor.\n\nProje: ${projLabel}\nFaz: ${phaseLabel}`;
+  // Mevcut görevi ara — aynı proje + dept + sistem tarafından oluşturulmuş + bitmemiş
+  const { data: existing, error: e1 } = await sb.from('tasks')
+    .select('id, done')
+    .eq('project_id', projectId)
+    .eq('dept', phase)
+    .eq('auto_phase', true)
+    .limit(1);
+  if(e1) { console.warn('phase task select:', e1); }
+  if(existing && existing.length){
+    const t = existing[0];
+    const { error } = await sb.from('tasks').update({
+      title, description: desc, due: dateStr || null, assignee_id: assignee.id, priority: 'high'
+    }).eq('id', t.id);
+    if(error){ console.warn('phase task update:', error); return; }
+    try { await notify(`📅 ${proj.no} ${phaseLabel} fazı için hedef tarih güncellendi: ${dateStr ? _fmtTRDate(dateStr) : 'kaldırıldı'}`, '📅', phase, 'project', projectId); } catch(e){}
+  } else {
+    const { error } = await sb.from('tasks').insert({
+      title, dept: phase, project_id: projectId,
+      assignee_id: assignee.id,
+      due: dateStr || null, priority: 'high',
+      description: desc,
+      auto_phase: true,
+      created_by: me.id, done: false
+    });
+    if(error){ console.warn('phase task insert:', error); return; }
+    try { await notify(`📅 ${proj.no} — ${phaseLabel} fazı sana atandı${dateStr?` (son tarih: ${_fmtTRDate(dateStr)})`:''}`, '📅', phase, 'project', projectId); } catch(e){}
+  }
+}
+function _fmtTRDate(d){
+  if(!d) return '—';
+  try { return new Date(d).toLocaleDateString('tr-TR'); } catch(e){ return d; }
 }
 function closeProj(){pmExitFs();document.getElementById('pModal').classList.remove('show');editP=null}
 // 4-Kart tam ekran toggle
@@ -5904,7 +5955,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v106';
+const APP_VERSION = 'v107';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
