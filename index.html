@@ -4810,26 +4810,11 @@ function _smartOpenFolder(raw){
   const isNet   = /^\\\\/.test(v);
   const isLocal = /^[A-Za-z]:\\/.test(v);
   if(isNet || isLocal){
-    const proto = 'ucelopen://' + encodeURIComponent(v);
+    // Yolu panoya kopyala — tarayıcı yerel klasör açamaz, ama 3 saniyede yapıştırılır
     try { navigator.clipboard.writeText(v); } catch(e){}
-    let didOpen = false;
-    try {
-      const a = document.createElement('a');
-      a.href = proto;
-      a.style.display = 'none';
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      didOpen = true;
-    } catch(e){}
-    // Hedef yolu da gösterelim — debug ve teyit için
     const kisaPath = v.length > 70 ? '...' + v.slice(-70) : v;
-    if(didOpen){
-      toast(`Açılıyor: ${kisaPath}`, 'info');
-    } else {
-      toast(`Açılamadı: ${kisaPath}`,'err');
-    }
+    // Net açıklamalı toast — daha uzun süre kalsın
+    toast(`Yol kopyalandı → ORTAK klasörüne git → Ctrl+L → Ctrl+V → Enter\n${kisaPath}`, 'info');
     return true;
   }
   // 3) Bilinmeyen → yeni sekme dene + clipboard
@@ -5919,7 +5904,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v105';
+const APP_VERSION = 'v106';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
