@@ -4810,12 +4810,8 @@ function _smartOpenFolder(raw){
   const isNet   = /^\\\\/.test(v);
   const isLocal = /^[A-Za-z]:\\/.test(v);
   if(isNet || isLocal){
-    // Yolu encode et — Türkçe karakter, boşluk vs.
-    // encodeURIComponent her şeyi encode eder, sonra PowerShell UrlDecode ile çözer
     const proto = 'ucelopen://' + encodeURIComponent(v);
-    // Önce panoya yaz (fallback için)
     try { navigator.clipboard.writeText(v); } catch(e){}
-    // <a> linki oluştur ve programlı tıkla — Chrome'un user gesture'unu korur
     let didOpen = false;
     try {
       const a = document.createElement('a');
@@ -4823,15 +4819,16 @@ function _smartOpenFolder(raw){
       a.style.display = 'none';
       a.rel = 'noopener';
       document.body.appendChild(a);
-      // Chrome bazen ilk seferde "Open ucelopen?" diyaloğu sorar — kullanıcı kabul edince sessiz çalışır
       a.click();
       a.remove();
       didOpen = true;
     } catch(e){}
+    // Hedef yolu da gösterelim — debug ve teyit için
+    const kisaPath = v.length > 70 ? '...' + v.slice(-70) : v;
     if(didOpen){
-      toast('Klasör açılıyor… İzin diyaloğu çıkarsa "Always open" / "İzin ver" seç.', 'info');
+      toast(`Açılıyor: ${kisaPath}`, 'info');
     } else {
-      toast('Açılamadı. .reg dosyasını çalıştırdığından emin ol. Yol panoya kopyalandı.','err');
+      toast(`Açılamadı: ${kisaPath}`,'err');
     }
     return true;
   }
@@ -5922,7 +5919,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v104';
+const APP_VERSION = 'v105';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
