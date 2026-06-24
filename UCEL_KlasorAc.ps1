@@ -1,28 +1,30 @@
-# ÜÇEL Steel Construction — Ortak Klasör Açma Helper
-# Bu script ucelopen:// linklerini alır, çözer ve Dosya Gezgini'nde açar.
+# ÜÇEL Steel Construction — Ortak Klasör Açma Helper (v2)
+# ucelopen:// linklerini Dosya Gezgini'nde açar.
+# System.Web bağımlılığı YOK — sadece .NET Core BCL kullanıyor.
 param([string]$Url)
 
 try {
   if ([string]::IsNullOrWhiteSpace($Url)) { exit 0 }
 
-  # ucelopen:// prefix'ini kaldır (slash sayısı değişebilir)
-  $p = $Url -replace '^ucelopen:[/]+', ''
+  # 1) ucelopen:// (slash sayısı değişebilir) prefix'ini sil
+  $p = $Url -replace '^ucelopen:[/]*', ''
 
-  # URL encoding'i çöz: %20 → boşluk, %C4%B0 → İ vb.
-  Add-Type -AssemblyName System.Web -ErrorAction SilentlyContinue
-  try { $p = [System.Web.HttpUtility]::UrlDecode($p) } catch { $p = [Uri]::UnescapeDataString($p) }
+  # 2) URL decode — %20 → boşluk, %C4%B0 → İ vb. (System.Web GEREKMEZ)
+  $p = [System.Uri]::UnescapeDataString($p)
 
-  # / → \ (UNC ve yerel yollar için)
+  # 3) İleri slash'ları geri slash'a çevir (UNC ve yerel yollar için)
   $p = $p -replace '/', '\'
 
-  # UNC yolu için başına \\ ekle (eğer JS slashları tek tek çevirdi ise)
-  if ($p -match '^\\\\' -or $p -match '^[A-Za-z]:\\') {
-    # Hazır UNC veya yerel yol
-  } elseif ($p -match '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+') {
+  # 4) Eğer UNC görünüyor ama \\ ile başlamıyorsa, başına ekle (ör: encodeURIComponent ham bıraktıysa)
+  if ($p -notmatch '^\\\\' -and $p -notmatch '^[A-Za-z]:\\' -and $p -match '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+') {
     $p = '\\' + $p
   }
 
+  # 5) Explorer'ı argümanla aç
   Start-Process explorer.exe -ArgumentList ('"' + $p + '"')
 } catch {
-  # Sessiz fail
+  # Hatayı yakalayıp PowerShell penceresinde göster (debug için)
+  Write-Host "HATA:" $_.Exception.Message
+  Write-Host "URL:" $Url
+  Start-Sleep -Seconds 5
 }
