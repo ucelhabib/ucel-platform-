@@ -833,7 +833,8 @@ body.proc-fullscreen{overflow:hidden}
     </div>
     <div class="modal-f">
       <button class="btn sec" onclick="closeProcDeliv()">Kapat</button>
-      <button class="btn ok" onclick="addProcDelivery()">💾 Teslimatı Kaydet</button>
+      <button class="btn sec" id="pdCancelEditBtn" onclick="cancelEditProcDelivery()" style="display:none">↶ Düzenlemeyi İptal</button>
+      <button class="btn ok" id="pdSaveBtn" onclick="addProcDelivery()">+ Ekle</button>
     </div>
   </div>
 </div>
@@ -3447,22 +3448,65 @@ async function editProcItem(itemId){
 }
 
 /* --- Teslimat --- */
+let _pdEditingId = null;  // Düzenlenen teslimat id (null = yeni teslimat ekle)
 function openProcDeliv(itemId){
   _pdCurrentItemId = itemId;
+  _pdEditingId = null;
   const it = procItems.find(x=>x.id===itemId); if(!it) return;
   const c = _procCalc(it);
   document.getElementById('pdTitle').textContent = '🚚 Teslimatlar — ' + it.malzeme;
   document.getElementById('pdInfo').innerHTML = `<strong>${esc(it.malzeme)}</strong> · İhtiyaç: ${parseFloat(it.miktar).toLocaleString('en-US')} ${esc(it.birim)} · Gelen: <strong>${c.gelen.toLocaleString('en-US')}</strong> · Kalan: <strong style="color:${c.kalan>0?'#c33':'#0a7'}">${c.kalan.toLocaleString('en-US')}</strong>`;
+  _pdResetForm();
+  _pdRenderList(itemId);
+  document.getElementById('procDelivModal').classList.add('show');
+}
+function _pdResetForm(){
+  _pdEditingId = null;
   document.getElementById('pd-tarih').value = new Date().toISOString().slice(0,10);
   ['pd-miktar','pd-irs','pd-fat','pd-ted','pd-tutar','pd-not'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value = (id==='pd-miktar'?'0':''); });
-  // Mevcut teslimatlar
+  // Buton metnini sıfırla
+  const saveBtn = document.getElementById('pdSaveBtn');
+  if(saveBtn) saveBtn.textContent = '+ Ekle';
+  const cancelBtn = document.getElementById('pdCancelEditBtn');
+  if(cancelBtn) cancelBtn.style.display = 'none';
+}
+function _pdRenderList(itemId){
+  const it = procItems.find(x=>x.id===itemId); if(!it) return;
   const dl = _procDelvOf(itemId);
   document.getElementById('pdList').innerHTML = dl.length === 0
     ? '<div style="padding:8px;color:#888;font-size:12px;text-align:center">Henüz teslimat yok.</div>'
-    : dl.map(d=>`<div style="background:#f9fbfd;padding:6px 8px;border-radius:4px;margin-bottom:4px;font-size:12px">📦 ${d.tarih} · ${parseFloat(d.miktar).toLocaleString('en-US')} ${esc(it.birim)} · İrs: ${esc(d.irsaliye_no||'-')} · ${esc(d.tedarikci||'-')}</div>`).join('');
-  document.getElementById('procDelivModal').classList.add('show');
+    : dl.map(d=>`<div style="display:flex;align-items:center;gap:6px;background:${d.id===_pdEditingId?'#fff3cd':'#f9fbfd'};padding:6px 8px;border-radius:4px;margin-bottom:4px;font-size:12px">
+        <div style="flex:1">📦 ${d.tarih} · ${parseFloat(d.miktar).toLocaleString('en-US')} ${esc(it.birim)} · İrs: ${esc(d.irsaliye_no||'-')} · ${esc(d.tedarikci||'-')}${d.not_text?` · <i>${esc(d.not_text)}</i>`:''}</div>
+        <button class="btn sec sm" onclick="event.stopPropagation();editProcDelivery('${d.id}')" style="padding:2px 6px;font-size:11px" title="Düzenle">✏️</button>
+        <button class="btn err sm" onclick="event.stopPropagation();deleteDelivery('${d.id}')" style="padding:2px 6px;font-size:11px" title="Sil">🗑</button>
+      </div>`).join('');
 }
-function closeProcDeliv(){ document.getElementById('procDelivModal').classList.remove('show'); _pdCurrentItemId = null; }
+function editProcDelivery(deliveryId){
+  if(!_pdCurrentItemId) return;
+  const dl = _procDelvOf(_pdCurrentItemId);
+  const d = dl.find(x => x.id === deliveryId); if(!d) return;
+  _pdEditingId = deliveryId;
+  document.getElementById('pd-tarih').value  = d.tarih || '';
+  document.getElementById('pd-miktar').value = d.miktar || 0;
+  document.getElementById('pd-irs').value    = d.irsaliye_no || '';
+  document.getElementById('pd-fat').value    = d.fatura_no || '';
+  document.getElementById('pd-ted').value    = d.tedarikci || '';
+  document.getElementById('pd-tutar').value  = d.fatura_tutari || '';
+  document.getElementById('pd-not').value    = d.not_text || '';
+  const saveBtn = document.getElementById('pdSaveBtn');
+  if(saveBtn) saveBtn.textContent = '💾 Güncelle';
+  const cancelBtn = document.getElementById('pdCancelEditBtn');
+  if(cancelBtn) cancelBtn.style.display = 'inline-flex';
+  _pdRenderList(_pdCurrentItemId);
+  // Form alanına scroll
+  try { document.getElementById('pd-tarih').focus(); } catch(e){}
+  if(typeof toast === 'function') toast('Düzenleme modunda — değiştir, sonra "Güncelle" bas','info');
+}
+function cancelEditProcDelivery(){
+  _pdResetForm();
+  if(_pdCurrentItemId) _pdRenderList(_pdCurrentItemId);
+}
+function closeProcDeliv(){ document.getElementById('procDelivModal').classList.remove('show'); _pdCurrentItemId = null; _pdEditingId = null; }
 async function addProcDelivery(){
   if(!_pdCurrentItemId) return;
   const it = procItems.find(x=>x.id===_pdCurrentItemId); if(!it) return;
@@ -3474,19 +3518,32 @@ async function addProcDelivery(){
     fatura_no: document.getElementById('pd-fat').value.trim()||null,
     tedarikci: document.getElementById('pd-ted').value.trim()||null,
     fatura_tutari: +document.getElementById('pd-tutar').value||null,
-    not_text: document.getElementById('pd-not').value.trim()||null,
-    created_by: me.id
+    not_text: document.getElementById('pd-not').value.trim()||null
   };
   if(d.miktar <= 0){toast('Geçerli bir miktar gir','err');return}
-  const {error} = await sb.from('procurement_deliveries').insert(d);
-  if(error){toast('Hata: '+errTr(error),'err');return}
-  toast('Teslimat kaydedildi','ok');
+  if(_pdEditingId){
+    // GÜNCELLE
+    const {error} = await sb.from('procurement_deliveries').update(d).eq('id', _pdEditingId);
+    if(error){toast('Hata: '+errTr(error),'err');return}
+    toast('Teslimat güncellendi','ok');
+    try { await logAudit('delivery_update','procurement_delivery', _pdEditingId, it.malzeme, d); } catch(e){}
+    try {
+      const proj = projects.find(p=>p.id===_procProjectId);
+      await notify(`✏️ ${me.full_name} ${it.malzeme} teslimatını düzeltti (${proj?.no})`, '✏️', 'satinalma', 'project', _procProjectId);
+    } catch(e){}
+  } else {
+    // YENİ EKLE
+    d.created_by = me.id;
+    const {error} = await sb.from('procurement_deliveries').insert(d);
+    if(error){toast('Hata: '+errTr(error),'err');return}
+    toast('Teslimat kaydedildi','ok');
+    try {
+      const proj = projects.find(p=>p.id===_procProjectId);
+      await notify(`🚚 ${me.full_name} "${proj?.no} ${proj?.customer}" projesi için ${it.malzeme} teslimatı kaydetti: ${d.miktar} ${it.birim}${d.irsaliye_no?` (irs: ${d.irsaliye_no})`:''}${d.tedarikci?` · ${d.tedarikci}`:''}`, '🚚', 'yonetici', 'project', _procProjectId);
+    } catch(e){}
+  }
   await loadProcurement(_procProjectId);
   closeProcDeliv();
-  try {
-    const proj = projects.find(p=>p.id===_procProjectId);
-    await notify(`🚚 ${me.full_name} "${proj?.no} ${proj?.customer}" projesi için ${it.malzeme} teslimatı kaydetti: ${d.miktar} ${it.birim}${d.irsaliye_no?` (irs: ${d.irsaliye_no})`:''}${d.tedarikci?` · ${d.tedarikci}`:''}`, '🚚', 'yonetici', 'project', _procProjectId);
-  } catch(e){}
 }
 // Ortak PDF şablonu — kurumsal kimlik (logo, sertifika rozetleri, iletişim bilgileri)
 function _pdfStyle(){
@@ -5987,7 +6044,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v113';
+const APP_VERSION = 'v114';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
