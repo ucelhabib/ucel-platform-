@@ -2228,7 +2228,7 @@ function cancelChatFile(){
 
 async function sendChat(){
   const input = document.getElementById('chatInput');
-  const txt = input.value.trim();
+  let txt = input.value.trim();
   const file = _chatPendingFile;
   if(!txt && !file) return;
   input.value = '';
@@ -2251,6 +2251,8 @@ async function sendChat(){
     }
     cancelChatFile();
   }
+  // CHECK constraint: text en az 1 karakter olmalı — dosya varsa varsayılan text kullan
+  if(!txt && file){ txt = `📎 ${attachment_name || 'dosya'}`; }
   const {error} = await sb.from('messages').insert({sender_id: me.id, text: txt, attachment_url, attachment_name, attachment_type});
   if(error){toast('Mesaj gönderilemedi: '+errTr(error),'err');input.value = txt;return}
   try {
@@ -3097,45 +3099,39 @@ async function _addToStock(cat, miktar, projectId, reason){
     boy3: cat.boy3||0, adet3: cat.adet3||0
   };
   let movement = null;
+  let noteAppend = null;
   if(cat.birim === 'adet'){
-    // İlk müsait slot'a (boş slot bul, yoksa slot1'e ekle)
+    // 'adet' birim (cıvata, saç vb.) — slot mantığı korunur
     let slot = [1,2,3].find(s => !(upd['adet'+s] > 0)) || 1;
     const before = upd['adet'+slot] || 0;
     upd['adet'+slot] = before + Math.ceil(miktar);
     movement = {slot, before, after: upd['adet'+slot], qty: +Math.ceil(miktar)};
   } else {
-    // 'm' birim → fazlalığı yeni bir parça olarak ekle (boy=miktar*1000 mm, adet=1)
-    const lenMm = Math.round(miktar * 1000);
-    // boş bir slot bul (boy/adet=0)
-    let slot = 0;
-    for(const s of [3,2,1]){
-      if(!(upd['boy'+s] > 0) || !(upd['adet'+s] > 0)){ slot = s; break; }
-    }
-    if(slot === 0){
-      // Tüm slotlar dolu → aynı boy varsa ona ekle
-      const matchSlot = [1,2,3].find(s => upd['boy'+s] === lenMm);
-      if(matchSlot){
-        const before = upd['adet'+matchSlot];
-        upd['adet'+matchSlot] = before + 1;
-        movement = {slot: matchSlot, before, after: upd['adet'+matchSlot], qty: 1, length: lenMm};
-      } else {
-        // Yer yok → adetçe en az olan slot'a aynı boy yerine adet ekle (boyu güncelleyemeyiz, ama log atalım)
-        try {
-          await sb.from('stock_movements').insert({
-            item_id: cat.id, action: 'rounding_surplus', slot: null, qty_change: 0,
-            length_mm: lenMm, before_adet: 0, after_adet: 0,
-            note: (reason||'Yuvarlama fazlası') + ' (3 slot dolu — manuel yerleştirme gerekir)',
-            project_id: projectId, user_id: me.id
-          });
-        } catch(e){ console.warn('rounding surplus log fail', e); }
-        // Üst katmana belli olsun ki uyarı verebilsin
-        throw new Error('Stok kalemine ait 3 slot da farklı boylarla dolu, fazlalık otomatik eklenemedi');
-      }
-    } else {
-      upd['boy'+slot] = lenMm;
-      upd['adet'+slot] = 1;
-      movement = {slot, before: 0, after: 1, qty: 1, length: lenMm};
-    }
+    // 'm' birim — yeni mantık: yuvarlama fazlası TOPLAM METRAJa eklenir
+    // Mevcut parça detayı not_text'e taşınır, slotlar tek bir toplam olarak temsil edilir
+    const eklenenMm = Math.round(miktar * 1000);
+    const mevcutMm = (upd.boy1*upd.adet1) + (upd.boy2*upd.adet2) + (upd.boy3*upd.adet3);
+    const yeniToplamMm = mevcutMm + eklenenMm;
+    // Mevcut parça detayını kısa formatta üret (örn: "12m × 4 + 7.7m × 1")
+    const parcalar = [];
+    [1,2,3].forEach(s => {
+      const b = upd['boy'+s], a = upd['adet'+s];
+      if(b > 0 && a > 0) parcalar.push(`${(b/1000).toFixed(b%1000?2:0)}m × ${a}`);
+    });
+    // Yeni toplam'ı tek slot'a yaz
+    upd.boy1 = yeniToplamMm;
+    upd.adet1 = 1;
+    upd.boy2 = 0; upd.adet2 = 0;
+    upd.boy3 = 0; upd.adet3 = 0;
+    // Hareket kaydı
+    movement = {slot: 1, before: mevcutMm, after: yeniToplamMm, qty: 1, length: eklenenMm};
+    // Not'a parça detayı ve yuvarlama bilgisi
+    const today = new Date().toLocaleDateString('tr-TR');
+    const ekDetay = parcalar.length
+      ? `[${today}] Önceki parça: ${parcalar.join(' + ')}. +${(eklenenMm/1000).toFixed(2)}m yuvarlama fazlası (${reason || ''}).`
+      : `[${today}] +${(eklenenMm/1000).toFixed(2)}m yuvarlama fazlası (${reason || ''}).`;
+    noteAppend = ekDetay.trim();
+    upd.not_text = (cat.not_text ? cat.not_text + ' · ' : '') + noteAppend;
   }
   const {error: ue} = await sb.from('stock_items').update({
     ...upd, updated_at: new Date().toISOString(), updated_by: me.id
@@ -3250,7 +3246,8 @@ async function saveProcCatalog(){
   const STD_BOY = {
     'IPE': 12, 'HEA': 12, 'HEB': 12, 'UNP': 12,
     'KUTUPROFIL': 6, 'KUTUPROFİL': 6, 'KUTU': 6,
-    'BORU': 6
+    'BORU': 6,
+    'LAMA': 6, 'KOSEBENT': 6, 'KÖŞEBENT': 6
   };
   let roundedCount = 0;
   let totalAddedToStock = 0;
@@ -5970,7 +5967,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v109';
+const APP_VERSION = 'v110';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
