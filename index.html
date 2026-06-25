@@ -2452,19 +2452,36 @@ async function loadProcurement(projectId){
   ]);
   procItems = r1.data || [];
   procDeliveries = r2.data || [];
-  // Talep formu notu — projeden gelir
-  const proj = projects.find(p => p.id === projectId);
-  const tEl = document.getElementById('procProjectNot');
-  if(tEl) tEl.value = proj?.talep_not || '';
+  // Talep formu notu — projeden gelir, AKTİF KATEGORİYE göre yüklenir
+  _refreshProcTalepNot();
   renderProcList();
+}
+function _refreshProcTalepNot(){
+  const tEl = document.getElementById('procProjectNot');
+  if(!tEl) return;
+  const proj = projects.find(p => p.id === _procProjectId);
+  const notes = (proj?.talep_notes) || {};
+  const kat = (_procFilterKat && _procFilterKat !== 'all') ? _procFilterKat : null;
+  tEl.value = kat ? (notes[kat] || '') : '';
+  tEl.disabled = !kat;
+  const lbl = kat ? (PROC_KAT_LABEL[kat] || kat) : '';
+  tEl.placeholder = kat
+    ? `Bu kategori için açıklama — sadece "${lbl}" talep PDF'inde görünür`
+    : '⚠ Önce yukarıdan bir katalog (cıvata / saç / boya vb.) seç — not o kategoriye özel olur';
+  tEl.style.background = kat ? '#fffbea' : '#f1f4f8';
 }
 async function saveProjectTalepNot(val){
   if(!_procProjectId) return;
+  const kat = (_procFilterKat && _procFilterKat !== 'all') ? _procFilterKat : null;
+  if(!kat){ toast('Önce bir katalog kategorisi seç','err'); return; }
   const txt = (val||'').trim();
-  const { error } = await sb.from('projects').update({ talep_not: txt || null }).eq('id', _procProjectId);
-  if(error){ console.warn('talep not kaydı:', error); return; }
   const proj = projects.find(p => p.id === _procProjectId);
-  if(proj) proj.talep_not = txt || null;
+  const notes = { ...((proj?.talep_notes) || {}) };
+  if(txt) notes[kat] = txt;
+  else delete notes[kat];
+  const { error } = await sb.from('projects').update({ talep_notes: notes }).eq('id', _procProjectId);
+  if(error){ toast('Not kaydedilemedi: ' + error.message, 'err'); return; }
+  if(proj) proj.talep_notes = notes;
 }
 function _procDelvOf(itemId){ return procDeliveries.filter(d=>d.item_id===itemId); }
 function _procCalc(item){
@@ -2558,6 +2575,7 @@ function _renderProcKatTabs(){
 }
 function _setProcFilterKat(k){
   _procFilterKat = k;
+  _refreshProcTalepNot();
   renderProcList();
 }
 function renderProcList(){
@@ -3972,8 +3990,12 @@ function exportProcTalepFormu(){
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      ${proj?.talep_not ? `<div style="background:#fff8e1;border:1px solid #f1c40f;border-radius:6px;padding:10px 12px;margin:14px 0 8px;font-size:10.5pt;color:#444;white-space:pre-wrap;line-height:1.5"><b style="color:#1f4e8c">📝 NOTLAR:</b>
-${esc(proj.talep_not)}</div>` : ''}
+      ${(() => {
+        const _aktifKat = (_procFilterKat && _procFilterKat !== 'all') ? _procFilterKat : null;
+        const _pdfNote = _aktifKat ? ((proj?.talep_notes||{})[_aktifKat] || '') : '';
+        return _pdfNote ? `<div style="background:#fff8e1;border:1px solid #f1c40f;border-radius:6px;padding:10px 12px;margin:14px 0 8px;font-size:10.5pt;color:#444;white-space:pre-wrap;line-height:1.5"><b style="color:#1f4e8c">📝 NOTLAR:</b>
+${esc(_pdfNote)}</div>` : '';
+      })()}
       <div style="flex:1"></div>
       ${_pdfFooter()}
     </div>
@@ -6178,7 +6200,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v118';
+const APP_VERSION = 'v119';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
