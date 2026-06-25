@@ -2732,7 +2732,7 @@ function addBolusetRow(){
     <input class="bs-pul" type="number" min="0" max="4" step="1" value="1" title="Pul katsayısı (0=yok, 1=standart, 2=çift)" oninput="_updateBolusetPreview()" style="padding:6px 6px;border:1px solid var(--bd);border-radius:6px;font-size:13px;text-align:center">
     <label style="display:flex;align-items:center;justify-content:center"><input type="checkbox" class="bs-somun" checked onchange="_updateBolusetPreview()" style="width:18px;height:18px"></label>
     <label style="display:flex;align-items:center;justify-content:center"><input type="checkbox" class="bs-rondela" onchange="_updateBolusetPreview()" style="width:18px;height:18px"></label>
-    <input class="bs-not" type="text" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px;min-width:0;width:100%">
+    <input class="bs-not" type="text" value="${(()=>{try{return esc(localStorage.getItem('ucel_civata_son_not')||'')}catch(e){return ''}})()}" placeholder="(son not otomatik geldi)" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px;min-width:0;width:100%">
     <button type="button" onclick="this.parentElement.remove();_updateBolusetPreview()" style="background:#fee;border:1px solid #f5b;color:#c33;border-radius:6px;cursor:pointer;font-size:14px">×</button>
   `;
   box.appendChild(row);
@@ -2778,6 +2778,9 @@ async function saveBoluset(){
   if(!_procProjectId){ toast('Proje seçili değil','err'); return; }
   const rows = _bolusetReadRows();
   if(rows.length === 0){ toast('Geçerli satır yok (adet girilmeli)','err'); return; }
+  // Son kullanılan not'u hafızaya al — sonraki "+ Satır"da otomatik gelir
+  const sonNot = rows.map(r => r.not).filter(Boolean).pop();
+  if(sonNot){ try { localStorage.setItem('ucel_civata_son_not', sonNot); } catch(e){} }
   const inserts = [];
   let sira = procItems.length;
   for(const r of rows){
@@ -2926,11 +2929,12 @@ function renderProcCatalog(){
         <input type="number" min="0" step="1" placeholder="boy" value="${boy}" oninput="setProcCatEbat('${it.id}','boy',this.value)" style="width:90px;padding:3px 6px;border:1px solid #cdd;border-radius:4px;font-size:12px">
         <small style="color:#888">en × boy</small>
       </div>` : '';
+    const curMiktar = _procPicked.get(it.id);
     return `<div style="display:grid;grid-template-columns:26px 110px 1fr 100px 70px ${canMod?'56px':'0px'};gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid #f0f2f5;background:${sel?'#eef6ff':'#fff'}">
       <input type="checkbox" ${sel?'checked':''} onchange="toggleProcCatPick('${it.id}',this.checked)">
       <div style="font-size:11px;color:#666">${esc(it.kategori)}</div>
-      <div style="font-weight:600;font-size:13px">${esc(it.urun)}${it.kg_per_meter?` <small style="color:#888">(${it.kg_per_meter} kg/m)</small>`:''}</div>
-      <input type="number" min="0" step="0.01" placeholder="${isSac?'adet':'miktar'}" id="pc-miktar-${it.id}" oninput="setProcCatMiktar('${it.id}',this.value)" style="padding:3px 6px;border:1px solid #cdd;border-radius:4px;font-size:12px" ${sel?'':'disabled'}>
+      <div style="font-weight:600;font-size:13px">${esc(it.urun)} ${it.kg_per_meter>0?`<small style="color:#888">(${it.kg_per_meter} kg/m)</small>`:`<small style="color:#c33;font-weight:700">⚠️ kg/m eksik</small>`}</div>
+      <input type="number" min="0" step="0.01" placeholder="${isSac?'adet':'miktar'}" id="pc-miktar-${it.id}" value="${curMiktar !== undefined ? curMiktar : ''}" oninput="setProcCatMiktar('${it.id}',this.value)" style="padding:3px 6px;border:1px solid #cdd;border-radius:4px;font-size:12px" ${sel?'':'disabled'}>
       <select id="pc-birim-${it.id}" onchange="setProcCatBirim('${it.id}',this.value)" style="padding:3px 4px;border:1px solid #cdd;border-radius:4px;font-size:12px" ${sel?'':'disabled'}>
         <option value="m" ${defBirim==='m'?'selected':''}>m</option>
         <option value="kg" ${defBirim==='kg'?'selected':''}>kg</option>
@@ -3324,9 +3328,10 @@ async function saveProcCatalog(){
     ), 800);
   }
 
-  // miktar = 0 olan satırlar → stoktan tam karşılandı, talep formuna eklenmez
-  const finalRows = rows.filter(r => r.miktar > 0);
-  const dropped = rows.length - finalRows.length;
+  // Tüm satırlar takip formuna ekleniyor — tamamı stoktan karşılananlar da görünür kalsın.
+  // Tedarikçi Talep PDF'inde (exportProcTalepFormu) miktar=0 olanlar zaten filtrelenir.
+  const finalRows = rows.slice();
+  const dropped = 0;
 
   // Kategoriye göre sırala (HEA, HEB, IPE, UNP, KUTU PROFİL, BORU, SAÇ) ve sira'yı yeniden ata
   finalRows.sort((a,b) => {
@@ -3675,9 +3680,13 @@ function exportProcTalepFormu(){
   if(!_procProjectId || procItems.length === 0){toast('Önce proje seç ve kalem ekle','err');return}
   const proj = projects.find(p=>p.id===_procProjectId);
   const today = new Date().toLocaleDateString('tr-TR');
-  // Aktif kategori filtresine göre PDF'i çıkar
-  const filtered = _procFilterKat === 'all' ? procItems : procItems.filter(it => (it.proc_kategori||'ana_yapi') === _procFilterKat);
-  if(filtered.length === 0){ toast('Bu kategoride kalem yok','err'); return; }
+  // Aktif kategori filtresi + tedarikçi filtresi:
+  //   - miktar = 0 (tamamı stoktan karşılanmış) → PDF'e girmez
+  //   - durum = 'tamamlandi' (teslimat tamamlanmış) → PDF'e girmez (proje devam ediyor olabilir, ilave sipariş için PDF temiz olsun)
+  const filtered = (_procFilterKat === 'all' ? procItems : procItems.filter(it => (it.proc_kategori||'ana_yapi') === _procFilterKat))
+    .filter(it => parseFloat(it.miktar||0) > 0)
+    .filter(it => _procCalc(it).durum !== 'tamamlandi');
+  if(filtered.length === 0){ toast('Tedarikçiye gönderilecek açık kalem yok (hepsi tamamlanmış veya stoktan karşılanmış)','info'); return; }
   const katLabel = _procFilterKat === 'all' ? '' : ` — ${PROC_KAT_LABEL[_procFilterKat]||_procFilterKat}`;
   // Aynı cins+ölçü+birim kalemleri tedarikçi formunda birleştir (Cıvata/Somun/Pul/Rondela)
   // Türkçe locale ile büyük harfe çevirerek karşılaştır (BEYAZ vs beyaz tek sayılır)
@@ -5978,7 +5987,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v111';
+const APP_VERSION = 'v113';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
