@@ -732,6 +732,7 @@ body.proc-fullscreen{overflow:hidden}
         </select>
       </div>
       <div class="frow"><label>Malzeme Adı</label><input id="pn-malzeme"></div>
+      <div class="frow"><label>Ebat (SAÇ için — örn. 1500×3000)</label><input id="pn-ebat" placeholder="opsiyonel — boyut girilirse kg/adet otomatik hesaplanır"></div>
       <div class="fgrid">
         <div class="frow"><label>Sipariş Miktarı</label><input id="pn-miktar" type="number" min="0" step="0.01" value="0"></div>
         <div class="frow"><label>Birim</label>
@@ -2728,7 +2729,7 @@ function toggleProcureBody(){
 
 /* --- Manuel ekleme --- */
 function openProcNew(){
-  ['pn-malzeme','pn-not'].forEach(id=>document.getElementById(id).value='');
+  ['pn-malzeme','pn-not','pn-ebat'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('pn-miktar').value=0;
   document.getElementById('pn-fiyat').value=0;
   document.getElementById('pn-kdv').value=20;
@@ -2899,17 +2900,19 @@ async function saveBoluset(){
 }
 async function saveProcNew(){
   if(!_procProjectId){toast('Önce yukarıdan bir proje seç','err');return}
-  const _kat = document.getElementById('pn-kategori').value || 'ana_yapi';
-  const _ad  = document.getElementById('pn-malzeme').value.trim();
-  let _kgpm  = parseFloat(document.getElementById('pn-kgpm').value) || 0;
-  // kg/m girilmemişse otomatik tahmin et
+  const _kat  = document.getElementById('pn-kategori').value || 'ana_yapi';
+  const _ad   = document.getElementById('pn-malzeme').value.trim();
+  const _ebat = (document.getElementById('pn-ebat')?.value || '').trim();
+  let _kgpm   = parseFloat(document.getElementById('pn-kgpm').value) || 0;
+  // kg/m girilmemişse otomatik tahmin et (ebat da hesaba katılır — SAÇ için kritik)
   if(_kgpm <= 0){
-    const tahmin = _guessKgPerMeter(_kat, _ad);
+    const tahmin = _guessKgPerMeter(_kat, _ad, _ebat);
     if(tahmin > 0){ _kgpm = tahmin; }
   }
   const d = {
     project_id: _procProjectId,
     malzeme: _ad,
+    ebat: _ebat || null,
     miktar: +document.getElementById('pn-miktar').value||0,
     birim: document.getElementById('pn-birim').value,
     birim_fiyat: +document.getElementById('pn-fiyat').value||0,
@@ -2951,9 +2954,10 @@ function closeProcCatalog(){ document.getElementById('procCatalogModal').classLi
 //   BORU (dış çap × kalınlık): π×(d-t)×t×7.85e-3
 //   LAMA (en×kalınlık): en×t×7.85e-3
 //   KÖŞEBENT eşit kanat (LxLxT): (2L-t)×t×7.85e-3
-function _guessKgPerMeter(kategori, urun){
+function _guessKgPerMeter(kategori, urun, ebat){
   const cat = (kategori||'').toUpperCase().replace(/İ/g,'I').replace(/Ç/g,'C').replace(/Ğ/g,'G').replace(/Ü/g,'U').replace(/Ö/g,'O').replace(/Ş/g,'S').trim();
   const ad  = (urun||'').toUpperCase().trim();
+  const eb  = (ebat||'').toUpperCase().trim();
   // Standart profillerden tablo
   const TABLE = {
     HEA: {100:16.7,120:19.9,140:24.7,160:30.4,180:35.5,200:42.3,220:50.5,240:60.3,260:68.2,280:76.4,300:88.3,320:97.6,340:105,360:112,400:125},
@@ -3008,14 +3012,27 @@ function _guessKgPerMeter(kategori, urun){
       return Math.round(((2*L - t) * t * 0.00785) * 100) / 100;
     }
   }
-  // SAÇ — standart 1500×3000 mm (4.5 m²) levha kabul, kg/adet olarak döndürür
-  // kg = kalınlık × 4.5 × 7.85
+  // SAÇ — kalınlık × 7.85 = kg/m². Ebat (en × boy mm) verilirse kg/adet'e çevir.
+  // Standart dışı ölçü bile girilse otomatik hesaplar.
   if(/^SAC$|^SAC |SAÇ/.test(cat) || /^SAC|^SAÇ/.test(ad)){
-    const m = ad.match(/(\d+(?:[.,]\d+)?)\s*MM/i) || ad.match(/(\d+(?:[.,]\d+)?)/);
-    if(m){
-      const kal = parseFloat(m[1].replace(',','.'));
+    const km = ad.match(/(\d+(?:[.,]\d+)?)\s*MM/i) || ad.match(/(\d+(?:[.,]\d+)?)/);
+    if(km){
+      const kal = parseFloat(km[1].replace(',','.'));
       if(kal > 0 && kal < 200){
-        return Math.round((kal * 4.5 * 7.85) * 100) / 100;
+        const kgM2 = kal * 7.85;
+        // Ebat (en × boy mm) varsa kg/adet hesabı
+        // Ebat hem ayrı parametre hem ürün adı sonuna eklenmiş olabilir
+        const src = eb ? eb : ad;
+        const em = src.match(/(\d{2,5})\s*[X×*]\s*(\d{2,5})/);
+        if(em){
+          const en  = parseFloat(em[1]);
+          const boy = parseFloat(em[2]);
+          if(en > 0 && boy > 0){
+            return Math.round((kgM2 * (en/1000) * (boy/1000)) * 100) / 100;
+          }
+        }
+        // Ebat yoksa kg/m² döndür (birim m² ise doğrudan çarpılır)
+        return Math.round(kgM2 * 100) / 100;
       }
     }
   }
@@ -4664,6 +4681,8 @@ function closeStockNew(){ document.getElementById('stockNewModal').classList.rem
 async function saveStockNew(){
   const _kat = document.getElementById('sn-kat').value.trim();
   const _ad  = document.getElementById('sn-urun').value.trim();
+  // SAÇ kategorisinde birim m², kg_per_meter = kg/m². Ürün adında "10 mm" varsa otomatik bulur.
+  const _isSac = /SAC|SAÇ/i.test(_kat) || /^SAC|^SAÇ/i.test(_ad);
   const _kgpm = _guessKgPerMeter(_kat, _ad);
   const d = {
     kategori: _kat,
@@ -4673,7 +4692,7 @@ async function saveStockNew(){
     boy2: +document.getElementById('sn-b2').value||0,
     adet2: +document.getElementById('sn-a2').value||0,
     kg_per_meter: _kgpm > 0 ? _kgpm : 0,
-    birim: 'm',
+    birim: _isSac ? 'm²' : 'm',
     updated_by: me.id
   };
   if(!d.kategori || !d.urun){toast('Kategori ve Ürün zorunlu','err');return}
@@ -6200,7 +6219,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v119';
+const APP_VERSION = 'v120';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
