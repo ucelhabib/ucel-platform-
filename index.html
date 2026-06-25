@@ -2673,6 +2673,13 @@ function renderProcDetail(it, c){
         <button class="btn err sm proj-edit-only" onclick="deleteProcItem('${it.id}')">🗑 Sil</button>
       </div>
     </div>
+    <div style="margin-bottom:10px;padding:10px 12px;background:#fff8e1;border-radius:8px;border:1px dashed #f1c40f">
+      <label style="font-size:11px;color:#7a5a00;font-weight:700;display:block;margin-bottom:4px">📝 Bu Kaleme Özel Not (Talep PDF'inde sadece bu satırın NOT sütununda görünür):</label>
+      <textarea id="procnote-${it.id}" rows="2" style="width:100%;border:1px solid #f1c40f;border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box;white-space:pre-wrap">${esc(it.not_text||'')}</textarea>
+      <div style="display:flex;justify-content:flex-end;margin-top:6px">
+        <button class="btn ok sm" onclick="saveProcItemNote('${it.id}')" style="padding:4px 12px;font-size:11px">💾 Notu Kaydet</button>
+      </div>
+    </div>
     <div>${teslimatlar}</div>
   </div>`;
 }
@@ -2836,9 +2843,8 @@ async function saveBoluset(){
     }
     if(r.pulN > 0){
       const pulAdet = useAdet * r.pulN;
-      const pulNot = r.pulN >= 2
-        ? `Her cıvataya ${r.pulN} pul. ${sharedNote || ''}`.trim()
-        : sharedNote;
+      // Kullanıcının yazdığı notu olduğu gibi geçir, "Her cıvataya N pul" otomatik açıklamasını ekleme
+      const pulNot = sharedNote;
       inserts.push({
         project_id: _procProjectId, sira: sira++,
         malzeme: pulAd,
@@ -2984,6 +2990,17 @@ function _guessKgPerMeter(kategori, urun){
       return Math.round(((2*L - t) * t * 0.00785) * 100) / 100;
     }
   }
+  // SAÇ — standart 1500×3000 mm (4.5 m²) levha kabul, kg/adet olarak döndürür
+  // kg = kalınlık × 4.5 × 7.85
+  if(/^SAC$|^SAC |SAÇ/.test(cat) || /^SAC|^SAÇ/.test(ad)){
+    const m = ad.match(/(\d+(?:[.,]\d+)?)\s*MM/i) || ad.match(/(\d+(?:[.,]\d+)?)/);
+    if(m){
+      const kal = parseFloat(m[1].replace(',','.'));
+      if(kal > 0 && kal < 200){
+        return Math.round((kal * 4.5 * 7.85) * 100) / 100;
+      }
+    }
+  }
   return 0;
 }
 
@@ -3028,7 +3045,7 @@ function renderProcCatalog(){
     return `<div style="display:grid;grid-template-columns:26px 110px 1fr 100px 70px ${canMod?'56px':'0px'};gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid #f0f2f5;background:${sel?'#eef6ff':'#fff'}">
       <input type="checkbox" ${sel?'checked':''} onchange="toggleProcCatPick('${it.id}',this.checked)">
       <div style="font-size:11px;color:#666">${esc(it.kategori)}</div>
-      <div style="font-weight:600;font-size:13px">${esc(it.urun)} ${it.kg_per_meter>0?`<small style="color:#888">(${it.kg_per_meter} kg/m)</small>`:`<small style="color:#c33;font-weight:700">⚠️ kg/m eksik</small>`}</div>
+      <div style="font-weight:600;font-size:13px">${esc(it.urun)} ${it.kg_per_meter>0?`<small style="color:#888">(${it.kg_per_meter} kg/${(it.birim==='adet'?'adet':'m')})</small>`:''}</div>
       <input type="number" min="0" step="0.01" placeholder="${isSac?'adet':'miktar'}" id="pc-miktar-${it.id}" value="${curMiktar !== undefined ? curMiktar : ''}" oninput="setProcCatMiktar('${it.id}',this.value)" style="padding:3px 6px;border:1px solid #cdd;border-radius:4px;font-size:12px" ${sel?'':'disabled'}>
       <select id="pc-birim-${it.id}" onchange="setProcCatBirim('${it.id}',this.value)" style="padding:3px 4px;border:1px solid #cdd;border-radius:4px;font-size:12px" ${sel?'':'disabled'}>
         <option value="m" ${defBirim==='m'?'selected':''}>m</option>
@@ -3945,7 +3962,6 @@ function exportProcTalepFormu(){
         <span>TARİH: ${today}</span>
       </div>
       <div class="desc">Aşağıda belirtilen malzeme listesi için fiyat teklifinizi ve termin sürenizi bekliyoruz.</div>
-      ${proj?.talep_not ? `<div style="background:#fff8e1;border:1px solid #f1c40f;border-radius:6px;padding:8px 12px;margin:0 0 10px;font-size:10.5pt;color:#444"><b style="color:#1f4e8c">📝 Açıklama:</b> ${esc(proj.talep_not)}</div>` : ''}
       <table class="frm">
         <thead><tr>
           <th style="width:48px">NO</th>
@@ -3956,6 +3972,8 @@ function exportProcTalepFormu(){
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
+      ${proj?.talep_not ? `<div style="background:#fff8e1;border:1px solid #f1c40f;border-radius:6px;padding:10px 12px;margin:14px 0 8px;font-size:10.5pt;color:#444;white-space:pre-wrap;line-height:1.5"><b style="color:#1f4e8c">📝 NOTLAR:</b>
+${esc(proj.talep_not)}</div>` : ''}
       <div style="flex:1"></div>
       ${_pdfFooter()}
     </div>
@@ -6160,7 +6178,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v117';
+const APP_VERSION = 'v118';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
