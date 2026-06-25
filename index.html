@@ -1006,10 +1006,14 @@ body.proc-fullscreen{overflow:hidden}
           <button type="button" class="pm-fs" onclick="pmToggleFs('proc')" title="Tam ekran">⛶</button>
         </div>
         <div class="pm-card-b" style="padding:0">
-          <div id="procureBox" style="display:none">
-            <div id="procKatTabs" style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 12px 6px;background:#f8fafc;border-bottom:1px solid var(--bd)"></div>
-            <div id="procSummaryBar" style="padding:6px 14px;background:#fcfdff;border-bottom:1px solid var(--bd);font-size:11px;color:#666"></div>
-            <div id="procList" style="padding:4px;min-height:60px;overflow:auto"></div>
+          <div id="procureBox" style="display:none;height:100%;display:flex;flex-direction:column">
+            <div id="procKatTabs" style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 12px 6px;background:#f8fafc;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:5;flex-shrink:0"></div>
+            <div id="procSummaryBar" style="padding:6px 14px;background:#fcfdff;border-bottom:1px solid var(--bd);font-size:11px;color:#666;position:sticky;top:48px;z-index:4;flex-shrink:0"></div>
+            <div id="procList" style="padding:4px;min-height:60px;overflow:auto;flex:1"></div>
+            <div style="padding:8px 12px;border-top:1px dashed var(--bd);background:#fffbea;flex-shrink:0">
+              <label style="font-size:11px;font-weight:700;color:#7a5a00;display:block;margin-bottom:3px">📝 Talep Formu Notu (tedarikçiye PDF'te görünür)</label>
+              <textarea id="procProjectNot" rows="2" placeholder="Genel açıklama, teslim adresi, özel istek vb." onblur="saveProjectTalepNot(this.value)" style="width:100%;border:1px solid #f1c40f;border-radius:6px;padding:6px 8px;font-size:12px;resize:vertical;box-sizing:border-box;font-family:inherit"></textarea>
+            </div>
           </div>
         </div>
       </div>
@@ -2448,7 +2452,19 @@ async function loadProcurement(projectId){
   ]);
   procItems = r1.data || [];
   procDeliveries = r2.data || [];
+  // Talep formu notu — projeden gelir
+  const proj = projects.find(p => p.id === projectId);
+  const tEl = document.getElementById('procProjectNot');
+  if(tEl) tEl.value = proj?.talep_not || '';
   renderProcList();
+}
+async function saveProjectTalepNot(val){
+  if(!_procProjectId) return;
+  const txt = (val||'').trim();
+  const { error } = await sb.from('projects').update({ talep_not: txt || null }).eq('id', _procProjectId);
+  if(error){ console.warn('talep not kaydı:', error); return; }
+  const proj = projects.find(p => p.id === _procProjectId);
+  if(proj) proj.talep_not = txt || null;
 }
 function _procDelvOf(itemId){ return procDeliveries.filter(d=>d.item_id===itemId); }
 function _procCalc(item){
@@ -2878,6 +2894,7 @@ async function saveProcNew(){
   closeProcNew();
   await loadProcurement(_procProjectId);
   try { const proj = projects.find(p=>p.id===_procProjectId); await notify(`🛒 ${me.full_name} "${proj?.no} ${proj?.customer}" satın almaya manuel kalem ekledi: ${d.malzeme}`, '🛒', 'satinalma', 'project', _procProjectId); } catch(e){}
+  try { await _autoAssignProcurementTasks(_procProjectId, 1); } catch(e){ console.warn('auto-assign manual:', e); }
 }
 
 /* --- Katalog seçici --- */
@@ -3811,14 +3828,30 @@ function exportProcTalepFormu(){
     if(yA !== yB) return yA - yB;
     return (a.malzeme||'').localeCompare(b.malzeme||'','tr');
   });
-  const rows = grouped.map((it,i)=>`
-    <tr>
-      <td class="no">${i+1}.</td>
+  // Grupları (CIVATA/SOMUN/PUL/RONDELA) tespit edip aralarına ayraç satır koy
+  let _lastType = null;
+  let _seqNo = 0;
+  const _typeLabel = (t) => ({1:'CIVATALAR', 2:'SOMUNLAR', 3:'PULLAR', 4:'RONDELALAR'})[t];
+  const rows = grouped.map((it)=>{
+    const t = _typeOrder(it.malzeme);
+    let separator = '';
+    if(_lastType !== null && _lastType !== t && t >= 1 && t <= 4){
+      // Boş satır + grup başlığı
+      separator = `<tr><td colspan="5" style="height:6px;background:#fff;border:0"></td></tr>
+        <tr><td colspan="5" style="background:#eef0f5;font-weight:800;color:#1f4e8c;padding:6px 10px;font-size:9pt;letter-spacing:0.5px">${_typeLabel(t)||''}</td></tr>`;
+    } else if(_lastType === null && t >= 1 && t <= 4){
+      separator = `<tr><td colspan="5" style="background:#eef0f5;font-weight:800;color:#1f4e8c;padding:6px 10px;font-size:9pt;letter-spacing:0.5px">${_typeLabel(t)||''}</td></tr>`;
+    }
+    _lastType = t;
+    _seqNo++;
+    return separator + `<tr>
+      <td class="no">${_seqNo}.</td>
       <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <span style="font-size:9pt;color:#1f4e8c">— ${esc(it.ebat)}</span>`:''}</td>
       <td>${fmtNum(it.miktar,2)}</td>
       <td>${esc(it.birim||'mt')}</td>
       <td class="lft">${esc(it.notes.join(' · '))}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Talep Formu - ${esc(proj?.no||'')}</title>
     <style>${_pdfStyle()}</style></head><body>
     <div class="pdf-toolbar no-print">
@@ -3835,6 +3868,7 @@ function exportProcTalepFormu(){
         <span>TARİH: ${today}</span>
       </div>
       <div class="desc">Aşağıda belirtilen malzeme listesi için fiyat teklifinizi ve termin sürenizi bekliyoruz.</div>
+      ${proj?.talep_not ? `<div style="background:#fff8e1;border:1px solid #f1c40f;border-radius:6px;padding:8px 12px;margin:0 0 10px;font-size:10.5pt;color:#444"><b style="color:#1f4e8c">📝 Açıklama:</b> ${esc(proj.talep_not)}</div>` : ''}
       <table class="frm">
         <thead><tr>
           <th style="width:48px">NO</th>
@@ -4667,7 +4701,7 @@ function renderPhases(project){
       ${approvalBtn ? `<div style="display:flex;gap:4px;align-items:center">${approvalBtn}${isPending && !adminEdit ? `<span style="font-size:10px;color:#888">(${esc(pendBy)} talep etti)</span>` : ''}</div>` : ''}
     </div>`;
   }).join('');
-  const headerRow = `<div style="display:flex;align-items:center;gap:10px;padding:6px 12px 6px 16px;margin-bottom:6px;border-bottom:2px solid #1f4e8c;font-size:10.5px;font-weight:800;color:#1f4e8c;text-transform:uppercase;letter-spacing:0.5px;flex-wrap:wrap">
+  const headerRow = `<div style="display:flex;align-items:center;gap:10px;padding:6px 12px 6px 16px;margin-bottom:6px;border-bottom:2px solid #1f4e8c;font-size:10.5px;font-weight:800;color:#1f4e8c;text-transform:uppercase;letter-spacing:0.5px;flex-wrap:wrap;position:sticky;top:0;background:#fff;z-index:5">
     <div style="min-width:170px">Faz</div>
     <div style="flex:1;min-width:200px;display:flex;align-items:center;gap:8px">
       <div style="flex:1;text-align:center">İlerleme</div>
@@ -6044,7 +6078,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v114';
+const APP_VERSION = 'v115';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
