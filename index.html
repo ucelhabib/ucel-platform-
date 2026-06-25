@@ -2673,13 +2673,6 @@ function renderProcDetail(it, c){
         <button class="btn err sm proj-edit-only" onclick="deleteProcItem('${it.id}')">🗑 Sil</button>
       </div>
     </div>
-    <div style="margin-bottom:10px;padding:10px 12px;background:#fff8e1;border-radius:8px;border:1px dashed #f1c40f">
-      <label style="font-size:11px;color:#7a5a00;font-weight:700;display:block;margin-bottom:4px">📝 Talep Formu Notu (tedarikçiye PDF'te görünür):</label>
-      <textarea id="procnote-${it.id}" rows="2" style="width:100%;border:1px solid #f1c40f;border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box">${esc(it.not_text||'')}</textarea>
-      <div style="display:flex;justify-content:flex-end;margin-top:6px">
-        <button class="btn ok sm" onclick="saveProcItemNote('${it.id}')" style="padding:4px 12px;font-size:11px">💾 Notu Kaydet</button>
-      </div>
-    </div>
     <div>${teslimatlar}</div>
   </div>`;
 }
@@ -2737,6 +2730,15 @@ function closeBoluset(){ document.getElementById('bolusetModal').classList.remov
 function addBolusetRow(){
   const box = document.getElementById('bs-rows');
   const i = box.children.length;
+  // Önceki satırın notunu yeni satıra varsayılan değer olarak getir (yoksa localStorage'dan)
+  let _sonNot = '';
+  if(i > 0){
+    const lastNot = box.children[i-1]?.querySelector('.bs-not');
+    if(lastNot && lastNot.value.trim()) _sonNot = lastNot.value.trim();
+  }
+  if(!_sonNot){
+    try { _sonNot = localStorage.getItem('ucel_civata_son_not') || ''; } catch(e){}
+  }
   const row = document.createElement('div');
   row.style.cssText = 'display:grid;grid-template-columns:80px 90px 90px 75px 60px 50px 60px 1fr 32px;gap:6px;align-items:center;margin-bottom:6px';
   row.innerHTML = `
@@ -2749,7 +2751,7 @@ function addBolusetRow(){
     <input class="bs-pul" type="number" min="0" max="4" step="1" value="1" title="Pul katsayısı (0=yok, 1=standart, 2=çift)" oninput="_updateBolusetPreview()" style="padding:6px 6px;border:1px solid var(--bd);border-radius:6px;font-size:13px;text-align:center">
     <label style="display:flex;align-items:center;justify-content:center"><input type="checkbox" class="bs-somun" checked onchange="_updateBolusetPreview()" style="width:18px;height:18px"></label>
     <label style="display:flex;align-items:center;justify-content:center"><input type="checkbox" class="bs-rondela" onchange="_updateBolusetPreview()" style="width:18px;height:18px"></label>
-    <input class="bs-not" type="text" value="${(()=>{try{return esc(localStorage.getItem('ucel_civata_son_not')||'')}catch(e){return ''}})()}" placeholder="(son not otomatik geldi)" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px;min-width:0;width:100%">
+    <input class="bs-not" type="text" value="${esc(_sonNot)}" placeholder="not" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px;min-width:0;width:100%">
     <button type="button" onclick="this.parentElement.remove();_updateBolusetPreview()" style="background:#fee;border:1px solid #f5b;color:#c33;border-radius:6px;cursor:pointer;font-size:14px">×</button>
   `;
   box.appendChild(row);
@@ -2873,17 +2875,25 @@ async function saveBoluset(){
 }
 async function saveProcNew(){
   if(!_procProjectId){toast('Önce yukarıdan bir proje seç','err');return}
+  const _kat = document.getElementById('pn-kategori').value || 'ana_yapi';
+  const _ad  = document.getElementById('pn-malzeme').value.trim();
+  let _kgpm  = parseFloat(document.getElementById('pn-kgpm').value) || 0;
+  // kg/m girilmemişse otomatik tahmin et
+  if(_kgpm <= 0){
+    const tahmin = _guessKgPerMeter(_kat, _ad);
+    if(tahmin > 0){ _kgpm = tahmin; }
+  }
   const d = {
     project_id: _procProjectId,
-    malzeme: document.getElementById('pn-malzeme').value.trim(),
+    malzeme: _ad,
     miktar: +document.getElementById('pn-miktar').value||0,
     birim: document.getElementById('pn-birim').value,
     birim_fiyat: +document.getElementById('pn-fiyat').value||0,
     fiyat_birimi: document.getElementById('pn-fb').value,
-    kg_per_meter: +document.getElementById('pn-kgpm').value||0,
+    kg_per_meter: _kgpm,
     kdv_orani: +document.getElementById('pn-kdv').value||20,
     not_text: document.getElementById('pn-not').value.trim()||null,
-    proc_kategori: document.getElementById('pn-kategori').value || 'ana_yapi',
+    proc_kategori: _kat,
     created_by: me.id,
     sira: procItems.length
   };
@@ -2910,6 +2920,73 @@ function openProcCatalog(){
   document.getElementById('procCatalogModal').classList.add('show');
 }
 function closeProcCatalog(){ document.getElementById('procCatalogModal').classList.remove('show'); }
+// Malzeme adından kg/m otomatik tahmini.
+// Standart Türk çelik tabloları + temel formüller:
+//   HEA/HEB/IPE/UNP — sabit tablodan
+//   KUTU PROFİL (en×boy×kalınlık): 2×(en+boy)×t×7.85e-3
+//   BORU (dış çap × kalınlık): π×(d-t)×t×7.85e-3
+//   LAMA (en×kalınlık): en×t×7.85e-3
+//   KÖŞEBENT eşit kanat (LxLxT): (2L-t)×t×7.85e-3
+function _guessKgPerMeter(kategori, urun){
+  const cat = (kategori||'').toUpperCase().replace(/İ/g,'I').replace(/Ç/g,'C').replace(/Ğ/g,'G').replace(/Ü/g,'U').replace(/Ö/g,'O').replace(/Ş/g,'S').trim();
+  const ad  = (urun||'').toUpperCase().trim();
+  // Standart profillerden tablo
+  const TABLE = {
+    HEA: {100:16.7,120:19.9,140:24.7,160:30.4,180:35.5,200:42.3,220:50.5,240:60.3,260:68.2,280:76.4,300:88.3,320:97.6,340:105,360:112,400:125},
+    HEB: {100:20.4,120:26.7,140:33.7,160:42.6,180:51.2,200:61.3,220:71.5,240:83.2,260:93,280:103,300:117,320:127,340:134,360:142,400:155},
+    IPE: {80:6.0,100:8.10,120:10.4,140:12.9,160:15.8,180:18.8,200:22.4,220:26.2,240:30.7,270:36.1,300:42.2,330:49.1,360:57.1,400:66.3,450:77.6,500:90.7,550:106,600:122},
+    UNP: {50:5.59,65:7.09,80:8.64,100:10.6,120:13.4,140:16.0,160:18.8,180:22.0,200:25.3,220:29.4,240:33.2,260:37.9,280:41.8,300:46.2}
+  };
+  // HEA 240, HEB 200, IPE 120 vb.
+  for(const k of ['HEA','HEB','IPE','UNP']){
+    if(ad.startsWith(k) || cat === k){
+      const m = ad.match(/(\d+)/);
+      if(m){ const n = parseInt(m[1]); if(TABLE[k][n]) return TABLE[k][n]; }
+    }
+  }
+  // KUTU PROFİL en×boy×kalınlık (örn 60x60x3, 100×200×4)
+  // (en+boy)×2×t×0.00785
+  if(/KUTU|PROFIL/.test(cat) || /\d+\s*[X×*]\s*\d+\s*[X×*]\s*\d+/.test(ad)){
+    const m = ad.match(/(\d+(?:[.,]\d+)?)\s*[X×*]\s*(\d+(?:[.,]\d+)?)\s*[X×*]\s*(\d+(?:[.,]\d+)?)/);
+    if(m){
+      const en = parseFloat(m[1].replace(',','.'));
+      const boy = parseFloat(m[2].replace(',','.'));
+      const t  = parseFloat(m[3].replace(',','.'));
+      return Math.round(((en + boy) * 2 * t * 0.00785) * 100) / 100;
+    }
+  }
+  // BORU dış çap×kalınlık (örn 168x4, 89×6 mm)
+  if(/BORU/.test(cat) || /^\d+\s*[X×*]\s*\d+\s*MM/.test(ad)){
+    const m = ad.match(/(\d+(?:[.,]\d+)?)\s*[X×*]\s*(\d+(?:[.,]\d+)?)/);
+    if(m){
+      const d = parseFloat(m[1].replace(',','.'));
+      const t = parseFloat(m[2].replace(',','.'));
+      if(d > t){
+        return Math.round((Math.PI * (d - t) * t * 0.00785) * 100) / 100;
+      }
+    }
+  }
+  // LAMA en×kalınlık (örn 50x5)
+  if(/LAMA/.test(cat) || /^LAMA/.test(ad)){
+    const m = ad.match(/(\d+(?:[.,]\d+)?)\s*[X×*]\s*(\d+(?:[.,]\d+)?)/);
+    if(m){
+      const en = parseFloat(m[1].replace(',','.'));
+      const t  = parseFloat(m[2].replace(',','.'));
+      return Math.round((en * t * 0.00785) * 100) / 100;
+    }
+  }
+  // KÖŞEBENT eşit kanat (LxLxT)
+  if(/KOSEBENT|KÖŞEBENT/i.test(cat) || /KOSE/.test(ad)){
+    const m = ad.match(/(\d+(?:[.,]\d+)?)\s*[X×*]\s*\d+\s*[X×*]\s*(\d+(?:[.,]\d+)?)/);
+    if(m){
+      const L = parseFloat(m[1].replace(',','.'));
+      const t = parseFloat(m[2].replace(',','.'));
+      return Math.round(((2*L - t) * t * 0.00785) * 100) / 100;
+    }
+  }
+  return 0;
+}
+
 // Bir stok kalemini hangi satın alma kategorisine sokarız (tek doğruluk kaynağı)
 function _catalogToProcKat(catItem){
   const _katU  = (catItem?.kategori||'').toUpperCase();
@@ -2919,7 +2996,7 @@ function _catalogToProcKat(catItem){
   if(/^C |^Z |C PROFI|Z PROFI|C-Z|CZ/.test(_katU)) return 'cz_profil';
   if(/SARF|ELEKTROD|KAYNAK|TAS|TAŞ/.test(_katU)) return 'sarf';
   if(/SAÇ|^SAC$|^SAC /.test(_katU) || /^SAÇ|^SAC /.test(_urunU)) return 'sac';
-  if(/HEA|HEB|IPE|UNP|KUTU|BORU|PROFIL/.test(_katU)) return 'ana_yapi';
+  if(/HEA|HEB|IPE|UNP|KUTU|BORU|PROFIL|LAMA|KOSEBENT|KÖŞEBENT/.test(_katU)) return 'ana_yapi';
   return 'diger';
 }
 function renderProcCatalog(){
@@ -4545,13 +4622,18 @@ function openStockNew(){
 }
 function closeStockNew(){ document.getElementById('stockNewModal').classList.remove('show'); }
 async function saveStockNew(){
+  const _kat = document.getElementById('sn-kat').value.trim();
+  const _ad  = document.getElementById('sn-urun').value.trim();
+  const _kgpm = _guessKgPerMeter(_kat, _ad);
   const d = {
-    kategori: document.getElementById('sn-kat').value.trim(),
-    urun: document.getElementById('sn-urun').value.trim(),
+    kategori: _kat,
+    urun: _ad,
     boy1: +document.getElementById('sn-b1').value||0,
     adet1: +document.getElementById('sn-a1').value||0,
     boy2: +document.getElementById('sn-b2').value||0,
     adet2: +document.getElementById('sn-a2').value||0,
+    kg_per_meter: _kgpm > 0 ? _kgpm : 0,
+    birim: 'm',
     updated_by: me.id
   };
   if(!d.kategori || !d.urun){toast('Kategori ve Ürün zorunlu','err');return}
@@ -6078,7 +6160,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v115';
+const APP_VERSION = 'v117';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
