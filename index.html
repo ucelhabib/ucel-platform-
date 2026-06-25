@@ -774,8 +774,8 @@ body.proc-fullscreen{overflow:hidden}
       <div style="background:#f1f7ff;border:1px solid #cdd2dc;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#444">
         Her satıra cıvata bilgisini gir. Pul ve somun seçili ise eklediğin adet kadar otomatik olarak talep formuna eklenir. Yeni satır için "+ Satır" tıkla.
       </div>
-      <div style="display:grid;grid-template-columns:80px 90px 90px 75px 50px 50px 60px 1fr 32px;gap:6px;font-size:10px;font-weight:700;color:#1f4e8c;text-transform:uppercase;letter-spacing:0.4px;padding:0 4px 4px">
-        <div>Çap</div><div>Boy (mm)</div><div>Adet</div><div title="Fire/yedek payı yüzdesi">Fire %</div><div>Pul</div><div>Somun</div><div>Rondela</div><div>Not</div><div></div>
+      <div style="display:grid;grid-template-columns:80px 90px 90px 75px 60px 50px 60px 1fr 32px;gap:6px;font-size:10px;font-weight:700;color:#1f4e8c;text-transform:uppercase;letter-spacing:0.4px;padding:0 4px 4px">
+        <div>Çap</div><div>Boy (mm)</div><div>Adet</div><div title="Fire/yedek payı yüzdesi">Fire %</div><div title="Pul adet katsayısı (1 veya 2)">Pul ×N</div><div>Somun</div><div>Rondela</div><div>Not</div><div></div>
       </div>
       <div id="bs-rows"></div>
       <button type="button" class="btn sec sm" onclick="addBolusetRow()" style="margin-top:6px">+ Satır</button>
@@ -2721,7 +2721,7 @@ function addBolusetRow(){
   const box = document.getElementById('bs-rows');
   const i = box.children.length;
   const row = document.createElement('div');
-  row.style.cssText = 'display:grid;grid-template-columns:80px 90px 90px 75px 50px 50px 60px 1fr 32px;gap:6px;align-items:center;margin-bottom:6px';
+  row.style.cssText = 'display:grid;grid-template-columns:80px 90px 90px 75px 60px 50px 60px 1fr 32px;gap:6px;align-items:center;margin-bottom:6px';
   row.innerHTML = `
     <select class="bs-cap" oninput="_updateBolusetPreview()" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px">
       ${BOLU_CAPLAR.map(c=>`<option value="${c}">${c}</option>`).join('')}
@@ -2729,7 +2729,7 @@ function addBolusetRow(){
     <input class="bs-boy" type="number" min="0" step="1" placeholder="60" oninput="_updateBolusetPreview()" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px">
     <input class="bs-adet" type="number" min="0" step="1" placeholder="0" oninput="_updateBolusetPreview()" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px">
     <input class="bs-fire" type="number" min="0" max="100" step="0.1" value="0" title="Fire/yedek %" oninput="_updateBolusetPreview()" style="padding:6px 6px;border:1px solid var(--bd);border-radius:6px;font-size:13px;text-align:center">
-    <label style="display:flex;align-items:center;justify-content:center"><input type="checkbox" class="bs-pul" checked onchange="_updateBolusetPreview()" style="width:18px;height:18px"></label>
+    <input class="bs-pul" type="number" min="0" max="4" step="1" value="1" title="Pul katsayısı (0=yok, 1=standart, 2=çift)" oninput="_updateBolusetPreview()" style="padding:6px 6px;border:1px solid var(--bd);border-radius:6px;font-size:13px;text-align:center">
     <label style="display:flex;align-items:center;justify-content:center"><input type="checkbox" class="bs-somun" checked onchange="_updateBolusetPreview()" style="width:18px;height:18px"></label>
     <label style="display:flex;align-items:center;justify-content:center"><input type="checkbox" class="bs-rondela" onchange="_updateBolusetPreview()" style="width:18px;height:18px"></label>
     <input class="bs-not" type="text" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px;min-width:0;width:100%">
@@ -2743,13 +2743,14 @@ function _bolusetReadRows(){
     const adet = parseInt(r.querySelector('.bs-adet').value) || 0;
     const fire = parseFloat(r.querySelector('.bs-fire').value) || 0;
     const finalAdet = adet > 0 ? Math.ceil(adet * (1 + fire/100)) : 0;
+    const pulN = Math.max(0, parseInt(r.querySelector('.bs-pul').value) || 0);
     return {
       cap:       r.querySelector('.bs-cap').value,
       boy:       parseInt(r.querySelector('.bs-boy').value) || 0,
       adet,
       fire,
-      finalAdet, // fire ile çarpılmış sipariş edilecek adet
-      pul:       r.querySelector('.bs-pul').checked,
+      finalAdet,
+      pulN,                 // pul katsayısı (0 = pul yok, 1 = standart, 2 = çift, 3+ özel)
       somun:     r.querySelector('.bs-somun').checked,
       rondela:   r.querySelector('.bs-rondela').checked,
       not:       r.querySelector('.bs-not').value.trim()
@@ -2764,12 +2765,14 @@ function _updateBolusetPreview(){
   rows.forEach(r=>{
     civata += r.finalAdet; kalemSayisi++;
     if(r.somun){ somun += r.finalAdet; kalemSayisi++; }
-    if(r.pul){ pul += r.finalAdet; kalemSayisi++; }
+    if(r.pulN > 0){ pul += r.finalAdet * r.pulN; kalemSayisi++; }
     if(r.rondela){ rondela += r.finalAdet; kalemSayisi++; }
   });
   const fireGosterimi = rows.some(r => r.fire > 0)
     ? `<br><small style="color:#888">(Fire %'leri uygulanmış, yukarı yuvarlanmış adetler)</small>` : '';
-  el.innerHTML = `<strong>${kalemSayisi} kalem</strong> eklenecek · Cıvata: <strong>${civata}</strong> · Somun: <strong>${somun}</strong> · Pul: <strong>${pul}</strong> · Rondela: <strong>${rondela}</strong>${fireGosterimi}`;
+  const ciftPul = rows.some(r => r.pulN >= 2)
+    ? `<br><small style="color:#b91c1c">(Bazı kalemlerde çift pul — adet katsayılı)</small>` : '';
+  el.innerHTML = `<strong>${kalemSayisi} kalem</strong> eklenecek · Cıvata: <strong>${civata}</strong> · Somun: <strong>${somun}</strong> · Pul: <strong>${pul}</strong> · Rondela: <strong>${rondela}</strong>${fireGosterimi}${ciftPul}`;
 }
 async function saveBoluset(){
   if(!_procProjectId){ toast('Proje seçili değil','err'); return; }
@@ -2778,24 +2781,28 @@ async function saveBoluset(){
   const inserts = [];
   let sira = procItems.length;
   for(const r of rows){
-    const boyStr = r.boy > 0 ? ` × ${r.boy} mm` : '';
+    // r.cap "M12" formatında — M öneki korunur
+    const civataAd = r.boy > 0 ? `${r.cap}*${r.boy} CIVATA` : `${r.cap} CIVATA`;
+    const somunAd  = `${r.cap} SOMUN`;
+    const pulAd    = `${r.cap} PUL`;
+    const rondAd   = `${r.cap} RONDELA`;
     const sharedNote = r.not || null;
-    const useAdet = r.finalAdet; // fire payı dahil
+    const useAdet = r.finalAdet;
     inserts.push({
       project_id: _procProjectId, sira: sira++,
-      malzeme: `${r.cap} mm Cıvata${boyStr}`,
+      malzeme: civataAd,
       miktar: useAdet, birim: 'adet',
       birim_fiyat: 0, kdv_orani: 20, fiyat_birimi: 'birim',
       kg_per_meter: 0,
       proc_kategori: 'civata',
-      original_ihtiyac: r.adet,  // fire öncesi gerçek ihtiyaç
+      original_ihtiyac: r.adet,
       not_text: sharedNote,
       created_by: me.id
     });
     if(r.somun){
       inserts.push({
         project_id: _procProjectId, sira: sira++,
-        malzeme: `${r.cap} mm Somun`,
+        malzeme: somunAd,
         miktar: useAdet, birim: 'adet',
         birim_fiyat: 0, kdv_orani: 20, fiyat_birimi: 'birim',
         kg_per_meter: 0,
@@ -2805,23 +2812,27 @@ async function saveBoluset(){
         created_by: me.id
       });
     }
-    if(r.pul){
+    if(r.pulN > 0){
+      const pulAdet = useAdet * r.pulN;
+      const pulNot = r.pulN >= 2
+        ? `Her cıvataya ${r.pulN} pul. ${sharedNote || ''}`.trim()
+        : sharedNote;
       inserts.push({
         project_id: _procProjectId, sira: sira++,
-        malzeme: `${r.cap} mm Pul`,
-        miktar: useAdet, birim: 'adet',
+        malzeme: pulAd,
+        miktar: pulAdet, birim: 'adet',
         birim_fiyat: 0, kdv_orani: 20, fiyat_birimi: 'birim',
         kg_per_meter: 0,
         proc_kategori: 'civata',
-        original_ihtiyac: r.adet,
-        not_text: sharedNote,
+        original_ihtiyac: r.adet * r.pulN,
+        not_text: pulNot || null,
         created_by: me.id
       });
     }
     if(r.rondela){
       inserts.push({
         project_id: _procProjectId, sira: sira++,
-        malzeme: `${r.cap} mm Rondela`,
+        malzeme: rondAd,
         miktar: useAdet, birim: 'adet',
         birim_fiyat: 0, kdv_orani: 20, fiyat_birimi: 'birim',
         kg_per_meter: 0,
@@ -5967,7 +5978,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v110';
+const APP_VERSION = 'v111';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
