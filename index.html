@@ -6725,4 +6725,49 @@ async function uploadFiles(){
   if(!inp.files || !inp.files.length){toast('Dosya seçin','err');return}
   const status = document.getElementById('fmStatus');
   let okN=0, failN=0;
-  for(const file of inp.files
+  for(const file of inp.files){
+    status.textContent = 'Yükleniyor: '+file.name;
+    const ts = Date.now();
+    const safe = file.name.replace(/[^\w.\-]/g,'_');
+    const folder = _filesCtx.projectId ? ('projects/'+_filesCtx.projectId) : ('tasks/'+_filesCtx.taskId);
+    const path = folder + '/' + ts + '_' + safe;
+    const up = await sb.storage.from('project-files').upload(path, file, {contentType:file.type||'application/octet-stream'});
+    if(up.error){failN++; console.error(up.error); continue}
+    const ins = await sb.from('attachments').insert({
+      project_id: _filesCtx.projectId,
+      task_id:    _filesCtx.taskId,
+      uploaded_by: me.id,
+      file_name:  file.name,
+      file_path:  path,
+      mime_type:  file.type||null,
+      size_bytes: file.size
+    });
+    if(ins.error){failN++; console.error(ins.error)} else {okN++}
+  }
+  status.textContent = okN+' yüklendi'+(failN?' · '+failN+' başarısız':'');
+  toast(okN+' dosya yüklendi',okN?'info':'err');
+  inp.value='';
+  await loadFiles();
+}
+async function delFile(id, path){
+  if(!confirm('Bu dosyayı silmek istediğinden emin misin?')) return;
+  const {error:e1} = await sb.from('attachments').delete().eq('id', id);
+  if(e1){toast('Hata: '+e1.message,'err');return}
+  await sb.storage.from('project-files').remove([path]);
+  toast('Silindi','info');
+  await loadFiles();
+}
+
+// userEditModal & filesModal click-out kapatma
+document.addEventListener('DOMContentLoaded', function(){
+  const u = document.getElementById('userEditModal');
+  if(u) u.addEventListener('click', e=>{if(e.target.id==='userEditModal') closeUserEdit()});
+  const f = document.getElementById('filesModal');
+  if(f) f.addEventListener('click', e=>{if(e.target.id==='filesModal') closeFiles()});
+  // Ses açık/kapalı tercihini yükle
+  const s = document.getElementById('setSound');
+  if(s) s.checked = localStorage.getItem('ucelSound')!=='0';
+});
+</script>
+</body>
+</html>
