@@ -444,8 +444,8 @@ body.proc-fullscreen{overflow:hidden}
         </div>
         <div class="table-wrap"><table>
           <thead><tr>
-            <th style="text-align:center">Proje No</th>
-            <th>Müşteri / Proje / Lokasyon</th>
+            <th style="text-align:center">Proje No / Lokasyon</th>
+            <th>Müşteri / Proje</th>
             <th style="text-align:center">Aşama</th>
             <th style="text-align:center">Tonaj (kg)</th>
             <th class="amount-only" style="text-align:center">Proje Bedeli</th>
@@ -2004,12 +2004,14 @@ function renderProjects(){
     const o=allProfiles[p.owner_id]||{initials:'?',color:'#999'};
     const lt=p.shipdate&&p.shipdate<td?'style="color:var(--err);font-weight:700"':'';
     return `<tr class="click compact" onclick="openProj('${p.id}')">
-      <td style="text-align:center"><strong>${esc(p.no)}</strong></td>
-      <td><div style="line-height:1.5;font-size:12.5px">
-        <div style="color:#1f2937;font-weight:700">${esc(p.customer)}</div>
-        ${p.title?`<div style="color:#4b5563;font-weight:500">${esc(p.title)}</div>`:''}
-        ${p.location?`<div style="color:#0a7c3a;font-weight:500">📍 ${esc(p.location)}</div>`:''}
-      </div></td>
+      <td style="text-align:center">
+        <div style="font-size:14px;font-weight:700;color:#1f2937">${esc(p.no)}</div>
+        ${p.location?`<div style="font-size:11px;color:#0a7c3a;font-weight:500;margin-top:2px">📍 ${esc(p.location)}</div>`:''}
+      </td>
+      <td>
+        <div style="font-size:13.5px;font-weight:700;color:#1f2937;line-height:1.3">${esc(p.customer)}</div>
+        ${p.title?`<div style="font-size:12px;color:#6b7280;font-weight:500;line-height:1.3;margin-top:2px">${esc(p.title)}</div>`:''}
+      </td>
       <td style="text-align:center">${((p.stages&&p.stages.length)?p.stages:[p.stage]).filter(Boolean).map(s=>`<span class="pill ${SP[s]||'pl-gray'}" style="margin:1px">${DI[s]||''} ${DN[s]||s}</span>`).join('')}</td>
       <td style="white-space:nowrap;text-align:center">${p.tonnage ? fmtNum(p.tonnage*1000, 0)+' kg' : '—'}</td>
       <td class="amount-only" style="text-align:center;white-space:nowrap">${p.amount ? fmtTL(p.amount) : '—'}</td>
@@ -6383,7 +6385,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v124';
+const APP_VERSION = 'v125';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
