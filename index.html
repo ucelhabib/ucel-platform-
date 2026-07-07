@@ -934,16 +934,35 @@ body.proc-fullscreen{overflow:hidden}
     <div class="modal-h"><h3>➕ Yeni Stok Kalemi</h3><button class="x" onclick="closeStockNew()">✕</button></div>
     <div class="modal-b">
       <div class="fgrid">
-        <div class="frow"><label>Kategori</label><input id="sn-kat" placeholder="HEA / HEB, IPE, UNP..." list="sn-kats"><datalist id="sn-kats"></datalist></div>
-        <div class="frow"><label>Ürün / Ölçü</label><input id="sn-urun" placeholder="HEA 360 / 100x100x4 mm"></div>
+        <div class="frow"><label>Kategori</label><input id="sn-kat" placeholder="HEA / HEB, IPE, BOYA, SARF..." list="sn-kats"><datalist id="sn-kats"></datalist></div>
+        <div class="frow"><label>Ürün / Ölçü</label><input id="sn-urun" placeholder="HEA 360 / 100×100×4 mm / RAL9002 EPOKSİ"></div>
       </div>
-      <div class="fgrid">
-        <div class="frow"><label>Boy 1 (mm)</label><input id="sn-b1" type="number" min="0" value="0"></div>
-        <div class="frow"><label>Adet 1</label><input id="sn-a1" type="number" min="0" value="0"></div>
+      <div class="frow">
+        <label>Birim</label>
+        <select id="sn-birim" onchange="_toggleStockNewFields()">
+          <option value="m">m (metre — boy uzunluğu üzerinden)</option>
+          <option value="m²">m² (saç — otomatik boyuttan hesap)</option>
+          <option value="adet">adet</option>
+          <option value="takım">takım (boya seti vb.)</option>
+          <option value="kg">kg</option>
+          <option value="litre">litre</option>
+          <option value="rulo">rulo</option>
+          <option value="paket">paket</option>
+          <option value="kutu">kutu</option>
+        </select>
       </div>
-      <div class="fgrid">
-        <div class="frow"><label>Boy 2 (mm)</label><input id="sn-b2" type="number" min="0" value="0"></div>
-        <div class="frow"><label>Adet 2</label><input id="sn-a2" type="number" min="0" value="0"></div>
+      <div id="sn-boy-block">
+        <div class="fgrid">
+          <div class="frow"><label>Boy 1 (mm)</label><input id="sn-b1" type="number" min="0" value="0"></div>
+          <div class="frow"><label>Adet 1</label><input id="sn-a1" type="number" min="0" value="0"></div>
+        </div>
+        <div class="fgrid">
+          <div class="frow"><label>Boy 2 (mm)</label><input id="sn-b2" type="number" min="0" value="0"></div>
+          <div class="frow"><label>Adet 2</label><input id="sn-a2" type="number" min="0" value="0"></div>
+        </div>
+      </div>
+      <div id="sn-adet-block" style="display:none">
+        <div class="frow"><label id="sn-adet-lbl">Adet</label><input id="sn-adet" type="number" min="0" value="0" placeholder="Örn. 5"></div>
       </div>
     </div>
     <div class="modal-f">
@@ -4837,25 +4856,46 @@ async function submitStockMove(){
 }
 
 function openStockNew(){
-  ['sn-kat','sn-urun','sn-b1','sn-a1','sn-b2','sn-a2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=(['sn-b1','sn-a1','sn-b2','sn-a2'].includes(id)?'0':'')});
+  ['sn-kat','sn-urun','sn-b1','sn-a1','sn-b2','sn-a2','sn-adet'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=(['sn-b1','sn-a1','sn-b2','sn-a2','sn-adet'].includes(id)?'0':'')});
+  const bir = document.getElementById('sn-birim'); if(bir) bir.value = 'm';
+  _toggleStockNewFields();
   document.getElementById('stockNewModal').classList.add('show');
+}
+function _toggleStockNewFields(){
+  const bir = document.getElementById('sn-birim')?.value || 'm';
+  const boyBlock = document.getElementById('sn-boy-block');
+  const adetBlock = document.getElementById('sn-adet-block');
+  const adetLbl = document.getElementById('sn-adet-lbl');
+  // m ve m² için "Boy × Adet" mantığı; diğer birimler için tek "Adet" kutusu
+  const useBoy = (bir === 'm' || bir === 'm²');
+  if(boyBlock) boyBlock.style.display  = useBoy ? '' : 'none';
+  if(adetBlock) adetBlock.style.display = useBoy ? 'none' : '';
+  if(adetLbl) adetLbl.textContent = (bir === 'm²' ? 'Toplam m²' : (bir[0].toUpperCase()+bir.slice(1)));
 }
 function closeStockNew(){ document.getElementById('stockNewModal').classList.remove('show'); }
 async function saveStockNew(){
   const _kat = document.getElementById('sn-kat').value.trim();
   const _ad  = document.getElementById('sn-urun').value.trim();
-  // SAÇ kategorisinde birim m², kg_per_meter = kg/m². Ürün adında "10 mm" varsa otomatik bulur.
-  const _isSac = /SAC|SAÇ/i.test(_kat) || /^SAC|^SAÇ/i.test(_ad);
+  const _bir = document.getElementById('sn-birim')?.value || 'm';
+  const _useBoy = (_bir === 'm' || _bir === 'm²');
   const _kgpm = _guessKgPerMeter(_kat, _ad);
+  // Birim m/m² → boy×adet mantığı; diğer birimler → boy1=1, adet1=girilen adet
+  let _b1=0,_a1=0,_b2=0,_a2=0;
+  if(_useBoy){
+    _b1 = +document.getElementById('sn-b1').value||0;
+    _a1 = +document.getElementById('sn-a1').value||0;
+    _b2 = +document.getElementById('sn-b2').value||0;
+    _a2 = +document.getElementById('sn-a2').value||0;
+  } else {
+    _b1 = 1;
+    _a1 = +document.getElementById('sn-adet').value||0;
+  }
   const d = {
     kategori: _kat,
     urun: _ad,
-    boy1: +document.getElementById('sn-b1').value||0,
-    adet1: +document.getElementById('sn-a1').value||0,
-    boy2: +document.getElementById('sn-b2').value||0,
-    adet2: +document.getElementById('sn-a2').value||0,
+    boy1: _b1, adet1: _a1, boy2: _b2, adet2: _a2,
     kg_per_meter: _kgpm > 0 ? _kgpm : 0,
-    birim: _isSac ? 'm²' : 'm',
+    birim: _bir,
     updated_by: me.id
   };
   if(!d.kategori || !d.urun){toast('Kategori ve Ürün zorunlu','err');return}
@@ -6382,7 +6422,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v126';
+const APP_VERSION = 'v127';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
@@ -6685,49 +6725,4 @@ async function uploadFiles(){
   if(!inp.files || !inp.files.length){toast('Dosya seçin','err');return}
   const status = document.getElementById('fmStatus');
   let okN=0, failN=0;
-  for(const file of inp.files){
-    status.textContent = 'Yükleniyor: '+file.name;
-    const ts = Date.now();
-    const safe = file.name.replace(/[^\w.\-]/g,'_');
-    const folder = _filesCtx.projectId ? ('projects/'+_filesCtx.projectId) : ('tasks/'+_filesCtx.taskId);
-    const path = folder + '/' + ts + '_' + safe;
-    const up = await sb.storage.from('project-files').upload(path, file, {contentType:file.type||'application/octet-stream'});
-    if(up.error){failN++; console.error(up.error); continue}
-    const ins = await sb.from('attachments').insert({
-      project_id: _filesCtx.projectId,
-      task_id:    _filesCtx.taskId,
-      uploaded_by: me.id,
-      file_name:  file.name,
-      file_path:  path,
-      mime_type:  file.type||null,
-      size_bytes: file.size
-    });
-    if(ins.error){failN++; console.error(ins.error)} else {okN++}
-  }
-  status.textContent = okN+' yüklendi'+(failN?' · '+failN+' başarısız':'');
-  toast(okN+' dosya yüklendi',okN?'info':'err');
-  inp.value='';
-  await loadFiles();
-}
-async function delFile(id, path){
-  if(!confirm('Bu dosyayı silmek istediğinden emin misin?')) return;
-  const {error:e1} = await sb.from('attachments').delete().eq('id', id);
-  if(e1){toast('Hata: '+e1.message,'err');return}
-  await sb.storage.from('project-files').remove([path]);
-  toast('Silindi','info');
-  await loadFiles();
-}
-
-// userEditModal & filesModal click-out kapatma
-document.addEventListener('DOMContentLoaded', function(){
-  const u = document.getElementById('userEditModal');
-  if(u) u.addEventListener('click', e=>{if(e.target.id==='userEditModal') closeUserEdit()});
-  const f = document.getElementById('filesModal');
-  if(f) f.addEventListener('click', e=>{if(e.target.id==='filesModal') closeFiles()});
-  // Ses açık/kapalı tercihini yükle
-  const s = document.getElementById('setSound');
-  if(s) s.checked = localStorage.getItem('ucelSound')!=='0';
-});
-</script>
-</body>
-</html>
+  for(const file of inp.files
