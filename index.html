@@ -3981,7 +3981,10 @@ function exportProcTalepFormu(){
       <td class="lft">${esc(it.notes.join(' · '))}</td>
     </tr>`;
   }).join('');
-  const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Talep Formu - ${esc(proj?.no||'')}</title>
+  // Kategoriye göre dosya adı: "Talep Formu 2026-093 - Ana Yapı" gibi
+  const _fnKat = _procFilterKat === 'all' ? '' : ` - ${(PROC_KAT_LABEL[_procFilterKat]||_procFilterKat).replace(/[\/\\:*?"<>|]/g,'')}`;
+  const _dosyaAd = `Talep Formu ${esc(proj?.no||'')}${_fnKat}`;
+  const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>${_dosyaAd}</title>
     <style>${_pdfStyle()}</style></head><body>
     <div class="pdf-toolbar no-print">
       <div style="font-weight:700;font-size:14px">📋 Talep Formu — ${esc(proj?.no||'')}</div>
@@ -6219,7 +6222,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v120';
+const APP_VERSION = 'v121';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
