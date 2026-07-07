@@ -2555,41 +2555,38 @@ function _procDelvOf(itemId){ return procDeliveries.filter(d=>d.item_id===itemId
 function _procCalc(item){
   const dl = _procDelvOf(item.id);
   const gelen = dl.reduce((s,d)=>s + parseFloat(d.miktar||0), 0);
-  const miktar = parseFloat(item.miktar||0);
+  const miktar = parseFloat(item.miktar||0);                  // Sipariş edilecek kısım
+  const stokDusum = parseFloat(item.stok_dusum||0);          // Stoktan karşılanacak kısım
+  const toplamIhtiyac = miktar + stokDusum;                   // Proje toplam ihtiyacı
   const kalan = miktar - gelen;
   const fiyat = parseFloat(item.birim_fiyat||0);
   const kgPm = parseFloat(item.kg_per_meter||0);
   const fb = item.fiyat_birimi || 'birim';
   const isKgUnit = (item.birim||'').toLowerCase() === 'kg';
-  // Toplam kg hesabı:
-  //   birim 'kg' ise miktar zaten kg
-  //   birim 'ton' ise miktar × 1000
-  //   SAÇ ise: adet × en(mm) × boy(mm) × kalınlık(mm) × 7.85 / 1,000,000
-  //   diğer (m/adet) ise miktar × kg_per_meter
-  let toplamKg = 0;
+  // Kg hesabını her iki miktar için ayrı ayrı yap (sipariş kg + proje toplam kg)
   const isSacItem = (item.malzeme||'').toUpperCase().startsWith('SAÇ') || (item.malzeme||'').toUpperCase().startsWith('SAC');
-  if(isKgUnit) toplamKg = miktar;
-  else if((item.birim||'').toLowerCase() === 'ton') toplamKg = miktar * 1000;
-  else if(isSacItem && item.ebat){
-    // ebat formatı: "1500×6000 mm" veya "1500x6000" veya "1500 mm"
-    const m = String(item.ebat).match(/(\d+(?:\.\d+)?)\s*[×x]\s*(\d+(?:\.\d+)?)/i);
-    // kalınlık ürün adından (örn "SAÇ 10 mm" → 10)
-    const km = String(item.malzeme||'').match(/(\d+(?:\.\d+)?)\s*mm/i);
-    const kalinlik = km ? parseFloat(km[1]) : 0;
-    if(m && kalinlik > 0){
-      const en = parseFloat(m[1]);
-      const boy = parseFloat(m[2]);
-      // birim adetse miktarı adet olarak kullan
-      toplamKg = miktar * en * boy * kalinlik * 7.85 / 1000000;
-    } else {
-      toplamKg = miktar * kgPm;
+  const _kgFor = (mik) => {
+    if(mik <= 0) return 0;
+    if(isKgUnit) return mik;
+    if((item.birim||'').toLowerCase() === 'ton') return mik * 1000;
+    if(isSacItem && item.ebat){
+      const m = String(item.ebat).match(/(\d+(?:\.\d+)?)\s*[×x]\s*(\d+(?:\.\d+)?)/i);
+      const km = String(item.malzeme||'').match(/(\d+(?:\.\d+)?)\s*mm/i);
+      const kalinlik = km ? parseFloat(km[1]) : 0;
+      if(m && kalinlik > 0){
+        const en = parseFloat(m[1]);
+        const boy = parseFloat(m[2]);
+        return mik * en * boy * kalinlik * 7.85 / 1000000;
+      }
     }
-  }
-  else toplamKg = miktar * kgPm;
-  // Tutar hesabı:
-  //   fb='kg' → toplam_kg × birim_fiyat (TL/kg)
-  //   fb='birim' → miktar × birim_fiyat (TL/m, TL/adet)
-  const tutar = (fb === 'kg' && toplamKg > 0) ? (toplamKg * fiyat) : (miktar * fiyat);
+    return mik * kgPm;
+  };
+  const toplamKg    = _kgFor(miktar);        // Sipariş edilen kg (tedarikçiden gelecek)
+  const projeKg     = _kgFor(toplamIhtiyac); // Proje toplam kg (sipariş + stok)
+  // Tutar hesabı — SİPARİŞ (tedarikçiye ödenecek):
+  const siparisTutar = (fb === 'kg' && toplamKg > 0) ? (toplamKg * fiyat) : (miktar * fiyat);
+  // PROJE MALİYETİ (sipariş + stoktan karşılanan):
+  const tutar = (fb === 'kg' && projeKg > 0) ? (projeKg * fiyat) : (toplamIhtiyac * fiyat);
   const kdv = tutar * (parseInt(item.kdv_orani||0)/100);
   const tevkifat = kdv * (parseInt(item.tevkifat_orani||0)/100);
   const net = tutar + kdv - tevkifat;
@@ -2608,7 +2605,7 @@ function _procCalc(item){
     }
     return s + (parseFloat(d.miktar||0) * kgPm);
   }, 0);
-  return { gelen, kalan, tutar, kdv, tevkifat, net, durum, delvCount: dl.length, toplamKg, gelenKg, fiyatBirimi: fb };
+  return { gelen, kalan, tutar, siparisTutar, kdv, tevkifat, net, durum, delvCount: dl.length, toplamKg, projeKg, toplamIhtiyac, stokDusum, gelenKg, fiyatBirimi: fb };
 }
 function _statusBadge(durum, gelen, miktar){
   if(durum==='tamamlandi') return '<span style="background:#c8f0d8;color:#0a7;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">🟢 Tamam</span>';
@@ -2749,9 +2746,9 @@ function renderProcDetail(it, c){
   return `<div style="background:#f9fbfd;padding:10px 16px;border-top:1px solid #eef0f5" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;flex-wrap:wrap;gap:8px">
       <div style="font-size:11px;color:#666;line-height:1.6">
-        ${c.toplamKg > 0 ? `Toplam Ağırlık: <strong>${fmtNum(c.toplamKg,2)} kg</strong> · Gelen: <strong>${fmtNum(c.gelenKg,2)} kg</strong> · Fark: <strong style="color:${(c.gelenKg-c.toplamKg)>=0?'#0a7':'#c33'}">${fmtNum(c.gelenKg-c.toplamKg,2)} kg</strong><br>` : ''}
+        ${c.projeKg > 0 ? `Proje Toplam Ağırlık: <strong>${fmtNum(c.projeKg,2)} kg</strong>${c.stokDusum>0?` <small style="color:#0a7c3a">(stok: ${fmtNum(c.stokDusum,2)} ${esc(it.birim)} · sipariş: ${fmtNum(parseFloat(it.miktar||0),2)} ${esc(it.birim)})</small>`:''} · Gelen: <strong>${fmtNum(c.gelenKg,2)} kg</strong> · Fark: <strong style="color:${(c.gelenKg-c.toplamKg)>=0?'#0a7':'#c33'}">${fmtNum(c.gelenKg-c.toplamKg,2)} kg</strong><br>` : ''}
         <span class="price-only">Fiyat: <strong>${fmtTL(it.birim_fiyat)}/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</strong>
-        · Tutar: <strong>${fmtTL(c.tutar)}</strong>
+        ${c.stokDusum>0?`· Sipariş Tutarı: <strong>${fmtTL(c.siparisTutar)}</strong> · Proje Maliyeti: <strong style="color:#0a7c3a">${fmtTL(c.tutar)}</strong>`:`· Tutar: <strong>${fmtTL(c.tutar)}</strong>`}
         · KDV: <strong>${fmtTL(c.kdv)}</strong>
         · Tevkifat (%${it.tevkifat_orani}): <strong>−${fmtTL(c.tevkifat)}</strong>
         · <span style="color:#1f4e8c">NET: <strong>${fmtTL(c.net)}</strong></span></span>
@@ -6385,7 +6382,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v125';
+const APP_VERSION = 'v126';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
