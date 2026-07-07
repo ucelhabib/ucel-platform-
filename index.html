@@ -822,12 +822,16 @@ body.proc-fullscreen{overflow:hidden}
           <div class="frow"><label>Gelen Miktar</label><input id="pd-miktar" type="number" min="0" step="0.01" value="0"></div>
         </div>
         <div class="fgrid">
+          <div class="frow"><label>Gerçek Kg (opsiyonel — faturaya göre)</label><input id="pd-gkg" type="number" min="0" step="0.01" placeholder="Fatura kg'ı buraya"></div>
+          <div class="frow"><label>Fatura Tutarı (TL — KDV DAHİL)</label><input id="pd-tutar" type="number" min="0" step="0.01" placeholder="Otomatik tevkifat için"></div>
+        </div>
+        <div class="fgrid">
           <div class="frow"><label>İrsaliye No</label><input id="pd-irs"></div>
           <div class="frow"><label>Fatura No</label><input id="pd-fat"></div>
         </div>
-        <div class="fgrid">
-          <div class="frow"><label>Tedarikçi</label><input id="pd-ted"></div>
-          <div class="frow"><label>Fatura Tutarı (TL)</label><input id="pd-tutar" type="number" min="0" step="0.01"></div>
+        <div class="frow"><label>Tedarikçi</label><input id="pd-ted"></div>
+        <div style="background:#eef7ff;border:1px solid #b3d4f5;border-radius:6px;padding:6px 10px;font-size:11px;color:#1f4e8c;margin:6px 0">
+          ℹ Tevkifat: Fatura KDV dahil <b>12.000 TL</b> ve üzeriyse sistem otomatik tevkifat uygular. Altındaysa tevkifat yok.
         </div>
         <div class="frow"><label>Not</label><input id="pd-not"></div>
       </div>
@@ -836,6 +840,63 @@ body.proc-fullscreen{overflow:hidden}
       <button class="btn sec" onclick="closeProcDeliv()">Kapat</button>
       <button class="btn sec" id="pdCancelEditBtn" onclick="cancelEditProcDelivery()" style="display:none">↶ Düzenlemeyi İptal</button>
       <button class="btn ok" id="pdSaveBtn" onclick="addProcDelivery()">+ Ekle</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="procEditModal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-h"><h3 id="pe-title">✏️ Fiyat & Ayarlar</h3><button class="x" onclick="closeProcEdit()">✕</button></div>
+    <div class="modal-b">
+      <div class="fgrid">
+        <div class="frow">
+          <label>Birim (ölçü)</label>
+          <select id="pe-birim" onchange="_updatePeFiyatBirimiLabel()">
+            <option value="m">m (metre)</option>
+            <option value="adet">adet</option>
+            <option value="kg">kg</option>
+            <option value="ton">ton</option>
+            <option value="m²">m²</option>
+            <option value="rulo">rulo</option>
+            <option value="paket">paket</option>
+            <option value="takım">takım</option>
+            <option value="litre">litre</option>
+            <option value="kutu">kutu</option>
+          </select>
+        </div>
+        <div class="frow">
+          <label>Birim Fiyat (<span id="pe-fiyat-label">TL / m</span>)</label>
+          <input id="pe-fiyat" type="number" min="0" step="0.01" value="0">
+        </div>
+      </div>
+      <div class="frow" style="margin-top:8px">
+        <label style="display:block;margin-bottom:4px;font-weight:700">Fiyat nasıl hesaplansın?</label>
+        <div style="display:flex;gap:16px;align-items:center">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+            <input type="radio" name="pe-fb" value="birim" onchange="_updatePeFiyatBirimiLabel()">
+            <span><b>TL / Birim</b> — profiller/borular metre fiyatı, cıvatalar adet fiyatı</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+            <input type="radio" name="pe-fb" value="kg" onchange="_updatePeFiyatBirimiLabel()">
+            <span><b>TL / kg</b> — saç ve tonaj bazlı ürünler</span>
+          </label>
+        </div>
+        <div style="background:#eef7ff;border:1px solid #b3d4f5;border-radius:6px;padding:6px 10px;font-size:11px;color:#1f4e8c;margin-top:6px">
+          ℹ Fatura metre fiyatı ile geliyorsa <b>TL / Birim</b>'i seç. Sonra fiyata metre birim fiyatını yaz.
+        </div>
+      </div>
+      <div class="fgrid" style="margin-top:8px">
+        <div class="frow"><label>KDV %</label><input id="pe-kdv" type="number" min="0" max="100" value="20"></div>
+        <div class="frow">
+          <label>Tevkifat %</label>
+          <input id="pe-tevkifat" type="number" min="0" max="100" value="0">
+          <small style="color:#888;font-size:10px">Tevkifat yoksa 0. Var ise genelde %50.</small>
+        </div>
+      </div>
+    </div>
+    <div class="modal-f">
+      <button class="btn sec" onclick="closeProcEdit()">Vazgeç</button>
+      <button class="btn ok" onclick="saveProcEdit()">💾 Kaydet</button>
     </div>
   </div>
 </div>
@@ -2526,7 +2587,10 @@ function _procCalc(item){
   const kdv = tutar * (parseInt(item.kdv_orani||0)/100);
   const tevkifat = kdv * (parseInt(item.tevkifat_orani||0)/100);
   const net = tutar + kdv - tevkifat;
-  const durum = gelen === 0 ? 'beklemede' : (gelen < miktar ? 'kismi' : 'tamamlandi');
+  // Durum: miktar 0 ise (tamamı stoktan) direkt tamamlandı
+  const durum = (miktar <= 0) ? 'tamamlandi'
+              : (gelen === 0 ? 'beklemede'
+              : (gelen < miktar ? 'kismi' : 'tamamlandi'));
   // Gelen kg: teslimatlarda gercek_kg varsa onu kullan, yoksa miktar bazlı hesapla
   const gelenKg = dl.reduce((s,d)=>{
     if(d.gercek_kg) return s + parseFloat(d.gercek_kg);
@@ -2686,9 +2750,10 @@ function renderProcDetail(it, c){
         · Tevkifat (%${it.tevkifat_orani}): <strong>−${fmtTL(c.tevkifat)}</strong>
         · <span style="color:#1f4e8c">NET: <strong>${fmtTL(c.net)}</strong></span></span>
       </div>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn sec sm" onclick="openProcDeliv('${it.id}')">+ Teslimat</button>
-        <button class="btn sec sm price-edit-only" onclick="editProcItem('${it.id}')" title="Fiyat ve KDV düzenle">✏️ Fiyat</button>
+        <button class="btn sec sm price-edit-only" onclick="editProcItem('${it.id}')" title="Fiyat, birim, KDV, tevkifat düzenle">✏️ Fiyat</button>
+        <button class="btn sm proj-edit-only" onclick="transferProcToStock('${it.id}')" style="background:#0a7c3a;color:#fff;border:0" title="Bu kalemi projeden çıkar, stoğa aktar">📦 Stoğa Aktar</button>
         <button class="btn err sm proj-edit-only" onclick="deleteProcItem('${it.id}')">🗑 Sil</button>
       </div>
     </div>
@@ -3572,25 +3637,102 @@ async function deleteProcItem(itemId){
   toast('Silindi','info');
   await loadProcurement(_procProjectId);
 }
-async function editProcItem(itemId){
+// Sipariş kalemini otomatik stoğa aktar: katalog kaydı varsa üzerine ekler, yoksa yeni stok satırı oluşturur
+async function transferProcToStock(itemId){
   const it = procItems.find(x=>x.id===itemId); if(!it) return;
-  const fb = prompt(`Fiyat birimi: "kg" (kilo başına) veya "birim" (m/adet başına)\nMevcut: ${it.fiyat_birimi||'birim'}\nDeğiştirmek için yaz, vazgeçmek için boş bırak:`, it.fiyat_birimi||'birim');
-  if(fb === null) return;
-  const fiyat = prompt(`Birim fiyat (TL/${(fb==='kg'?'kg':it.birim)}):`, it.birim_fiyat);
-  if(fiyat === null) return;
-  const kdv = prompt('KDV oranı (%):', it.kdv_orani);
-  if(kdv === null) return;
+  const miktar = parseFloat(it.miktar)||0;
+  if(miktar <= 0){ toast('Miktar sıfır — aktarılacak bir şey yok','err'); return; }
+  const proj = projects.find(p=>p.id===it.project_id);
+  if(!confirm(`"${it.malzeme}" ${it.ebat?`(${it.ebat}) `:''}${miktar} ${it.birim} kalemi\n${proj?.no||''} projesinden çıkarılıp stoğa aktarılacak.\n\nDevam?`)) return;
+  try {
+    let stockId = it.catalog_id;
+    // Katalog kaydı yoksa: aynı kategoride aynı adla ara, yoksa yeni oluştur
+    if(!stockId){
+      const _katMap = {ana_yapi:'ANA YAPI', civata:'CİVATA-SOMUN', sac:'SAÇ', boya:'BOYA', cz_profil:'C/Z PROFİL', sarf:'SARF', diger:'DİĞER'};
+      let stkKat = _katMap[it.proc_kategori] || 'DİĞER';
+      // SAÇ ise
+      if(/SAÇ|^SAC/i.test(it.malzeme)) stkKat = 'SAÇ';
+      // Ana yapı profilleri urun adında kategori var (HEA/IPE/UNP/BORU/KUTU PROFİL/LAMA)
+      const _upperAd = (it.malzeme||'').toUpperCase();
+      for(const k of ['HEA','HEB','IPE','UNP','BORU','KUTU PROFİL','LAMA','KOSEBENT','KÖŞEBENT']){
+        if(_upperAd.startsWith(k)) { stkKat = k; break; }
+      }
+      // Mevcut kayıt ara
+      const existing = stockItems.find(s => s.kategori===stkKat && s.urun===it.malzeme);
+      if(existing){
+        stockId = existing.id;
+      } else {
+        const _ins = { kategori: stkKat, urun: it.malzeme, birim: it.birim||'m', kg_per_meter: it.kg_per_meter||0, boy1: 0, adet1: 0, updated_by: me.id };
+        const {data:newRow, error:_insErr} = await sb.from('stock_items').insert(_ins).select().single();
+        if(_insErr) throw _insErr;
+        stockId = newRow.id;
+        stockItems.push(newRow);
+      }
+    }
+    // Stok kaydına miktarı ekle (birim m² veya adet ise boy1×adet1 mantığı)
+    const stk = stockItems.find(s=>s.id===stockId); if(!stk) throw new Error('Stok kaydı bulunamadı');
+    // boy1 dolu ise adet1 artır; boş ise boy1=1, adet1=miktar
+    let newBoy1 = stk.boy1||0, newAdet1 = stk.adet1||0;
+    if(newBoy1 > 0 && stk.birim === it.birim){
+      // Aynı birim — mevcut boy'a paralel yeni adet olarak eklemek anlamsız. Not'a taşı, adet artır.
+      newAdet1 = newAdet1 + Math.round(miktar);
+    } else {
+      newBoy1 = 1;
+      newAdet1 = (stk.adet1||0) + Math.round(miktar);
+    }
+    const notEk = `${miktar} ${it.birim} ${it.ebat?`(${it.ebat}) `:''}${proj?.no||''} projesinden aktarıldı · ${new Date().toLocaleDateString('tr-TR')}`;
+    const yeniNot = ((stk.not_text||'').trim() ? stk.not_text+' · ' : '') + notEk;
+    const {error:_uErr} = await sb.from('stock_items').update({ boy1:newBoy1, adet1:newAdet1, not_text:yeniNot, updated_at:new Date().toISOString(), updated_by:me.id }).eq('id', stockId);
+    if(_uErr) throw _uErr;
+    // Sipariş kalemini sil
+    const {error:_dErr} = await sb.from('procurement_items').delete().eq('id', itemId);
+    if(_dErr) throw _dErr;
+    toast(`✅ Stoğa aktarıldı: ${miktar} ${it.birim} ${it.malzeme}`,'ok');
+    await loadProcurement(_procProjectId);
+    await loadStock();
+  } catch(err){
+    toast('Aktarım hatası: '+(err.message||err),'err');
+  }
+}
+let _peCurrentId = null;
+function editProcItem(itemId){
+  const it = procItems.find(x=>x.id===itemId); if(!it) return;
+  _peCurrentId = itemId;
+  document.getElementById('pe-title').textContent = `✏️ Fiyat & Ayarlar — ${it.malzeme}`;
+  document.getElementById('pe-birim').value = it.birim || 'm';
+  document.getElementById('pe-fiyat').value = it.birim_fiyat || 0;
+  const fb = it.fiyat_birimi || 'birim';
+  document.querySelector(`input[name="pe-fb"][value="${fb}"]`).checked = true;
+  document.getElementById('pe-kdv').value = it.kdv_orani || 20;
+  document.getElementById('pe-tevkifat').value = it.tevkifat_orani || 0;
+  _updatePeFiyatBirimiLabel();
+  document.getElementById('procEditModal').classList.add('show');
+}
+function closeProcEdit(){ document.getElementById('procEditModal').classList.remove('show'); _peCurrentId = null; }
+function _updatePeFiyatBirimiLabel(){
+  const fb = document.querySelector('input[name="pe-fb"]:checked')?.value || 'birim';
+  const birim = document.getElementById('pe-birim').value || 'm';
+  const lbl = fb === 'kg' ? 'TL / kg' : `TL / ${birim}`;
+  document.getElementById('pe-fiyat-label').textContent = lbl;
+}
+async function saveProcEdit(){
+  if(!_peCurrentId) return;
+  const it = procItems.find(x=>x.id===_peCurrentId); if(!it) return;
+  const fb = document.querySelector('input[name="pe-fb"]:checked')?.value || 'birim';
   const upd = {
-    birim_fiyat: parseFloat(fiyat)||0,
-    kdv_orani: parseInt(kdv)||20,
-    fiyat_birimi: (fb==='kg'||fb==='birim') ? fb : (it.fiyat_birimi||'birim'),
+    birim: document.getElementById('pe-birim').value,
+    birim_fiyat: parseFloat(document.getElementById('pe-fiyat').value) || 0,
+    fiyat_birimi: fb,
+    kdv_orani: parseInt(document.getElementById('pe-kdv').value) || 20,
+    tevkifat_orani: parseInt(document.getElementById('pe-tevkifat').value) || 0,
     updated_at: new Date().toISOString()
   };
-  const {error} = await sb.from('procurement_items').update(upd).eq('id', itemId);
-  if(error){toast('Hata: '+errTr(error),'err');return}
+  const {error} = await sb.from('procurement_items').update(upd).eq('id', _peCurrentId);
+  if(error){ toast('Hata: '+errTr(error),'err'); return; }
   toast('Güncellendi','ok');
+  closeProcEdit();
   await loadProcurement(_procProjectId);
-  try { const proj = projects.find(p=>p.id===_procProjectId); await notify(`🛒 ${me.full_name} ${it.malzeme} için birim fiyatı güncelledi: ${fmtTL(fiyat)}`, '🛒', 'satinalma', 'project', _procProjectId); } catch(e){}
+  try { const proj = projects.find(p=>p.id===_procProjectId); await notify(`🛒 ${me.full_name} ${it.malzeme} için fiyat güncelledi: ${fmtTL(upd.birim_fiyat)} (${fb==='kg'?'TL/kg':`TL/${upd.birim}`})`, '🛒', 'satinalma', 'project', _procProjectId); } catch(e){}
 }
 
 /* --- Teslimat --- */
@@ -3609,7 +3751,7 @@ function openProcDeliv(itemId){
 function _pdResetForm(){
   _pdEditingId = null;
   document.getElementById('pd-tarih').value = new Date().toISOString().slice(0,10);
-  ['pd-miktar','pd-irs','pd-fat','pd-ted','pd-tutar','pd-not'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value = (id==='pd-miktar'?'0':''); });
+  ['pd-miktar','pd-irs','pd-fat','pd-ted','pd-tutar','pd-not','pd-gkg'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value = (id==='pd-miktar'?'0':''); });
   // Buton metnini sıfırla
   const saveBtn = document.getElementById('pdSaveBtn');
   if(saveBtn) saveBtn.textContent = '+ Ekle';
@@ -3639,6 +3781,7 @@ function editProcDelivery(deliveryId){
   document.getElementById('pd-ted').value    = d.tedarikci || '';
   document.getElementById('pd-tutar').value  = d.fatura_tutari || '';
   document.getElementById('pd-not').value    = d.not_text || '';
+  const _gkgEl = document.getElementById('pd-gkg'); if(_gkgEl) _gkgEl.value = d.gercek_kg || '';
   const saveBtn = document.getElementById('pdSaveBtn');
   if(saveBtn) saveBtn.textContent = '💾 Güncelle';
   const cancelBtn = document.getElementById('pdCancelEditBtn');
@@ -3656,17 +3799,31 @@ function closeProcDeliv(){ document.getElementById('procDelivModal').classList.r
 async function addProcDelivery(){
   if(!_pdCurrentItemId) return;
   const it = procItems.find(x=>x.id===_pdCurrentItemId); if(!it) return;
+  const _fatTutar = +document.getElementById('pd-tutar').value||null;
+  const _gercekKg = +document.getElementById('pd-gkg').value||null;
   const d = {
     item_id: _pdCurrentItemId,
     tarih: document.getElementById('pd-tarih').value,
     miktar: +document.getElementById('pd-miktar').value||0,
+    gercek_kg: _gercekKg,
     irsaliye_no: document.getElementById('pd-irs').value.trim()||null,
     fatura_no: document.getElementById('pd-fat').value.trim()||null,
     tedarikci: document.getElementById('pd-ted').value.trim()||null,
-    fatura_tutari: +document.getElementById('pd-tutar').value||null,
+    fatura_tutari: _fatTutar,
     not_text: document.getElementById('pd-not').value.trim()||null
   };
   if(d.miktar <= 0){toast('Geçerli bir miktar gir','err');return}
+  // Tevkifat kontrolü: Fatura KDV DAHİL ≥ 12.000 TL ise kaleme %50 (varsayılan) tevkifat uygula
+  // Altındaysa 0'a çek
+  if(_fatTutar !== null && it){
+    const yeniTevkifat = _fatTutar >= 12000 ? 50 : 0;
+    const mevcut = +it.tevkifat_orani || 0;
+    if(mevcut !== yeniTevkifat){
+      await sb.from('procurement_items').update({ tevkifat_orani: yeniTevkifat }).eq('id', _pdCurrentItemId);
+      it.tevkifat_orani = yeniTevkifat;
+      if(yeniTevkifat > 0) toast(`Fatura ≥ 12.000 TL → Tevkifat %${yeniTevkifat} uygulandı`,'info');
+    }
+  }
   if(_pdEditingId){
     // GÜNCELLE
     const {error} = await sb.from('procurement_deliveries').update(d).eq('id', _pdEditingId);
@@ -6222,7 +6379,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v121';
+const APP_VERSION = 'v122';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
