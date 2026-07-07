@@ -2005,7 +2005,7 @@ function renderProjects(){
     const lt=p.shipdate&&p.shipdate<td?'style="color:var(--err);font-weight:700"':'';
     return `<tr class="click compact" onclick="openProj('${p.id}')">
       <td style="text-align:center"><strong>${esc(p.no)}</strong></td>
-      <td><div style="line-height:1.25"><strong>${esc(p.customer)}</strong>${p.title?`<br><small style="color:#666;font-size:11px;font-weight:500">${esc(p.title)}</small>`:''}</div></td>
+      <td><div style="line-height:1.25"><strong>${esc(p.customer)}</strong>${p.title?`<br><small style="color:#666;font-size:11px;font-weight:500">${esc(p.title)}</small>`:''}${p.location?`<br><small style="color:#0a7c3a;font-size:10.5px;font-weight:600">📍 ${esc(p.location)}</small>`:''}</div></td>
       <td style="text-align:center">${((p.stages&&p.stages.length)?p.stages:[p.stage]).filter(Boolean).map(s=>`<span class="pill ${SP[s]||'pl-gray'}" style="margin:1px">${DI[s]||''} ${DN[s]||s}</span>`).join('')}</td>
       <td style="white-space:nowrap;text-align:center">${p.tonnage ? fmtNum(p.tonnage*1000, 0)+' kg' : '—'}</td>
       <td class="amount-only" style="text-align:center;white-space:nowrap">${p.amount ? fmtTL(p.amount) : '—'}</td>
@@ -6379,7 +6379,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v122';
+const APP_VERSION = 'v123';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
