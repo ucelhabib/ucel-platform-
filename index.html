@@ -794,10 +794,11 @@ body.proc-fullscreen{overflow:hidden}
   <div class="modal" style="max-width:680px">
     <div class="modal-h"><h3>📚 Katalogtan Malzeme Seç</h3><button class="x" onclick="closeProcCatalog()">✕</button></div>
     <div class="modal-b">
+      <div id="pc-chips" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;padding:4px 2px;border-bottom:1px dashed #e5e7eb"></div>
       <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
         <input id="pc-search" type="text" placeholder="🔎 Ara..." style="flex:1;min-width:140px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;font-size:13px" oninput="renderProcCatalog()">
         <select id="pc-cat" style="padding:6px 10px;border:1px solid var(--bd);border-radius:6px;font-size:13px" onchange="renderProcCatalog()">
-          <option value="">Tüm kategoriler</option>
+          <option value="">Tüm stok kategorileri</option>
         </select>
         <button class="btn sm" type="button" onclick="openStockNew()" title="Kataloga yeni kalem ekle">+ Yeni Kalem</button>
       </div>
@@ -3035,9 +3036,33 @@ function openProcCatalog(){
   // Kategori dropdown'unu doldur
   const cats = [...new Set(stockItems.map(i=>i.kategori))].sort();
   const sel = document.getElementById('pc-cat');
-  sel.innerHTML = '<option value="">Tüm kategoriler</option>' + cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  sel.innerHTML = '<option value="">Tüm stok kategorileri</option>' + cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  _renderPcChips();
   renderProcCatalog();
   document.getElementById('procCatalogModal').classList.add('show');
+}
+// Katalog modalindeki PROC_KAT chip'leri (Ana Yapı, Saçlar, Cıvata-Somun, Boya, C/Z Profil, Sarf, Diğer)
+function _renderPcChips(){
+  const box = document.getElementById('pc-chips'); if(!box) return;
+  // Katalogdaki her stok kaleminin PROC_KAT dağılımı
+  const counts = {all: stockItems.length};
+  PROC_KAT.forEach(k => counts[k.k] = stockItems.filter(it => _catalogToProcKat(it) === k.k).length);
+  const mkChip = (key, label, color, n) => {
+    const active = (_procFilterKat||'all') === key;
+    const bg = active ? (color||'#1f4e8c') : '#fff';
+    const fg = active ? '#fff' : (color||'#1f4e8c');
+    const bd = active ? bg : (color||'#cbd5e1');
+    return `<button type="button" onclick="_setPcChipFilter('${key}')" style="background:${bg};color:${fg};border:1.5px solid ${bd};border-radius:14px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px">
+      ${esc(label)} <span style="background:${active?'rgba(255,255,255,.25)':'#f1f4f8'};color:${active?'#fff':'#1f4e8c'};padding:1px 7px;border-radius:9px;font-size:10px">${n||0}</span>
+    </button>`;
+  };
+  box.innerHTML = mkChip('all','Tümü','#1f4e8c', counts.all)
+                + PROC_KAT.map(k => mkChip(k.k, k.l, k.color, counts[k.k])).join('');
+}
+function _setPcChipFilter(k){
+  _procFilterKat = k;
+  _renderPcChips();
+  renderProcCatalog();
 }
 function closeProcCatalog(){ document.getElementById('procCatalogModal').classList.remove('show'); }
 // Malzeme adından kg/m otomatik tahmini.
@@ -3166,11 +3191,12 @@ function _guessKgPerMeter(kategori, urun, ebat){
 function _catalogToProcKat(catItem){
   const _katU  = (catItem?.kategori||'').toUpperCase();
   const _urunU = (catItem?.urun||'').toUpperCase();
-  if(/CIVATA|CİVATA|SOMUN|PUL|RONDELA|VIDA|VİDA/.test(_katU)) return 'civata';
-  if(/BOYA|VERN|ASTAR/.test(_katU)) return 'boya';
+  // Boya HER ZAMAN kendi kategorisi — sarf değil
+  if(/BOYA|VERN|ASTAR|TİNER|TINER/.test(_katU) || /BOYA|VERN|ASTAR|TİNER|TINER|PRIMER|PRİMER/.test(_urunU)) return 'boya';
+  if(/CIVATA|CİVATA|SOMUN|PUL|RONDELA|VIDA|VİDA/.test(_katU) || /CIVATA|CİVATA|SOMUN|PUL|RONDELA/.test(_urunU)) return 'civata';
   if(/^C |^Z |C PROFI|Z PROFI|C-Z|CZ/.test(_katU)) return 'cz_profil';
-  if(/SARF|ELEKTROD|KAYNAK|TAS|TAŞ/.test(_katU)) return 'sarf';
   if(/SAÇ|^SAC$|^SAC /.test(_katU) || /^SAÇ|^SAC /.test(_urunU)) return 'sac';
+  if(/SARF|ELEKTROD|KAYNAK|FITIL|FİTİL|TAS|TAŞ/.test(_katU) || /FITIL|FİTİL|KAYNAK/.test(_urunU)) return 'sarf';
   if(/HEA|HEB|IPE|UNP|KUTU|BORU|PROFIL|LAMA|KOSEBENT|KÖŞEBENT/.test(_katU)) return 'ana_yapi';
   return 'diger';
 }
@@ -6518,7 +6544,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v135';
+const APP_VERSION = 'v137';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
