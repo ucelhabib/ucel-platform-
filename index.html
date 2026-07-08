@@ -4527,6 +4527,8 @@ function renderStockTable(){
   const thBg = '#f1f4f8';
   // Düzenlenebilir hücre stili — açık mavi zemin + hover'da koyulaşır + sağ üst köşede ✏️
   const editStyle = 'background:#eef6ff;cursor:pointer;position:relative;transition:background .15s';
+  // Sil yetkisi: yönetici veya perms içinde 'stok' olan kullanıcılar
+  const canDelete = (me?.role === 'yonetici') || (me?.perms||[]).includes('*') || (me?.perms||[]).includes('stok') || me?.role === 'stok';
   const head = `<thead><tr style="position:sticky;top:0;background:${thBg};z-index:1">
     <th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd)">Kategori ✏️</th>
     <th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd)">Ürün ✏️</th>
@@ -4534,6 +4536,7 @@ function renderStockTable(){
     <th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd)">kg/m ✏️</th>
     <th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd)">Ağırlık<br><small style="font-weight:400;color:#888">(kg, otomatik)</small></th>
     <th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd)">Not ✏️</th>
+    ${canDelete ? '<th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd);width:70px">İşlem</th>' : ''}
   </tr></thead>`;
   const rowHtml = (it)=>{
     const tot = stockTotals(it);
@@ -4546,10 +4549,14 @@ function renderStockTable(){
       <td data-label="kg/m" class="stk-edit" style="padding:6px 8px;color:#444;font-size:12px;${editCell}" ondblclick="editStockCell('${it.id}','kg_per_meter',this)" title="📝 Çift tıkla kg/m düzenle">${parseFloat(it.kg_per_meter||0).toLocaleString('en-US')}</td>
       <td data-label="Ağırlık" style="padding:6px 8px;text-align:center;color:#1f4e8c;font-weight:700;background:#fff8e1">${parseFloat(tot.kg).toLocaleString('en-US')} kg</td>
       <td data-label="Not" class="stk-edit" style="padding:6px 8px;font-size:11px;color:${noteText?'#333':'#999'};${editCell}" ondblclick="editStockCell('${it.id}','not_text',this)" title="📝 Çift tıkla not gir">${esc(noteText) || '📝 not ekle'}</td>
+      ${canDelete ? `<td data-label="İşlem" style="padding:6px 4px;text-align:center;white-space:nowrap">
+        <button class="btn err sm" onclick="event.stopPropagation();deleteStockItem('${it.id}')" title="Bu kalemi sil" style="padding:3px 8px;font-size:11px">🗑</button>
+      </td>` : ''}
     </tr>`;
   };
   const body = filtered.map(rowHtml).join('');
-  t.innerHTML = head + '<tbody>' + (body || '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--m)">Eslesen kalem yok</td></tr>') + '</tbody>';
+  const colspan = canDelete ? 7 : 6;
+  t.innerHTML = head + '<tbody>' + (body || `<tr><td colspan="${colspan}" style="padding:20px;text-align:center;color:var(--m)">Eslesen kalem yok</td></tr>`) + '</tbody>';
   // Summary
   const sumAdet = filtered.reduce((s,it)=>s+stockTotals(it).adet, 0);
   const sumM = filtered.reduce((s,it)=>s+parseFloat(stockTotals(it).m), 0).toFixed(2);
@@ -4573,7 +4580,9 @@ function renderStockDetail(it){
       <span style="color:#666;font-size:11px">adet</span>
     </div>`;
   };
-  return `<tr><td colspan="6" style="padding:0;background:#fafbfd">
+  const _canDel = (me?.role === 'yonetici') || (me?.perms||[]).includes('*') || (me?.perms||[]).includes('stok') || me?.role === 'stok';
+  const _cs = _canDel ? 7 : 6;
+  return `<tr><td colspan="${_cs}" style="padding:0;background:#fafbfd">
     <div style="padding:12px 24px;border-top:1px solid #eef0f5;border-bottom:1px solid #eef0f5">
       <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap" onclick="event.stopPropagation()">
         <div>${slotRow(1)}${slotRow(2)}</div>
@@ -4589,6 +4598,22 @@ function renderStockDetail(it){
       </div>
     </div>
   </td></tr>`;
+}
+async function deleteStockItem(itemId){
+  const it = stockItems.find(x=>x.id===itemId); if(!it){ toast('Stok kalemi bulunamadı','err'); return; }
+  const canDel = (me?.role === 'yonetici') || (me?.perms||[]).includes('*') || (me?.perms||[]).includes('stok') || me?.role === 'stok';
+  if(!canDel){ toast('Silme yetkisi yok','err'); return; }
+  const tot = stockTotals(it);
+  const detay = `${it.kategori} · ${it.urun}`
+              + (tot.mm ? ` · ${(tot.mm/1000).toFixed(2)} m` : '')
+              + (tot.adet ? ` · ${tot.adet} ${it.birim||'adet'}` : '')
+              + (tot.kg ? ` · ${parseFloat(tot.kg).toFixed(0)} kg` : '');
+  if(!confirm(`🗑 STOK KALEMİNİ SİL\n\n${detay}\n\nBu kalem kalıcı olarak silinecek.\nBağlı sipariş kalemleri catalog_id bağlantısını kaybedecek (silinmeyecek).\n\nEmin misin?`)) return;
+  const { error } = await sb.from('stock_items').delete().eq('id', itemId);
+  if(error){ toast('Silme hatası: '+errTr(error),'err'); return; }
+  toast(`✅ Silindi: ${it.urun}`,'ok');
+  try { await notify(`🗑 ${me.full_name} stoktan sildi: ${it.kategori} · ${it.urun}`, '🗑', 'stok'); } catch(e){}
+  await loadStockItems();
 }
 function editStockCell(itemId, field, cellEl){
   const it = stockItems.find(x=>x.id===itemId); if(!it) return;
@@ -6462,7 +6487,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v132';
+const APP_VERSION = 'v133';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
