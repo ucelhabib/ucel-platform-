@@ -966,6 +966,10 @@ body.proc-fullscreen{overflow:hidden}
       <div id="sn-adet-block" style="display:none">
         <div class="frow"><label id="sn-adet-lbl">Adet</label><input id="sn-adet" type="number" min="0" value="0" placeholder="Örn. 5"></div>
       </div>
+      <div class="frow">
+        <label>Birim Ağırlık (kg) — <small style="color:#888;font-weight:400">boya, sarf gibi kalemler için manuel gir; HEA/IPE/SAÇ gibi profillerde boş bırakırsan otomatik hesaplanır</small></label>
+        <input id="sn-kgpm" type="number" min="0" step="0.01" value="0" placeholder="Örn. 25 kg/takım (boya için)">
+      </div>
     </div>
     <div class="modal-f">
       <button class="btn sec" onclick="closeStockNew()">Vazgeç</button>
@@ -4970,7 +4974,7 @@ async function submitStockMove(){
 }
 
 function openStockNew(){
-  ['sn-kat','sn-urun','sn-b1','sn-a1','sn-b2','sn-a2','sn-adet'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=(['sn-b1','sn-a1','sn-b2','sn-a2','sn-adet'].includes(id)?'0':'')});
+  ['sn-kat','sn-urun','sn-b1','sn-a1','sn-b2','sn-a2','sn-adet','sn-kgpm'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=(['sn-b1','sn-a1','sn-b2','sn-a2','sn-adet','sn-kgpm'].includes(id)?'0':'')});
   const bir = document.getElementById('sn-birim'); if(bir) bir.value = 'm';
   _toggleStockNewFields();
   document.getElementById('stockNewModal').classList.add('show');
@@ -4992,7 +4996,9 @@ async function saveStockNew(){
   const _ad  = document.getElementById('sn-urun').value.trim();
   const _bir = document.getElementById('sn-birim')?.value || 'm';
   const _useBoy = (_bir === 'm' || _bir === 'm²');
-  const _kgpm = _guessKgPerMeter(_kat, _ad);
+  // Manuel birim ağırlık (kg/adet, kg/takım, kg/kutu vb.) — kullanıcı girdiyse onu kullan
+  const _kgpmManual = parseFloat(document.getElementById('sn-kgpm')?.value) || 0;
+  const _kgpm = _kgpmManual > 0 ? _kgpmManual : _guessKgPerMeter(_kat, _ad);
   // Birim m/m² → boy×adet mantığı; diğer birimler → boy1=1, adet1=girilen adet
   let _b1=0,_a1=0,_b2=0,_a2=0;
   if(_useBoy){
@@ -6544,7 +6550,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v137';
+const APP_VERSION = 'v138';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
