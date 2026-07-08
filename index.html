@@ -274,10 +274,11 @@ body.proc-fullscreen{overflow:hidden}
   justify-content:center;z-index:1000;padding:16px;backdrop-filter:blur(4px)}
 .modal-bg.show{display:flex;animation:fade .15s}
 /* Üst üste açılan modallarda en sonuncu (öne çekilen) daha yüksek katmanda olsun */
-#filesModal.show{z-index:1100}
-#userEditModal.show{z-index:1100}
-#procNewModal.show,#procCatalogModal.show,#procDelivModal.show,#bolusetModal.show{z-index:1200}
-#stockMoveModal.show,#stockNewModal.show,#excelModal.show{z-index:1200}
+#filesModal.show{z-index:9400}
+#userEditModal.show{z-index:9400}
+#procNewModal.show,#procCatalogModal.show,#procDelivModal.show,#bolusetModal.show{z-index:9500}
+#stockMoveModal.show,#stockNewModal.show,#excelModal.show{z-index:9500}
+#procEditModal.show{z-index:9600}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 .modal{background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:90vh;
   display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
@@ -6517,7 +6518,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v134';
+const APP_VERSION = 'v135';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
