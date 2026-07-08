@@ -5029,8 +5029,16 @@ const PHASE_ROLE_MAP = {
   montaj:['montaj'], muhasebe:['muhasebe']
 };
 function canEditPhase(phase){
+  // Ana rol yetkisi
   const allowed = PHASE_ROLE_MAP[me?.role] || [];
-  return allowed.includes(phase);
+  if(allowed.includes(phase)) return true;
+  // Yönetici her fazı düzenleyebilir
+  if(me?.role === 'yonetici') return true;
+  // Ek yetki (perms) — örn. muhasebe rolündeki bir kullanıcının perms'i 'satinalma' içeriyorsa satın alma fazını düzenleyebilir
+  const perms = me?.perms || [];
+  if(perms.includes('*')) return true;
+  if(perms.includes(phase)) return true;
+  return false;
 }
 function renderPhases(project){
   const phases = project.phases || {};
@@ -6454,7 +6462,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v131';
+const APP_VERSION = 'v132';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
