@@ -3180,6 +3180,11 @@ function renderProcCatalog(){
         <option value="adet" ${defBirim==='adet'?'selected':''}>adet</option>
         <option value="ton" ${defBirim==='ton'?'selected':''}>ton</option>
         <option value="m²" ${defBirim==='m²'?'selected':''}>m²</option>
+        <option value="rulo" ${defBirim==='rulo'?'selected':''}>rulo</option>
+        <option value="litre" ${defBirim==='litre'?'selected':''}>litre</option>
+        <option value="takım" ${defBirim==='takım'?'selected':''}>takım</option>
+        <option value="paket" ${defBirim==='paket'?'selected':''}>paket</option>
+        <option value="kutu" ${defBirim==='kutu'?'selected':''}>kutu</option>
       </select>
       ${canMod ? `<div style="display:flex;gap:2px"><button class="icon-btn" title="Düzenle" onclick="editCatalogItem('${it.id}')" style="padding:2px 4px;font-size:11px">✏️</button><button class="icon-btn" title="Sil" onclick="deleteCatalogItem('${it.id}')" style="padding:2px 4px;font-size:11px">🗑</button></div>` : ''}
       ${sacInput}
@@ -3260,12 +3265,19 @@ function _byCatOrder(a, b){
 
 // Toplam mevcut stok miktarı (cat.birim cinsinden)
 function _stockAvailable(cat){
-  if(cat.birim === 'adet'){
-    return (cat.adet1||0) + (cat.adet2||0) + (cat.adet3||0);
+  const b = cat.birim || 'm';
+  // m veya m² için: toplam mm'den metre/m² hesabı (boy × adet)
+  if(b === 'm' || b === 'm²'){
+    const mm = (cat.boy1||0)*(cat.adet1||0) + (cat.boy2||0)*(cat.adet2||0) + (cat.boy3||0)*(cat.adet3||0);
+    return mm / 1000;
   }
-  // 'm' birim: toplam metre = (boy×adet toplamı) / 1000
-  const mm = (cat.boy1||0)*(cat.adet1||0) + (cat.boy2||0)*(cat.adet2||0) + (cat.boy3||0)*(cat.adet3||0);
-  return mm / 1000;
+  // Sayılabilir birimler (adet, rulo, litre, takım, paket, kutu, kg, ton):
+  // boy1=1 mantığı → adet1+adet2+adet3 toplamı
+  // boy1>1 mantığı → boy×adet (eski kayıtlar için tolerans)
+  const totalCount = ((cat.boy1||0)*(cat.adet1||0)) + ((cat.boy2||0)*(cat.adet2||0)) + ((cat.boy3||0)*(cat.adet3||0));
+  const totalAdet  = (cat.adet1||0) + (cat.adet2||0) + (cat.adet3||0);
+  // Eğer boy alanı >1 ise onu miktar olarak kabul et, aksi halde adet toplamı
+  return (cat.boy1||0) > 1 ? totalCount : totalAdet;
 }
 
 // Stoktan otomatik düşüm — boy/adet'leri güncel haliyle yeniden hesaplar
@@ -3276,18 +3288,33 @@ async function _deductFromStock(cat, miktar, projectId){
     boy3: cat.boy3||0, adet3: cat.adet3||0
   };
   const movements = [];
+  const b = cat.birim || 'm';
+  const isMeasured = (b === 'm' || b === 'm²');
 
-  if(cat.birim === 'adet'){
+  if(!isMeasured){
+    // Sayılabilir birimler (adet, rulo, litre, takım, paket, kutu, kg, ton):
+    // Eğer boy1 > 1 ise "boy = miktar" kabul (18 birim × 1 adet gibi kayıtlar)
+    // Aksi halde adet1+adet2+adet3 mantığı
     let need = miktar;
-    for(const slot of [1,2,3]){
-      if(need <= 0) break;
-      const k = 'adet'+slot;
-      const avail = upd[k]||0;
-      const take = Math.min(need, avail);
+    if((cat.boy1||0) > 1){
+      // boy1 = mevcut miktar
+      const take = Math.min(need, upd.boy1||0);
       if(take > 0){
-        movements.push({slot, before:avail, after:avail-take, qty:-take});
-        upd[k] = avail - take;
+        movements.push({slot:1, before:upd.boy1, after:upd.boy1-take, qty:-take});
+        upd.boy1 = (upd.boy1||0) - take;
         need -= take;
+      }
+    } else {
+      for(const slot of [1,2,3]){
+        if(need <= 0) break;
+        const k = 'adet'+slot;
+        const avail = upd[k]||0;
+        const take = Math.min(need, avail);
+        if(take > 0){
+          movements.push({slot, before:avail, after:avail-take, qty:-take});
+          upd[k] = avail - take;
+          need -= take;
+        }
       }
     }
   } else {
@@ -3445,12 +3472,11 @@ async function saveProcCatalog(){
       created_by: me.id
     };
     rows.push(row);
-    // Stok kontrolü — sadece picked birim cat.birim ile aynı olduğunda anlamlı
-    if(pickedBirim === cat.birim){
-      const avail = _stockAvailable(cat);
-      if(avail > 0){
-        stockMatches.push({cat, miktar, avail, birim: cat.birim, row});
-      }
+    // Stok kontrolü — birim uyuşmuyor olsa bile katalog eşleşiyorsa 1:1 kabul edilerek düşülür
+    // (SARF/BOYA gibi sayılabilir birimler için pratik: 15 adet talep, 195 rulo stok → 15 birim düş)
+    const avail = _stockAvailable(cat);
+    if(avail > 0){
+      stockMatches.push({cat, miktar, avail, birim: cat.birim, row, birimUyusmuyor: pickedBirim !== cat.birim, talepBirim: pickedBirim});
     }
   }
   if(rows.length === 0){toast('En az bir kaleme miktar gir','err');return}
@@ -3463,8 +3489,9 @@ async function saveProcCatalog(){
       const fmt = v=>(+v).toLocaleString('en-US',{maximumFractionDigits:2});
       const take = Math.min(d.miktar, d.avail);
       const kalan = d.miktar - take;
-      const kalanTxt = kalan > 0 ? ` → satın al: ${fmt(kalan)} ${d.birim}` : ' → satın alma listesine eklenmez (stoktan karşılandı)';
-      return `  • ${d.cat.urun}: talep ${fmt(d.miktar)} ${d.birim} · stokta ${fmt(d.avail)} ${d.birim} · düşülecek: ${fmt(take)} ${d.birim}${kalanTxt}`;
+      const kalanTxt = kalan > 0 ? ` → satın al: ${fmt(kalan)} ${d.talepBirim||d.birim}` : ' → satın alma listesine eklenmez (stoktan karşılandı)';
+      const uyariTxt = d.birimUyusmuyor ? ` [⚠ birim farklı: talep ${d.talepBirim} · stok ${d.birim} — 1:1 kabul]` : '';
+      return `  • ${d.cat.urun}: talep ${fmt(d.miktar)} ${d.talepBirim||d.birim} · stokta ${fmt(d.avail)} ${d.birim} · düşülecek: ${fmt(take)}${uyariTxt}${kalanTxt}`;
     });
     const ok = confirm(
       '⚠️ STOKTA MEVCUT MALZEMELER VAR\n\n' +
@@ -6427,7 +6454,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v130';
+const APP_VERSION = 'v131';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
