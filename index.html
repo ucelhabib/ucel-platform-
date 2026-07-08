@@ -2629,7 +2629,7 @@ function _procCalc(item){
     }
     return s + (parseFloat(d.miktar||0) * kgPm);
   }, 0);
-  return { gelen, kalan, tutar, siparisTutar, kdv, tevkifat, net, durum, delvCount: dl.length, toplamKg, projeKg, toplamIhtiyac, stokDusum, gelenKg, fiyatBirimi: fb };
+  return { gelen, kalan, tutar, siparisTutar, kdv, tevkifat, net, durum, delvCount: dl.length, toplamKg, projeKg, stokKg, toplamIhtiyac, stokDusum, gelenKg, fiyatBirimi: fb };
 }
 function _statusBadge(durum, gelen, miktar){
   if(durum==='tamamlandi') return '<span style="background:#c8f0d8;color:#0a7;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">🟢 Tamam</span>';
@@ -2720,7 +2720,7 @@ function renderProcList(){
         <div style="text-align:right;color:#1f4e8c;font-weight:700;line-height:1.4">${fmt(ihtiyac)}<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} ihtiyaç</small></div>
         <div style="text-align:right;color:#0a7;font-weight:700;line-height:1.4">${stokDusum>0?fmt(stokDusum):'<span style="color:#bbb;font-weight:400">—</span>'}${stokDusum>0?`<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} stoktan</small>`:''}</div>
         <div style="text-align:right;font-weight:700;line-height:1.4">${fmt(siparis)} ${esc(it.birim)}${yuvarlama>0.01?`<br><small style="color:${(it.proc_kategori||'')==='civata'||(it.proc_kategori||'')==='sarf'?'#b45309':'#0a7'};font-size:10px;font-weight:700">+${fmt(yuvarlama)} ${(it.proc_kategori||'')==='civata'||(it.proc_kategori||'')==='sarf'?'fire':'stoğa'}</small>`:''}</div>
-        <div style="text-align:right;font-weight:700;color:#b91c1c;line-height:1.4">${c.toplamKg>0?fmt(c.toplamKg)+' <small style=\"color:#888;font-weight:400;font-size:10px\">kg</small>':'<span style=\"color:#bbb;font-weight:400\">—</span>'}</div>
+        <div style="text-align:right;font-weight:700;color:#b91c1c;line-height:1.4" title="${c.stokDusum>0?'Proje toplam ağırlığı: sipariş + stok':'Toplam ağırlık'}">${c.projeKg>0?fmt(c.projeKg)+' <small style=\"color:#888;font-weight:400;font-size:10px\">kg</small>'+(c.stokDusum>0?`<br><small style=\"color:#0a7c3a;font-weight:500;font-size:9.5px\">sip ${fmt(c.toplamKg)} + stok ${fmt(c.stokKg||(c.projeKg-c.toplamKg))} kg</small>`:''):'<span style=\"color:#bbb;font-weight:400\">—</span>'}</div>
         ${priceCells}
         <div style="text-align:right;color:#0a7;font-size:12px">${c.gelen.toLocaleString('en-US')} ${esc(it.birim)}</div>
         <div style="text-align:center">${_statusBadge(c.durum, c.gelen, parseFloat(it.miktar))}</div>
@@ -3102,6 +3102,36 @@ function _guessKgPerMeter(kategori, urun, ebat){
       const L = parseFloat(m[1].replace(',','.'));
       const t = parseFloat(m[2].replace(',','.'));
       return Math.round(((2*L - t) * t * 0.00785) * 100) / 100;
+    }
+  }
+  // CIVATA / SOMUN / PUL / RONDELA — DIN 8.8 standart kg/adet
+  // Format örnekleri: "M16*40 CIVATA", "M12 SOMUN", "M20 PUL", "M16 RONDELA"
+  if(/CIVATA|CİVATA|SOMUN|PUL|RONDELA|VIDA|VİDA/.test(cat) || /CIVATA|CİVATA|SOMUN|PUL|RONDELA/.test(ad)){
+    const capM = ad.match(/M(\d+(?:[.,]\d+)?)/i);
+    const cap = capM ? parseFloat(capM[1].replace(',','.')) : 0;
+    if(cap > 0){
+      // Somun (DIN 934)
+      if(/SOMUN/.test(ad)){
+        const SOMUN = {6:0.0025, 8:0.0055, 10:0.0107, 12:0.0173, 14:0.0269, 16:0.0333, 18:0.048, 20:0.0658, 22:0.087, 24:0.113, 27:0.164, 30:0.226};
+        return SOMUN[cap] || Math.round((cap*cap*cap*0.0000067)*10000)/10000;
+      }
+      // Pul / Rondela (DIN 125)
+      if(/PUL|RONDELA/.test(ad)){
+        const PUL = {6:0.0015, 8:0.0028, 10:0.0045, 12:0.0084, 14:0.010, 16:0.0155, 18:0.019, 20:0.023, 22:0.030, 24:0.036, 27:0.048, 30:0.062};
+        return PUL[cap] || Math.round((cap*cap*0.000034)*10000)/10000;
+      }
+      // Cıvata (DIN 933 tam paso / DIN 931 yarım paso), boyu urun/ebat'tan al: "M16*40" veya "M16×40"
+      const boyM = ad.match(/M\d+(?:[.,]\d+)?\s*[X×*]\s*(\d+)/i) || (eb||'').match(/[X×*]\s*(\d+)|(\d+)\s*mm/i);
+      const boy = boyM ? parseFloat(boyM[1] || boyM[2] || 0) : 0;
+      if(boy > 0){
+        // Yaklaşık formül: 0.00617 × D² × (L+D)/1000 kg (metal 7.85 g/cm³, kafa+gövde)
+        // Deneysel çarpan 0.75 baş+diş için — DIN 8.8'e uyumlu tabloya yakın
+        const kg = 0.00785 * (cap*cap * Math.PI/4) * (boy * 1.35) / 1000;
+        return Math.round(kg * 10000) / 10000;
+      }
+      // Boy yoksa çapa göre kaba tahmin (uzun cıvata varsayımı)
+      const kabaSecim = {6:0.008, 8:0.017, 10:0.030, 12:0.055, 14:0.077, 16:0.117, 18:0.155, 20:0.240, 22:0.290, 24:0.442, 27:0.560, 30:0.720};
+      return kabaSecim[cap] || Math.round((cap*cap*0.0007)*10000)/10000;
     }
   }
   // SAÇ — kalınlık × 7.85 = kg/m². Ebat (en × boy mm) verilirse kg/adet'e çevir.
@@ -6487,7 +6517,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v133';
+const APP_VERSION = 'v134';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
