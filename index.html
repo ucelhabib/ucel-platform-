@@ -1871,6 +1871,32 @@ async function refreshAll(){
   const btn = document.getElementById('refreshBtn');
   if(btn){ btn.disabled = true; btn.textContent = '⏳ Güncelleniyor...'; }
   try {
+    // 1) ÖNCE UYGULAMA SÜRÜMÜNÜ KONTROL ET — GitHub Pages'te yeni sürüm var mı?
+    try {
+      const r = await fetch('./service-worker.js?bust=' + Date.now(), { cache: 'no-store' });
+      if(r.ok){
+        const t = await r.text();
+        const m = t.match(/ucel-(v\d+)/);
+        if(m && m[1] !== APP_VERSION){
+          // Yeni sürüm var → SW ve cache temizle, sayfayı yenile
+          if(btn){ btn.textContent = `⏳ Yeni sürüm ${m[1]} yükleniyor...`; }
+          if(typeof toast === 'function') toast(`🚀 Yeni sürüm bulundu: ${m[1]} — yükleniyor...`,'info');
+          try {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for(const reg of regs){
+              await reg.update().catch(()=>{});
+              if(reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+            }
+            const ks = await caches.keys();
+            for(const k of ks) await caches.delete(k);
+          } catch(e){ console.warn('sw refresh:', e); }
+          // 1.5 sn sonra hard reload
+          setTimeout(() => location.reload(true), 1500);
+          return;
+        }
+      }
+    } catch(e){ console.warn('version check:', e); }
+    // 2) Sürüm aynı → sadece DB verilerini yenile
     const TIMEOUT = 6000;
     await Promise.allSettled([
       withTimeout(loadProjects(), TIMEOUT, 'projects'),
@@ -1881,7 +1907,7 @@ async function refreshAll(){
     ]);
     lastRefreshAt = Date.now();
     renderAll();
-    if(typeof toast === 'function') toast('Veriler güncellendi','ok');
+    if(typeof toast === 'function') toast('✅ Veriler güncel (sürüm aynı)','ok');
   } catch(e){
     if(typeof toast === 'function') toast('Güncellenemedi: '+errTr(e),'err');
   } finally {
@@ -7066,7 +7092,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v149';
+const APP_VERSION = 'v150';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
@@ -7079,11 +7105,27 @@ const APP_VERSION = 'v149';
     b.style.cssText = 'display:inline-flex;align-items:center;background:rgba(255,255,255,.18);color:#fff;font-size:11px;font-weight:700;padding:4px 9px;border-radius:10px;margin-left:6px;cursor:pointer;font-family:inherit;border:1px solid rgba(255,255,255,.25);user-select:none';
     b.textContent = APP_VERSION;
     b.onclick = async () => {
+      // Yeni sürüm var mı bak — varsa direkt yükle
       try {
-        const reg = await navigator.serviceWorker?.getRegistration();
-        if(reg){ await reg.update(); }
-        if(typeof toast === 'function') toast('Güncel sürüm kontrol edildi — yeni sürüm varsa otomatik yüklenir','info');
-      } catch(e){}
+        const r = await fetch('./service-worker.js?bust='+Date.now(), { cache: 'no-store' });
+        if(r.ok){
+          const t = await r.text();
+          const m = t.match(/ucel-(v\d+)/);
+          if(m && m[1] !== APP_VERSION){
+            if(typeof toast === 'function') toast(`🚀 Yeni sürüm ${m[1]} yükleniyor...`,'info');
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for(const reg of regs){
+              await reg.update().catch(()=>{});
+              if(reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+            }
+            const ks = await caches.keys();
+            for(const k of ks) await caches.delete(k);
+            setTimeout(()=>location.reload(true), 1200);
+            return;
+          }
+        }
+      } catch(e){ console.warn('badge check:', e); }
+      if(typeof toast === 'function') toast(`✅ Sürüm güncel: ${APP_VERSION}`,'ok');
     };
     if(target && target.parentNode){
       target.parentNode.insertBefore(b, target.nextSibling);
@@ -7095,6 +7137,31 @@ const APP_VERSION = 'v149';
   };
   if(document.body && document.getElementById('topbarRefreshBtn')) init();
   else document.addEventListener('DOMContentLoaded', init);
+  // Arka planda periyodik yeni sürüm kontrolü — 60 saniye
+  const checkNewVersion = async () => {
+    try {
+      const r = await fetch('./service-worker.js?bust='+Date.now(), { cache: 'no-store' });
+      if(!r.ok) return;
+      const t = await r.text();
+      const m = t.match(/ucel-(v\d+)/);
+      const badge = document.getElementById('verBadge');
+      if(!badge || !m) return;
+      if(m[1] !== APP_VERSION){
+        // Yeni sürüm var — rozete kırmızı yanıp sönen nokta ekle
+        badge.title = `Yeni sürüm var: ${m[1]} — Tıkla yükle`;
+        badge.style.background = 'rgba(220,38,38,0.95)';
+        badge.style.borderColor = 'rgba(255,255,255,0.5)';
+        badge.innerHTML = `${APP_VERSION} <span style="display:inline-block;width:8px;height:8px;background:#fff;border-radius:50%;margin-left:4px;animation:blinkNew 1.2s infinite">&nbsp;</span>`;
+        if(!document.getElementById('_blinkStyle')){
+          const s = document.createElement('style'); s.id='_blinkStyle';
+          s.textContent = '@keyframes blinkNew{0%,100%{opacity:1}50%{opacity:0.3}}';
+          document.head.appendChild(s);
+        }
+      }
+    } catch(e){}
+  };
+  setTimeout(checkNewVersion, 5000);   // ilk 5 sn sonra
+  setInterval(checkNewVersion, 60000); // her 60 sn
 })();
 
 // Otomatik güncelleme: yeni SW gelirse beklenmeden devreye alınır, sayfa otomatik yenilenir
