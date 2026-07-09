@@ -5435,7 +5435,7 @@ function openProj(id){
     loadProcurement(id);
   } else {
     document.getElementById('pmTitle').textContent='Yeni Proje';
-    ['pf-no','pf-cust','pf-title','pf-loc','pf-amt','pf-ton','pf-ship','pf-notes'].forEach(x=>document.getElementById(x).value='');
+    ['pf-no','pf-cust','pf-title','pf-loc','pf-amt','pf-ton','pf-ship','pf-notes','pf-folder'].forEach(x=>{ const el=document.getElementById(x); if(el){ el.value=''; el.readOnly=false; el.style.background='#fff'; } });
     document.getElementById('pf-no').value='P-'+Date.now().toString().slice(-4);
     renderStageChips(['teklifproje']);
     document.getElementById('pf-prog').value='0';
@@ -6920,7 +6920,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v143';
+const APP_VERSION = 'v144';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
