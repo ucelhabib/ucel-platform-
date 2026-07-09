@@ -4615,11 +4615,24 @@ function normSearch(s){
     .replace(/\s+/g,'');
 }
 function stockTotals(it){
-  const a = (it.adet1||0) + (it.adet2||0);
-  const lmm = (it.boy1||0)*(it.adet1||0) + (it.boy2||0)*(it.adet2||0);
+  const a = (it.adet1||0) + (it.adet2||0) + (it.adet3||0);
+  const lmm = (it.boy1||0)*(it.adet1||0) + (it.boy2||0)*(it.adet2||0) + (it.boy3||0)*(it.adet3||0);
   const kgPm = parseFloat(it.kg_per_meter||0);
-  const kg = (lmm/1000) * kgPm;
-  return { adet:a, mm:lmm, m:(lmm/1000).toFixed(2), kg: kg.toFixed(1) };
+  const b = it.birim || 'm';
+  let kg = 0;
+  let m = (lmm/1000).toFixed(2);
+  if(b === 'm' || b === 'm²'){
+    // Metre veya m² — (boy × adet)/1000 × kg/(m veya m²) = kg
+    kg = (lmm/1000) * kgPm;
+  } else {
+    // Sayılabilir birim (adet, takım, kutu, rulo, paket, litre, kg) — miktar × kg/birim
+    // Eski format (boy1>1): boy1=miktar, adet1=1  → total = boy1 × adet1
+    // Yeni format:            boy1=1,      adet1=miktar → total = adet1
+    const miktar = (it.boy1||0) > 1 ? ((it.boy1||0)*(it.adet1||0)) : a;
+    kg = miktar * kgPm;
+    m = miktar.toString();
+  }
+  return { adet:a, mm:lmm, m:m, kg: kg.toFixed(1) };
 }
 window._stkExpanded = window._stkExpanded || new Set();
 async function updateStockNote(itemId, newNote){
@@ -4682,21 +4695,31 @@ function renderStockTable(){
   const head = `<thead><tr style="position:sticky;top:0;background:${thBg};z-index:1">
     <th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd)">Kategori ✏️</th>
     <th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd)">Ürün ✏️</th>
-    <th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd)">Toplam Metraj ✏️<br><small style="font-weight:400;color:#888">(mm)</small></th>
-    <th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd)">kg/m ✏️</th>
-    <th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd)">Ağırlık<br><small style="font-weight:400;color:#888">(kg, otomatik)</small></th>
+    <th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd)">Toplam Miktar ✏️<br><small style="font-weight:400;color:#888">(birime göre)</small></th>
+    <th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd)">Birim Ağırlık ✏️<br><small style="font-weight:400;color:#888">(kg/birim)</small></th>
+    <th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd)">Toplam Ağırlık<br><small style="font-weight:400;color:#888">(kg, otomatik)</small></th>
     <th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd)">Not ✏️</th>
     ${canDelete ? '<th style="padding:8px;text-align:center;border-bottom:1px solid var(--bd);width:70px">İşlem</th>' : ''}
   </tr></thead>`;
+  // Miktar sütunu birim'e göre biçimlenir: m/m² için metre/m², diğerleri için adet
+  const _miktarGoster = (it, tot) => {
+    const b = it.birim || 'm';
+    if(b === 'm')  return `${tot.m} <small style="color:#888;font-weight:400">m</small>`;
+    if(b === 'm²') return `${tot.m} <small style="color:#888;font-weight:400">m²</small>`;
+    // Sayılabilir birim — boy1>1 ise miktar=boy1×adet1, aksi halde adet toplamı
+    const miktar = (it.boy1||0) > 1 ? ((it.boy1||0)*(it.adet1||0)) : tot.adet;
+    return `${miktar} <small style="color:#888;font-weight:400">${esc(b)}</small>`;
+  };
   const rowHtml = (it)=>{
     const tot = stockTotals(it);
     const noteText = it.not_text || '';
     const editCell = 'background:#eef6ff;cursor:pointer;border-right:1px solid #d6e4f5;text-align:center';
+    const b = it.birim || 'm';
     return `<tr style="border-bottom:1px solid #eef0f5" onmouseover="this.style.background='#f8fbff'" onmouseout="this.style.background=''">
       <td data-label="Kategori" class="stk-edit" style="padding:6px 8px;font-size:12px;color:#333;${editCell}" ondblclick="editStockCell('${it.id}','kategori',this)" title="📝 Çift tıkla düzenle">${esc(it.kategori)}</td>
       <td data-label="Ürün" class="stk-edit" style="padding:6px 8px;font-weight:600;${editCell}" ondblclick="editStockCell('${it.id}','urun',this)" title="📝 Çift tıkla düzenle">${esc(it.urun)}</td>
-      <td data-label="Toplam mm" class="stk-edit" style="padding:6px 8px;color:${tot.mm===0?'#c33':'#0a7'};font-weight:700;${editCell}" ondblclick="editStockTotalMm('${it.id}',this)" title="📝 Çift tıkla toplam mm gir">${tot.mm.toLocaleString('en-US')}</td>
-      <td data-label="kg/m" class="stk-edit" style="padding:6px 8px;color:#444;font-size:12px;${editCell}" ondblclick="editStockCell('${it.id}','kg_per_meter',this)" title="📝 Çift tıkla kg/m düzenle">${parseFloat(it.kg_per_meter||0).toLocaleString('en-US')}</td>
+      <td data-label="Toplam Miktar" class="stk-edit" style="padding:6px 8px;color:${tot.kg==='0.0'?'#c33':'#0a7'};font-weight:700;${editCell}" ondblclick="editStockTotalMm('${it.id}',this)" title="📝 Çift tıkla toplam miktar gir">${_miktarGoster(it, tot)}</td>
+      <td data-label="Birim Ağırlık" class="stk-edit" style="padding:6px 8px;color:#444;font-size:12px;${editCell}" ondblclick="editStockCell('${it.id}','kg_per_meter',this)" title="📝 Çift tıkla birim ağırlık düzenle">${parseFloat(it.kg_per_meter||0).toLocaleString('en-US')} <small style="color:#888">kg/${b==='m'||b==='m²'?b:b}</small></td>
       <td data-label="Ağırlık" style="padding:6px 8px;text-align:center;color:#1f4e8c;font-weight:700;background:#fff8e1">${parseFloat(tot.kg).toLocaleString('en-US')} kg</td>
       <td data-label="Not" class="stk-edit" style="padding:6px 8px;font-size:11px;color:${noteText?'#333':'#999'};${editCell}" ondblclick="editStockCell('${it.id}','not_text',this)" title="📝 Çift tıkla not gir">${esc(noteText) || '📝 not ekle'}</td>
       ${canDelete ? `<td data-label="İşlem" style="padding:6px 4px;text-align:center;white-space:nowrap">
@@ -6920,7 +6943,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v144';
+const APP_VERSION = 'v145';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
