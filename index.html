@@ -240,6 +240,15 @@ tr.compact td .pill{font-size:10px;padding:2px 7px}
 @media (max-width:720px){
   #mobileNav{display:flex !important}
   .main{padding-bottom:70px}
+  /* Mobilde saat kutusunu kompaktla — sadece saat görünsün */
+  #topClock{white-space:nowrap}
+  #topClock .clock-day-date{display:block;font-size:10.5px;opacity:0.85}
+  #topClock .clock-time{font-size:14px;font-weight:700}
+  @media (max-width: 760px){
+    #topClock{min-width:auto !important;padding:4px 8px !important;font-size:11px !important}
+    #topClock .clock-day-date{display:none}
+    #topClock .clock-time{font-size:12px}
+  }
   /* Üst bardakı "son güncelleme" yazısını mobilde gizle, sadece 🔄 ikon görünür */
   .topbar-refresh-txt{display:none !important}
   #topbarRefreshBtn{padding:6px 8px !important}
@@ -387,6 +396,7 @@ body.proc-fullscreen{overflow:hidden}
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
+      <div id="topClock" class="top-clock" style="color:#fff;font-size:12px;padding:5px 12px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:6px;font-weight:500;line-height:1.35;text-align:right;min-width:170px"></div>
       <button id="topbarRefreshBtn" onclick="refreshAll()" title="Verileri yenile" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px"><span style="font-size:14px">🔄</span><span class="topbar-refresh-txt" id="topbarRefreshTxt" style="font-size:11px;opacity:.85">son güncelleme: —</span></button>
       <button class="notif-btn" onclick="tNotif(event)">🔔<span class="notif-badge" id="nBadge">0</span></button>
       <button class="logout-btn" onclick="doLogout()">🚪 Çıkış</button>
@@ -7092,7 +7102,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v150';
+const APP_VERSION = 'v151';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
@@ -7441,81 +7451,4 @@ async function uploadFiles(){
     const ts = Date.now();
     const safe = file.name.replace(/[^\w.\-]/g,'_');
     const folder = _filesCtx.projectId ? ('projects/'+_filesCtx.projectId) : ('tasks/'+_filesCtx.taskId);
-    const path = folder + '/' + ts + '_' + safe;
-    const up = await sb.storage.from('project-files').upload(path, file, {contentType:file.type||'application/octet-stream'});
-    if(up.error){failN++; console.error(up.error); continue}
-    const ins = await sb.from('attachments').insert({
-      project_id: _filesCtx.projectId,
-      task_id:    _filesCtx.taskId,
-      uploaded_by: me.id,
-      file_name:  file.name,
-      file_path:  path,
-      mime_type:  file.type||null,
-      size_bytes: file.size
-    });
-    if(ins.error){failN++; console.error(ins.error)} else {okN++}
-  }
-  status.textContent = okN+' yüklendi'+(failN?' · '+failN+' başarısız':'');
-  toast(okN+' dosya yüklendi',okN?'info':'err');
-  inp.value='';
-  await loadFiles();
-}
-async function delFile(id, path){
-  if(!confirm('Bu dosyayı silmek istediğinden emin misin?')) return;
-  const {error:e1} = await sb.from('attachments').delete().eq('id', id);
-  if(e1){toast('Hata: '+e1.message,'err');return}
-  await sb.storage.from('project-files').remove([path]);
-  toast('Silindi','info');
-  await loadFiles();
-}
-
-// userEditModal & filesModal click-out kapatma
-document.addEventListener('DOMContentLoaded', function(){
-  const u = document.getElementById('userEditModal');
-  if(u) u.addEventListener('click', e=>{if(e.target.id==='userEditModal') closeUserEdit()});
-  const f = document.getElementById('filesModal');
-  if(f) f.addEventListener('click', e=>{if(e.target.id==='filesModal') closeFiles()});
-  // Ses açık/kapalı tercihini yükle
-  const s = document.getElementById('setSound');
-  if(s) s.checked = localStorage.getItem('ucelSound')!=='0';
-  // KLAVYE KISAYOLLARI — Esc = kapat, Enter = kaydet (textarea hariç)
-  document.addEventListener('keydown', function(e){
-    // Şu anda aktif (üstte açık) olan modal-bg'i bul
-    const openModals = Array.from(document.querySelectorAll('.modal-bg.show'));
-    if(!openModals.length) return;
-    // En yüksek z-index'li = en önde
-    const topModal = openModals.reduce((a,b) => (parseInt(getComputedStyle(b).zIndex)||0) > (parseInt(getComputedStyle(a).zIndex)||0) ? b : a);
-    if(e.key === 'Escape'){
-      // Kapat butonunu bul ve tıkla
-      const closeBtn = topModal.querySelector('.modal-h .x, .modal-h button.x') || topModal.querySelector('.modal-f .btn.sec');
-      if(closeBtn){ e.preventDefault(); closeBtn.click(); }
-    } else if(e.key === 'Enter' && !e.shiftKey && !e.ctrlKey){
-      // Textarea içinde Enter satır atlar, dokunma
-      if(e.target && (e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
-      // Ana ok butonunu bul (.btn.ok)
-      const okBtn = topModal.querySelector('.modal-f .btn.ok, .modal-f button.btn.ok');
-      if(okBtn && !okBtn.disabled){ e.preventDefault(); okBtn.click(); }
-    }
-  });
-});
-// UNDO destekli toast — silme işlemlerinden sonra 5 sn geri al butonu gösterir
-function toastUndo(mesaj, undoLabel, undoFn){
-  const el = document.createElement('div');
-  el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:12px 18px 12px 20px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:5100;display:flex;align-items:center;gap:14px;font-size:13px;max-width:90vw';
-  const msgSpan = document.createElement('span');
-  msgSpan.textContent = mesaj;
-  const btn = document.createElement('button');
-  btn.textContent = '↶ ' + (undoLabel||'Geri Al');
-  btn.style.cssText = 'background:#0891b2;color:#fff;border:0;border-radius:6px;padding:6px 12px;font-weight:600;font-size:12px;cursor:pointer';
-  btn.onclick = async () => {
-    btn.disabled = true; btn.textContent = 'Geri alınıyor...';
-    try { await undoFn(); } catch(e){ console.error('undo:',e); }
-    el.remove();
-  };
-  el.appendChild(msgSpan); el.appendChild(btn);
-  document.body.appendChild(el);
-  setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),400); }, 5000);
-}
-</script>
-</body>
-</html>
+    const path = folder + '/' + ts + 
