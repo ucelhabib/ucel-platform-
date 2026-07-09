@@ -4132,7 +4132,9 @@ function printProcurement(){
   let totT=0, totK=0, totTv=0, totN=0, totKg=0;
   const rows = procItems.map((it,i)=>{
     const c = _procCalc(it);
-    totT += c.tutar; totK += c.kdv; totTv += c.tevkifat; totN += c.net; totKg += c.toplamKg;
+    totT += c.tutar; totK += c.kdv; totTv += c.tevkifat; totN += c.net;
+    // Toplam ağırlık PROJE bazlı (sipariş + stoktan karşılanan) — takip formuyla aynı
+    totKg += c.projeKg;
     const dl = _procDelvOf(it.id);
     const dStr = dl.length === 0 ? '<em style="color:#999">— teslimat yok —</em>' :
       dl.map(d=>`<div style="font-size:11px;padding:2px 0">📦 <b>${d.tarih}</b> · ${fmtNum(d.miktar,2)} ${esc(it.birim)}${d.gercek_kg?` (${fmtNum(d.gercek_kg,2)} kg)`:''}${d.irsaliye_no?` · İrs: <b>${esc(d.irsaliye_no)}</b>`:''}${d.fatura_no?` · Fat: <b>${esc(d.fatura_no)}</b>`:''}${d.tedarikci?` · ${esc(d.tedarikci)}`:''}${d.fatura_tutari?` · ${fmtTL(d.fatura_tutari)}`:''}${d.not_text?` · <i>${esc(d.not_text)}</i>`:''}</div>`).join('');
@@ -4160,7 +4162,7 @@ function printProcurement(){
       <td><b style="color:#1f4e8c">${_fmt(_ihtiyac)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small></td>
       <td>${_stokDusum>0?`<b style="color:#0a7">${_fmt(_stokDusum)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small>`:'<span style="color:#bbb">—</span>'}</td>
       <td><b>${_fmt(_siparis)} ${esc(it.birim)}</b>${_yuvarlama>0.01?`<br><small style="color:#0a7;font-size:8pt;font-weight:600">+${_fmt(_yuvarlama)} stoğa</small>`:''}</td>
-      <td><b style="color:#b91c1c">${c.toplamKg>0?_fmt(c.toplamKg)+' kg':'—'}</b></td>
+      <td><b style="color:#b91c1c">${c.projeKg>0?_fmt(c.projeKg)+' kg':'—'}</b>${c.stokDusum>0?`<br><small style="color:#0a7c3a;font-size:8pt;font-weight:600">stok: ${_fmt(c.stokKg||(c.projeKg-c.toplamKg))} kg</small>`:''}</td>
       <td>${fmtTL(it.birim_fiyat)}/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</td>
       <td>${fmtTL(c.tutar)}</td>
       <td>%${it.kdv_orani}<br>${fmtTL(c.kdv)}</td>
@@ -4406,7 +4408,7 @@ function exportProcurementExcel(){
   const proj = projects.find(p=>p.id===_procProjectId);
   const tarih = new Date().toLocaleDateString('tr-TR');
   // Kurumsal başlıklı yapı (aoa)
-  const headers = ['#','Malzeme','Ebat','Stoktan','Sipariş','Toplam İhtiyaç','Birim','Toplam Kg','Birim Fiyat','Fiyat Br.','Tutar','KDV %','KDV ₺','Tevkifat','NET ₺','Gelen','Kalan','Durum','Tesl. Sayı','Not'];
+  const headers = ['#','Malzeme','Ebat','Stoktan','Sipariş','Toplam İhtiyaç','Birim','Proje Toplam Kg','Sipariş Kg','Stok Kg','Birim Fiyat','Fiyat Br.','Tutar','KDV %','KDV ₺','Tevkifat','NET ₺','Gelen','Kalan','Durum','Tesl. Sayı','Not'];
   const aoa = [
     ['ÜÇEL STEEL CONSTRUCTION'],
     ['SATIN ALMA TAKİP RAPORU'],
@@ -4420,9 +4422,10 @@ function exportProcurementExcel(){
     const stokDusum = +it.stok_dusum || 0;
     const siparis = parseFloat(it.miktar) || 0;
     const ihtiyac = siparis + stokDusum;
-    tt+=c.tutar; tk+=c.kdv; ttv+=c.tevkifat; tn+=c.net; tkg+=c.toplamKg; tg+=c.gelen; tih+=ihtiyac;
+    tt+=c.tutar; tk+=c.kdv; ttv+=c.tevkifat; tn+=c.net; tkg+=c.projeKg; tg+=c.gelen; tih+=ihtiyac;
     aoa.push([
-      i+1, it.malzeme, it.ebat||'', stokDusum, siparis, ihtiyac, it.birim, c.toplamKg,
+      i+1, it.malzeme, it.ebat||'', stokDusum, siparis, ihtiyac, it.birim,
+      Math.round(c.projeKg*100)/100, Math.round(c.toplamKg*100)/100, Math.round((c.stokKg||0)*100)/100,
       parseFloat(it.birim_fiyat)||0, '/' + (c.fiyatBirimi==='kg'?'kg':it.birim),
       c.tutar, it.kdv_orani, c.kdv, c.tevkifat, c.net, c.gelen, c.kalan,
       c.durum==='tamamlandi'?'Tamam':(c.durum==='kismi'?'Kısmi':'Bekliyor'),
@@ -6961,7 +6964,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v146';
+const APP_VERSION = 'v147';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
