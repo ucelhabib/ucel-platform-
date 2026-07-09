@@ -460,8 +460,11 @@ body.proc-fullscreen{overflow:hidden}
       </div>
 
       <div class="page" id="page-mytasks">
+        <div id="mtWelcome" style="margin-bottom:14px"></div>
+        <div id="mtQuickCards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:18px"></div>
+        <div id="mtShortcuts" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"></div>
         <div class="page-h">
-          <div><div class="page-title">Görevlerim</div><div class="page-sub" id="mtSub">-</div></div>
+          <div><div class="page-title">📋 Görevlerim</div><div class="page-sub" id="mtSub">-</div></div>
           <div><button class="btn admin-only" onclick="openTask()">+ Yeni Görev</button></div>
         </div>
         <div id="myList"></div>
@@ -2066,9 +2069,69 @@ function renderProjects(){
   document.getElementById('pCount').textContent=projects.length;
 }
 function renderMyTasks(){
-  const mt=tasks.filter(t=>t.assignee_id===me.id);
-  document.getElementById('mtSub').textContent=`${mt.filter(t=>!t.done).length} açık · ${mt.filter(t=>t.done).length} tamamlandı`;
-  document.getElementById('myList').innerHTML=renderTL(mt);
+  const mt = tasks.filter(t => t.assignee_id === me.id);
+  const now = new Date();
+  const td = now.toISOString().slice(0,10);
+  const in7 = new Date(now.getTime() + 7*24*3600*1000).toISOString().slice(0,10);
+  const acik = mt.filter(t=>!t.done);
+  const geciken = acik.filter(t=>t.due && t.due<td);
+  const bugun = acik.filter(t=>t.due === td);
+  const buHafta = acik.filter(t=>t.due && t.due>td && t.due<=in7);
+  const tamam = mt.filter(t=>t.done);
+  // Hoş geldin — saate göre selamlama
+  const saat = now.getHours();
+  const selam = saat < 12 ? 'Günaydın' : (saat < 18 ? 'İyi çalışmalar' : 'İyi akşamlar');
+  const isim = (me.full_name||'').split(' ')[0] || '';
+  const wEl = document.getElementById('mtWelcome');
+  if(wEl){
+    const durum = geciken.length > 0
+      ? `<span style="color:#dc2626;font-weight:600">${geciken.length} geciken göreviniz var — bugün kapatmaya çalışın.</span>`
+      : bugun.length > 0
+        ? `<span style="color:#059669;font-weight:600">Bugün ${bugun.length} göreviniz var — güzel bir gün olacak.</span>`
+        : acik.length > 0
+          ? `<span style="color:#1f4e8c">${acik.length} açık göreviniz var, geciken yok. Rahat çalışın.</span>`
+          : `<span style="color:#0a7c3a">🎉 Tüm görevleriniz tamam — bugün rahatsınız.</span>`;
+    wEl.innerHTML = `<div style="background:linear-gradient(135deg,#eef6ff 0%,#f5f9ff 100%);padding:16px 22px;border-radius:14px;border:1px solid #d6e4f5">
+      <div style="font-size:20px;font-weight:700;color:#1f2937">${selam}, ${esc(isim)} 👋</div>
+      <div style="font-size:13px;color:#4b5563;margin-top:4px">${durum}</div>
+    </div>`;
+  }
+  // Hızlı özet kartları
+  const qEl = document.getElementById('mtQuickCards');
+  if(qEl){
+    const kart = (renk, bg, ikon, sayi, alt, action) => `<div onclick="${action||''}" style="background:${bg};border:1px solid ${renk}30;border-radius:12px;padding:14px 16px;cursor:${action?'pointer':'default'};transition:all .15s" ${action?`onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,.08)'" onmouseout="this.style.transform='';this.style.boxShadow=''"`:''}>
+      <div style="font-size:26px;line-height:1">${ikon}</div>
+      <div style="font-size:32px;font-weight:800;color:${renk};line-height:1.1;margin-top:4px">${sayi}</div>
+      <div style="font-size:12px;color:#6b7280;margin-top:2px">${alt}</div>
+    </div>`;
+    qEl.innerHTML =
+      kart('#dc2626', '#fef2f2', '⏰', geciken.length, 'geciken görev', geciken.length>0?"_mtScrollToList()":'')
+    + kart('#059669', '#ecfdf5', '📅', bugun.length,   'bugün için',    bugun.length>0?"_mtScrollToList()":'')
+    + kart('#1f4e8c', '#eff6ff', '📋', buHafta.length, 'bu hafta',      buHafta.length>0?"_mtScrollToList()":'')
+    + kart('#6b7280', '#f9fafb', '✅', tamam.length,   'tamamlandı',    '');
+  }
+  // Rol bazlı hızlı işlemler
+  const sEl = document.getElementById('mtShortcuts');
+  if(sEl){
+    const perms = me.perms || [];
+    const rol = me.role;
+    const btn = (ikon, txt, action, renk) => `<button onclick="${action}" style="background:${renk};color:#fff;border:0;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 2px 6px rgba(0,0,0,.08)">${ikon} ${txt}</button>`;
+    const items = [];
+    if(rol === 'yonetici') items.push(btn('📊','Genel Bakış',"goto('overview')",'#1f4e8c'));
+    if(rol === 'satinalma' || perms.includes('satinalma') || rol === 'yonetici' || perms.includes('*')) items.push(btn('🛒','Satın Alma',"goto('d-satinalma')",'#6b3fa0'));
+    if(rol === 'stok' || perms.includes('stok') || rol === 'yonetici' || perms.includes('*')) items.push(btn('📦','Stok Takip',"goto('d-stok')",'#0891b2'));
+    if(rol === 'muhasebe' || perms.includes('muhasebe') || rol === 'yonetici' || perms.includes('*')) items.push(btn('💰','Muhasebe',"goto('d-muhasebe')",'#059669'));
+    if(rol === 'uretim' || perms.includes('uretim') || rol === 'yonetici' || perms.includes('*')) items.push(btn('🔧','Üretim',"goto('d-uretim')",'#ea580c'));
+    if(rol === 'teklifproje' || perms.includes('teklifproje') || rol === 'yonetici' || perms.includes('*')) items.push(btn('📐','Teklif/Projelendirme',"goto('d-teklifproje')",'#0d9488'));
+    if(rol === 'montaj' || perms.includes('montaj') || rol === 'yonetici' || perms.includes('*')) items.push(btn('🏗️','Saha Montajı',"goto('d-montaj')",'#7c3aed'));
+    items.push(btn('📁','Projeler',"goto('projects')",'#374151'));
+    sEl.innerHTML = items.join('');
+  }
+  document.getElementById('mtSub').textContent = `${acik.length} açık · ${tamam.length} tamamlandı${geciken.length>0?` · ${geciken.length} geciken`:''}`;
+  document.getElementById('myList').innerHTML = renderTL(mt);
+}
+function _mtScrollToList(){
+  document.getElementById('myList')?.scrollIntoView({behavior:'smooth', block:'start'});
 }
 function renderDept(d){
   const dt=tasks.filter(t=>t.dept===d);
@@ -3821,6 +3884,7 @@ async function transferProcToStock(itemId){
     const {error:_dErr} = await sb.from('procurement_items').delete().eq('id', itemId);
     if(_dErr) throw _dErr;
     toast(`✅ Stoğa aktarıldı: ${miktar} ${it.birim} ${it.malzeme}`,'ok');
+    bigOK('Stoğa aktarıldı');
     await loadProcurement(_procProjectId);
     await loadStock();
   } catch(err){
@@ -3863,9 +3927,12 @@ async function saveProcEdit(){
   const {error} = await sb.from('procurement_items').update(upd).eq('id', _peCurrentId);
   if(error){ toast('Hata: '+errTr(error),'err'); return; }
   toast('Güncellendi','ok');
+  bigOK('Fiyat kaydedildi');
   closeProcEdit();
   await loadProcurement(_procProjectId);
-  try { const proj = projects.find(p=>p.id===_procProjectId); await notify(`🛒 ${me.full_name} ${it.malzeme} için fiyat güncelledi: ${fmtTL(upd.birim_fiyat)} (${fb==='kg'?'TL/kg':`TL/${upd.birim}`})`, '🛒', 'satinalma', 'project', _procProjectId); } catch(e){}
+  // GİZLİLİK: Fiyat rakamı bildirime yazılmaz — sadece "fiyat güncellendi" mesajı gider
+  // Rakamı görmek isteyen yetkili kişi projeye tıklayıp içeride görür (RLS ile filtrelenir)
+  try { const proj = projects.find(p=>p.id===_procProjectId); await notify(`🛒 ${me.full_name} "${proj?.no||''}" projesinde ${it.malzeme} için fiyat bilgisini güncelledi`, '🛒', 'satinalma', 'project', _procProjectId); } catch(e){}
 }
 
 /* --- Teslimat --- */
@@ -6587,6 +6654,35 @@ async function toggle(id){
 /* ============ UTIL ============ */
 function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c])}
 function toast(m,t='ok'){const el=document.createElement('div');el.className='toast '+t;el.textContent=m;document.getElementById('toasts').appendChild(el);setTimeout(()=>el.style.opacity='0',2400);setTimeout(()=>el.remove(),2700)}
+// Büyük ekran ortasında başarı animasyonu — 1 saniye görünür, sonra soluklaşıp kaybolur
+function bigOK(mesaj){
+  let host = document.getElementById('bigOkHost');
+  if(!host){
+    host = document.createElement('div');
+    host.id = 'bigOkHost';
+    host.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:99999;pointer-events:none';
+    document.body.appendChild(host);
+  }
+  host.innerHTML = `<div style="background:rgba(10,124,58,0.95);color:#fff;padding:36px 48px;border-radius:24px;box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center;font-family:inherit;animation:bigOkPop .4s ease-out;min-width:220px">
+    <div style="font-size:88px;line-height:1;margin-bottom:10px">✅</div>
+    <div style="font-size:20px;font-weight:700;letter-spacing:0.5px">${mesaj||'Tamamlandı'}</div>
+  </div>`;
+  host.style.display = 'flex';
+  clearTimeout(bigOK._t);
+  bigOK._t = setTimeout(()=>{
+    host.firstElementChild.style.transition = 'opacity .3s, transform .3s';
+    host.firstElementChild.style.opacity = '0';
+    host.firstElementChild.style.transform = 'scale(0.9)';
+    setTimeout(()=>{ host.style.display = 'none'; }, 300);
+  }, 900);
+}
+// CSS keyframe animation'ı bir kez ekle
+if(!document.getElementById('bigOkStyle')){
+  const s = document.createElement('style');
+  s.id = 'bigOkStyle';
+  s.textContent = '@keyframes bigOkPop{0%{transform:scale(0.5);opacity:0}60%{transform:scale(1.05);opacity:1}100%{transform:scale(1);opacity:1}}';
+  document.head.appendChild(s);
+}
 
 /* ============ PARA / SAYI FORMATLAYICILARI ============ */
 // Türk Lirası — uluslararası format: 12,420,000.00 TL (binlik virgül, ondalık nokta)
@@ -6824,7 +6920,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v142';
+const APP_VERSION = 'v143';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
