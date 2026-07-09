@@ -3009,6 +3009,56 @@ function _updateBolusetPreview(){
     ? `<br><small style="color:#b91c1c">(Bazı kalemlerde çift pul — adet katsayılı)</small>` : '';
   el.innerHTML = `<strong>${kalemSayisi} kalem</strong> eklenecek · Cıvata: <strong>${civata}</strong> · Somun: <strong>${somun}</strong> · Pul: <strong>${pul}</strong> · Rondela: <strong>${rondela}</strong>${fireGosterimi}${ciftPul}`;
 }
+// Yeni kalem(leri) satın almaya eklerken — aynı proje+malzeme+birim varsa "üzerine ekle" (merge), yoksa insert.
+// Duplicate kayıt oluşmasını önler. Cıvata Seti, Manuel Ekleme ve Katalog seçiminde ortak kullanılır.
+async function _mergeOrInsertProcItems(rows){
+  if(!rows || !rows.length) return { eklenen: 0, birlestirilen: 0 };
+  const projectId = rows[0].project_id;
+  // Bu projedeki mevcut kalemleri çek (bir kez)
+  const { data: existing, error: readErr } = await sb.from('procurement_items')
+    .select('id, malzeme, birim, miktar, stok_dusum, original_ihtiyac, not_text')
+    .eq('project_id', projectId);
+  if(readErr) return { error: readErr };
+  const _norm = (s)=>(s||'').toString().trim().toLocaleUpperCase('tr-TR').replace(/\s+/g,' ');
+  const idx = new Map();
+  (existing||[]).forEach(e => idx.set(`${_norm(e.malzeme)}|${_norm(e.birim)}`, e));
+  const toInsert = [];
+  let eklenen = 0, birlestirilen = 0;
+  for(const r of rows){
+    const key = `${_norm(r.malzeme)}|${_norm(r.birim)}`;
+    const match = idx.get(key);
+    if(match){
+      // Mevcut kalemin miktarına ekle
+      const yeniMiktar   = (parseFloat(match.miktar)||0)   + (parseFloat(r.miktar)||0);
+      const yeniStokDus  = (parseFloat(match.stok_dusum)||0) + (parseFloat(r.stok_dusum||0));
+      const yeniOrig     = (parseFloat(match.original_ihtiyac)||0) + (parseFloat(r.original_ihtiyac||r.miktar)||0);
+      // Notları birleştir (yeni notu ekle, boş değilse)
+      const notAdd = (r.not_text||'').trim();
+      const notCur = (match.not_text||'').trim();
+      const yeniNot = notAdd && !notCur.includes(notAdd) ? (notCur ? `${notCur} · ${notAdd}` : notAdd) : notCur;
+      const { error: upErr } = await sb.from('procurement_items').update({
+        miktar: yeniMiktar,
+        stok_dusum: yeniStokDus,
+        original_ihtiyac: yeniOrig,
+        not_text: yeniNot || null,
+        updated_at: new Date().toISOString()
+      }).eq('id', match.id);
+      if(upErr) return { error: upErr };
+      birlestirilen++;
+      // idx'i güncelle ki aynı call'da 2 aynı ürün varsa yine merge olsun
+      match.miktar = yeniMiktar;
+    } else {
+      toInsert.push(r);
+    }
+  }
+  if(toInsert.length){
+    const { error: insErr } = await sb.from('procurement_items').insert(toInsert);
+    if(insErr) return { error: insErr };
+    eklenen = toInsert.length;
+  }
+  return { eklenen, birlestirilen };
+}
+
 async function saveBoluset(){
   if(!_procProjectId){ toast('Proje seçili değil','err'); return; }
   const rows = _bolusetReadRows();
@@ -3080,9 +3130,10 @@ async function saveBoluset(){
       });
     }
   }
-  const {error} = await sb.from('procurement_items').insert(inserts);
-  if(error){ toast('Hata: '+errTr(error),'err'); return; }
-  toast(`${inserts.length} kalem eklendi`,'ok');
+  // Duplicate önleme — aynı proje+malzeme+birim varsa üzerine ekle
+  const summary = await _mergeOrInsertProcItems(inserts);
+  if(summary.error){ toast('Hata: '+errTr(summary.error),'err'); return; }
+  toast(`${summary.eklenen} yeni + ${summary.birlestirilen} üzerine eklendi`,'ok');
   closeBoluset();
   _procFilterKat = 'civata';  // ekledikten sonra cıvata kategorisini göster
   await loadProcurement(_procProjectId);
@@ -3115,9 +3166,10 @@ async function saveProcNew(){
     sira: procItems.length
   };
   if(!d.malzeme){toast('Malzeme adı zorunlu','err');return}
-  const {error} = await sb.from('procurement_items').insert(d);
-  if(error){toast('Hata: '+errTr(error),'err');return}
-  toast('Eklendi','ok');
+  // Duplicate önleme
+  const summary = await _mergeOrInsertProcItems([d]);
+  if(summary.error){toast('Hata: '+errTr(summary.error),'err');return}
+  toast(summary.birlestirilen ? `Mevcut kaleme eklendi: ${d.malzeme}` : `Eklendi: ${d.malzeme}`,'ok');
   closeProcNew();
   await loadProcurement(_procProjectId);
   try { const proj = projects.find(p=>p.id===_procProjectId); await notify(`🛒 ${me.full_name} "${proj?.no} ${proj?.customer}" satın almaya manuel kalem ekledi: ${d.malzeme}`, '🛒', 'satinalma', 'project', _procProjectId); } catch(e){}
@@ -3782,16 +3834,19 @@ async function saveProcCatalog(){
   let baseSira = procItems.length;
   finalRows.forEach((r,i) => { r.sira = baseSira + i; });
 
-  let insertedCount = 0;
+  let insertedCount = 0, mergedCount = 0;
   if(finalRows.length > 0){
-    const {error} = await sb.from('procurement_items').insert(finalRows);
-    if(error){toast('Hata: '+errTr(error),'err');return}
-    insertedCount = finalRows.length;
+    // Duplicate önleme
+    const summary = await _mergeOrInsertProcItems(finalRows);
+    if(summary.error){toast('Hata: '+errTr(summary.error),'err');return}
+    insertedCount = summary.eklenen;
+    mergedCount = summary.birlestirilen;
   }
 
   // Özet bildirim
   const parts = [];
-  if(insertedCount > 0) parts.push(`${insertedCount} kalem talep formuna eklendi`);
+  if(insertedCount > 0) parts.push(`${insertedCount} yeni kalem eklendi`);
+  if(mergedCount > 0) parts.push(`${mergedCount} kalem üzerine eklendi (mevcut)`);
   if(deducted > 0) parts.push(`${deducted} kalemde stoktan düşüm`);
   if(dropped > 0) parts.push(`${dropped} kalem tamamen stoktan karşılandı`);
   if(roundedCount > 0) parts.push(`${roundedCount} profil standart boya yuvarlandı`);
@@ -3859,11 +3914,28 @@ async function _autoAssignProcurementTasks(projectId, kalemSayisi){
 }
 
 async function deleteProcItem(itemId){
+  const it = procItems.find(x=>x.id===itemId);
+  if(!it){ toast('Kalem bulunamadı','err'); return; }
   if(!confirm('Bu kalemi (ve tüm teslimatlarını) silmek istediğine emin misin?')) return;
+  // Silmeden önce yedek al
+  const backup = { ...it };
+  // Bağlı teslimatları da yedekle
+  const { data: dels } = await sb.from('procurement_deliveries').select('*').eq('item_id', itemId);
   const {error} = await sb.from('procurement_items').delete().eq('id', itemId);
   if(error){toast('Silme hatası: '+errTr(error),'err');return}
-  toast('Silindi','info');
   await loadProcurement(_procProjectId);
+  // 5 sn geri al butonu ile toast
+  toastUndo(`Silindi: ${backup.malzeme}`, 'Geri Al', async () => {
+    delete backup.updated_at;
+    const {error:reErr} = await sb.from('procurement_items').insert(backup);
+    if(reErr){ toast('Geri alma hatası: '+errTr(reErr),'err'); return; }
+    if(dels && dels.length){
+      for(const d of dels){ delete d.created_at; }
+      await sb.from('procurement_deliveries').insert(dels);
+    }
+    toast('Geri alındı','ok');
+    await loadProcurement(_procProjectId);
+  });
 }
 // Sipariş kalemini otomatik stoğa aktar: katalog kaydı varsa üzerine ekler, yoksa yeni stok satırı oluşturur
 async function transferProcToStock(itemId){
@@ -4871,12 +4943,19 @@ async function deleteStockItem(itemId){
               + (tot.mm ? ` · ${(tot.mm/1000).toFixed(2)} m` : '')
               + (tot.adet ? ` · ${tot.adet} ${it.birim||'adet'}` : '')
               + (tot.kg ? ` · ${parseFloat(tot.kg).toFixed(0)} kg` : '');
-  if(!confirm(`🗑 STOK KALEMİNİ SİL\n\n${detay}\n\nBu kalem kalıcı olarak silinecek.\nBağlı sipariş kalemleri catalog_id bağlantısını kaybedecek (silinmeyecek).\n\nEmin misin?`)) return;
+  if(!confirm(`🗑 STOK KALEMİNİ SİL\n\n${detay}\n\nBu kalem silinecek. 5 saniye içinde geri alabilirsin.\n\nEmin misin?`)) return;
+  const backup = { ...it };
   const { error } = await sb.from('stock_items').delete().eq('id', itemId);
   if(error){ toast('Silme hatası: '+errTr(error),'err'); return; }
-  toast(`✅ Silindi: ${it.urun}`,'ok');
   try { await notify(`🗑 ${me.full_name} stoktan sildi: ${it.kategori} · ${it.urun}`, '🗑', 'stok'); } catch(e){}
   await loadStockItems();
+  toastUndo(`Silindi: ${backup.urun}`, 'Geri Al', async () => {
+    delete backup.updated_at;
+    const {error:reErr} = await sb.from('stock_items').insert(backup);
+    if(reErr){ toast('Geri alma hatası: '+errTr(reErr),'err'); return; }
+    toast('Geri alındı','ok');
+    await loadStockItems();
+  });
 }
 function editStockCell(itemId, field, cellEl){
   const it = stockItems.find(x=>x.id===itemId); if(!it) return;
@@ -6987,7 +7066,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v148';
+const APP_VERSION = 'v149';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
@@ -7332,7 +7411,44 @@ document.addEventListener('DOMContentLoaded', function(){
   // Ses açık/kapalı tercihini yükle
   const s = document.getElementById('setSound');
   if(s) s.checked = localStorage.getItem('ucelSound')!=='0';
+  // KLAVYE KISAYOLLARI — Esc = kapat, Enter = kaydet (textarea hariç)
+  document.addEventListener('keydown', function(e){
+    // Şu anda aktif (üstte açık) olan modal-bg'i bul
+    const openModals = Array.from(document.querySelectorAll('.modal-bg.show'));
+    if(!openModals.length) return;
+    // En yüksek z-index'li = en önde
+    const topModal = openModals.reduce((a,b) => (parseInt(getComputedStyle(b).zIndex)||0) > (parseInt(getComputedStyle(a).zIndex)||0) ? b : a);
+    if(e.key === 'Escape'){
+      // Kapat butonunu bul ve tıkla
+      const closeBtn = topModal.querySelector('.modal-h .x, .modal-h button.x') || topModal.querySelector('.modal-f .btn.sec');
+      if(closeBtn){ e.preventDefault(); closeBtn.click(); }
+    } else if(e.key === 'Enter' && !e.shiftKey && !e.ctrlKey){
+      // Textarea içinde Enter satır atlar, dokunma
+      if(e.target && (e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
+      // Ana ok butonunu bul (.btn.ok)
+      const okBtn = topModal.querySelector('.modal-f .btn.ok, .modal-f button.btn.ok');
+      if(okBtn && !okBtn.disabled){ e.preventDefault(); okBtn.click(); }
+    }
+  });
 });
+// UNDO destekli toast — silme işlemlerinden sonra 5 sn geri al butonu gösterir
+function toastUndo(mesaj, undoLabel, undoFn){
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:12px 18px 12px 20px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:5100;display:flex;align-items:center;gap:14px;font-size:13px;max-width:90vw';
+  const msgSpan = document.createElement('span');
+  msgSpan.textContent = mesaj;
+  const btn = document.createElement('button');
+  btn.textContent = '↶ ' + (undoLabel||'Geri Al');
+  btn.style.cssText = 'background:#0891b2;color:#fff;border:0;border-radius:6px;padding:6px 12px;font-weight:600;font-size:12px;cursor:pointer';
+  btn.onclick = async () => {
+    btn.disabled = true; btn.textContent = 'Geri alınıyor...';
+    try { await undoFn(); } catch(e){ console.error('undo:',e); }
+    el.remove();
+  };
+  el.appendChild(msgSpan); el.appendChild(btn);
+  document.body.appendChild(el);
+  setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),400); }, 5000);
+}
 </script>
 </body>
 </html>
