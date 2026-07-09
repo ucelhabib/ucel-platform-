@@ -798,6 +798,7 @@ body.proc-fullscreen{overflow:hidden}
     <div class="modal-h"><h3>📚 Katalogtan Malzeme Seç</h3><button class="x" onclick="closeProcCatalog()">✕</button></div>
     <div class="modal-b">
       <div id="pc-chips" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;padding:4px 2px;border-bottom:1px dashed #e5e7eb"></div>
+      <div id="pc-context-actions" style="display:none;margin-bottom:10px"></div>
       <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
         <input id="pc-search" type="text" placeholder="🔎 Ara..." style="flex:1;min-width:140px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;font-size:13px" oninput="renderProcCatalog()">
         <select id="pc-cat" style="padding:6px 10px;border:1px solid var(--bd);border-radius:6px;font-size:13px" onchange="renderProcCatalog()">
@@ -2740,12 +2741,8 @@ function _renderProcKatTabs(){
     mkChip('all','Tümü','#1f4e8c', counts.all),
     ...PROC_KAT.map(k => mkChip(k.k, k.l, k.color, counts[k.k]))
   ].join('');
-  // Kategoriye özel yardımcı buton — Cıvata-Somun seçiliyse "Cıvata Seti Ekle" görünür
-  let kontextButton = '';
-  if(_procFilterKat === 'civata'){
-    kontextButton = `<button type="button" class="btn sm" onclick="openBoluset()" style="margin-left:auto;background:#6b3fa0;color:#fff;border:0;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Cıvata Seti</button>`;
-  }
-  tabs.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;flex:1">${chips}</div>${kontextButton}`;
+  // Cıvata Seti butonu KALDIRILDI - Katalog modaline entegre edildi
+  tabs.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;flex:1">${chips}</div>`;
   tabs.style.justifyContent = 'space-between';
 }
 function _setProcFilterKat(k){
@@ -3119,6 +3116,7 @@ function openProcCatalog(){
   const sel = document.getElementById('pc-cat');
   sel.innerHTML = '<option value="">Tüm stok kategorileri</option>' + cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   _renderPcChips();
+  _updatePcContextActions();
   renderProcCatalog();
   document.getElementById('procCatalogModal').classList.add('show');
 }
@@ -3143,7 +3141,27 @@ function _renderPcChips(){
 function _setPcChipFilter(k){
   _procFilterKat = k;
   _renderPcChips();
+  _updatePcContextActions();
   renderProcCatalog();
+}
+// Katalog modalinde aktif kategoriye göre üstte özel aksiyon butonu
+function _updatePcContextActions(){
+  const box = document.getElementById('pc-context-actions'); if(!box) return;
+  if(_procFilterKat === 'civata'){
+    box.style.display = 'block';
+    box.innerHTML = `<button type="button" onclick="_openBolusetFromCatalog()" style="width:100%;background:linear-gradient(135deg,#6b3fa0 0%,#8b5cbf 100%);color:#fff;border:0;border-radius:10px;padding:12px 16px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(107,63,160,.25);display:flex;align-items:center;justify-content:center;gap:10px">
+      🔩 Cıvata Seti Ekle
+      <small style="font-weight:400;font-size:11px;opacity:0.9">— Cıvata + Somun + Pul + Rondela birlikte gir</small>
+    </button>`;
+  } else {
+    box.style.display = 'none';
+    box.innerHTML = '';
+  }
+}
+// Katalog modalini kapat, cıvata seti modalini aç
+function _openBolusetFromCatalog(){
+  closeProcCatalog();
+  setTimeout(()=>openBoluset(), 100);
 }
 function closeProcCatalog(){ document.getElementById('procCatalogModal').classList.remove('show'); }
 // Malzeme adından kg/m otomatik tahmini.
@@ -6943,7 +6961,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v145';
+const APP_VERSION = 'v146';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
