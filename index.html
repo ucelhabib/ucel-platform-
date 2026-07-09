@@ -7102,7 +7102,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v151';
+const APP_VERSION = 'v152';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
@@ -7451,4 +7451,98 @@ async function uploadFiles(){
     const ts = Date.now();
     const safe = file.name.replace(/[^\w.\-]/g,'_');
     const folder = _filesCtx.projectId ? ('projects/'+_filesCtx.projectId) : ('tasks/'+_filesCtx.taskId);
-    const path = folder + '/' + ts + 
+    const path = folder + '/' + ts + '_' + safe;
+    const up = await sb.storage.from('project-files').upload(path, file, {contentType:file.type||'application/octet-stream'});
+    if(up.error){failN++; console.error(up.error); continue}
+    const ins = await sb.from('attachments').insert({
+      project_id: _filesCtx.projectId,
+      task_id:    _filesCtx.taskId,
+      uploaded_by: me.id,
+      file_name:  file.name,
+      file_path:  path,
+      mime_type:  file.type||null,
+      size_bytes: file.size
+    });
+    if(ins.error){failN++; console.error(ins.error)} else {okN++}
+  }
+  status.textContent = okN+' yüklendi'+(failN?' · '+failN+' başarısız':'');
+  toast(okN+' dosya yüklendi',okN?'info':'err');
+  inp.value='';
+  await loadFiles();
+}
+async function delFile(id, path){
+  if(!confirm('Bu dosyayı silmek istediğinden emin misin?')) return;
+  const {error:e1} = await sb.from('attachments').delete().eq('id', id);
+  if(e1){toast('Hata: '+e1.message,'err');return}
+  await sb.storage.from('project-files').remove([path]);
+  toast('Silindi','info');
+  await loadFiles();
+}
+
+// userEditModal & filesModal click-out kapatma
+document.addEventListener('DOMContentLoaded', function(){
+  const u = document.getElementById('userEditModal');
+  if(u) u.addEventListener('click', e=>{if(e.target.id==='userEditModal') closeUserEdit()});
+  const f = document.getElementById('filesModal');
+  if(f) f.addEventListener('click', e=>{if(e.target.id==='filesModal') closeFiles()});
+  // Ses açık/kapalı tercihini yükle
+  const s = document.getElementById('setSound');
+  if(s) s.checked = localStorage.getItem('ucelSound')!=='0';
+  // KLAVYE KISAYOLLARI — Esc = kapat, Enter = kaydet (textarea hariç)
+  document.addEventListener('keydown', function(e){
+    // Şu anda aktif (üstte açık) olan modal-bg'i bul
+    const openModals = Array.from(document.querySelectorAll('.modal-bg.show'));
+    if(!openModals.length) return;
+    // En yüksek z-index'li = en önde
+    const topModal = openModals.reduce((a,b) => (parseInt(getComputedStyle(b).zIndex)||0) > (parseInt(getComputedStyle(a).zIndex)||0) ? b : a);
+    if(e.key === 'Escape'){
+      // Kapat butonunu bul ve tıkla
+      const closeBtn = topModal.querySelector('.modal-h .x, .modal-h button.x') || topModal.querySelector('.modal-f .btn.sec');
+      if(closeBtn){ e.preventDefault(); closeBtn.click(); }
+    } else if(e.key === 'Enter' && !e.shiftKey && !e.ctrlKey){
+      // Textarea içinde Enter satır atlar, dokunma
+      if(e.target && (e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
+      // Ana ok butonunu bul (.btn.ok)
+      const okBtn = topModal.querySelector('.modal-f .btn.ok, .modal-f button.btn.ok');
+      if(okBtn && !okBtn.disabled){ e.preventDefault(); okBtn.click(); }
+    }
+  });
+});
+// Üst bardaki canlı saat — gün, tarih ve saat
+const _TR_GUNLER = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+const _TR_AYLAR  = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+function _tickClock(){
+  const el = document.getElementById('topClock');
+  if(!el) return;
+  const now = new Date();
+  const gun  = _TR_GUNLER[now.getDay()];
+  const ay   = _TR_AYLAR[now.getMonth()];
+  const gne  = now.getDate();
+  const yil  = now.getFullYear();
+  const saat = now.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+  el.innerHTML = `<span class="clock-day-date">${gun}, ${gne} ${ay} ${yil}</span><span class="clock-time">🕐 ${saat}</span>`;
+}
+setInterval(_tickClock, 20000); // 20 sn'de bir güncelle
+document.addEventListener('DOMContentLoaded', _tickClock);
+_tickClock();
+// UNDO destekli toast — silme işlemlerinden sonra 5 sn geri al butonu gösterir
+function toastUndo(mesaj, undoLabel, undoFn){
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:12px 18px 12px 20px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:5100;display:flex;align-items:center;gap:14px;font-size:13px;max-width:90vw';
+  const msgSpan = document.createElement('span');
+  msgSpan.textContent = mesaj;
+  const btn = document.createElement('button');
+  btn.textContent = '↶ ' + (undoLabel||'Geri Al');
+  btn.style.cssText = 'background:#0891b2;color:#fff;border:0;border-radius:6px;padding:6px 12px;font-weight:600;font-size:12px;cursor:pointer';
+  btn.onclick = async () => {
+    btn.disabled = true; btn.textContent = 'Geri alınıyor...';
+    try { await undoFn(); } catch(e){ console.error('undo:',e); }
+    el.remove();
+  };
+  el.appendChild(msgSpan); el.appendChild(btn);
+  document.body.appendChild(el);
+  setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),400); }, 5000);
+}
+</script>
+</body>
+</html>
