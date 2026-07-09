@@ -3792,7 +3792,11 @@ async function transferProcToStock(itemId){
       // Aynı birim — mevcut boy'a paralel yeni adet olarak eklemek anlamsız. Not'a taşı, adet artır.
       newAdet1 = newAdet1 + Math.round(miktar);
     } else {
-      newBoy1 = 1;
+      // m ve m² için boy=1000 mm (1 metre) mantığı — _stockAvailable (boy×adet)/1000 hesabı doğru döner
+      // Diğer sayılabilir birimler için boy=1
+      const _bTip = stk.birim || it.birim || 'm';
+      newBoy1 = (_bTip === 'm' || _bTip === 'm²') ? 1000 : 1;
+      // Ekli miktar: m/m² için doğrudan metre/m² sayısı → newBoy1=1000 iken adet=miktar
       newAdet1 = (stk.adet1||0) + Math.round(miktar);
     }
     const notEk = `${miktar} ${it.birim} ${it.ebat?`(${it.ebat}) `:''}${proj?.no||''} projesinden aktarıldı · ${new Date().toLocaleDateString('tr-TR')}`;
@@ -6554,7 +6558,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v139';
+const APP_VERSION = 'v140';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
