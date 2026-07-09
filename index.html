@@ -2768,11 +2768,14 @@ function renderProcList(){
     el.innerHTML = `<div style="padding:30px;text-align:center;color:var(--m)">Bu kategoride kalem yok.<br><small>Üstteki "Tümü" sekmesine dönebilirsin.</small></div>`;
     return;
   }
-  let totalTutar = 0, totalNet = 0, gelenSayi = 0, eksikSayi = 0;
+  let totalTutar = 0, totalNet = 0, totalKg = 0, totalSiparisKg = 0, totalStokKg = 0, gelenSayi = 0, eksikSayi = 0;
   const rows = items.map((it,i)=>{
     const c = _procCalc(it);
     totalTutar += c.tutar;
     totalNet += c.net;
+    totalKg += c.projeKg || 0;
+    totalSiparisKg += c.toplamKg || 0;
+    totalStokKg += c.stokKg || 0;
     if(c.durum==='tamamlandi') gelenSayi++; else eksikSayi++;
     const expanded = _procExpanded.has(it.id);
     const detail = expanded ? renderProcDetail(it, c) : '';
@@ -2822,13 +2825,28 @@ function renderProcList(){
   const bar = document.getElementById('procSummaryBar');
   if(bar){
     const filtTxt = _procFilterKat === 'all' ? '' : ` · Filtre: <strong style="color:${PROC_KAT_COLOR[_procFilterKat]||'#1f4e8c'}">${esc(PROC_KAT_LABEL[_procFilterKat]||_procFilterKat)}</strong>`;
-    bar.innerHTML = `<strong>${items.length} kalem</strong> · Net: <strong style="color:#1f4e8c">${fmtTL(totalNet)}</strong> · ${gelenSayi} tamam / ${eksikSayi} eksik${filtTxt}${_procFilterKat==='all'?'':` · <small>(toplam ${procItems.length} kalem)</small>`}`;
+    const _fmtNumInline = (v)=>(+v).toLocaleString('en-US',{maximumFractionDigits:0});
+    const kgTxt = totalKg > 0
+      ? ` · <strong style="color:#b91c1c">${_fmtNumInline(totalKg)} kg</strong>` + (totalStokKg>0 ? ` <small style="color:#0a7c3a">(sip ${_fmtNumInline(totalSiparisKg)} + stok ${_fmtNumInline(totalStokKg)})</small>` : '')
+      : '';
+    bar.innerHTML = `<strong>${items.length} kalem</strong>${kgTxt} · <span class="price-only">Net: <strong style="color:#1f4e8c">${fmtTL(totalNet)}</strong> · </span>${gelenSayi} tamam / ${eksikSayi} eksik${filtTxt}${_procFilterKat==='all'?'':` · <small>(toplam ${procItems.length} kalem)</small>`}`;
   }
-  // Üst başlıktaki özet — proje kart başlığında daima tüm kalemler
+  // Üst başlıktaki özet — proje kart başlığında daima tüm kalemler + toplam ağırlık
   const sumEl = document.getElementById('procSummary');
   if(sumEl){
-    const allNet = procItems.reduce((s,it)=>s + _procCalc(it).net, 0);
-    sumEl.textContent = `· ${procItems.length} kalem · ${fmtTL(allNet)}`;
+    let allNet = 0, allKg = 0;
+    procItems.forEach(it => {
+      const cc = _procCalc(it);
+      allNet += cc.net;
+      allKg  += cc.projeKg || 0;
+    });
+    const proj = projects.find(p=>p.id===_procProjectId);
+    const hedefKg = proj?.tonnage ? (parseFloat(proj.tonnage) * 1000) : 0;
+    const kgPart = allKg > 0
+      ? ` · ${(allKg).toLocaleString('en-US',{maximumFractionDigits:0})} kg`
+        + (hedefKg > 0 ? ` / hedef ${(hedefKg).toLocaleString('en-US',{maximumFractionDigits:0})} kg (%${Math.round(allKg/hedefKg*100)})` : '')
+      : '';
+    sumEl.textContent = `· ${procItems.length} kalem${kgPart} · ${fmtTL(allNet)}`;
   }
 }
 function renderProcDetail(it, c){
@@ -4278,12 +4296,12 @@ function exportProcTalepFormu(){
     if(groupMap.has(key)){
       const g = groupMap.get(key);
       g.miktar += parseFloat(it.miktar||0);
-      // notları da birleştir — büyük/küçük farkı önemli değil
+      g.kg     += (_procCalc(it).toplamKg || 0);
       if(cleanRaw){
         const normNote = _normTR(cleanRaw);
         if(!g.notesNorm.has(normNote)){
           g.notesNorm.add(normNote);
-          g.notes.push(normNote);   // hep TR büyük harfle göster
+          g.notes.push(normNote);
         }
       }
     } else {
@@ -4298,6 +4316,7 @@ function exportProcTalepFormu(){
         ebat: it.ebat,
         birim: it.birim,
         miktar: parseFloat(it.miktar||0),
+        kg: (_procCalc(it).toplamKg || 0),
         notesNorm: notesSet,
         notes: notesArr
       });
@@ -4342,11 +4361,10 @@ function exportProcTalepFormu(){
     const t = _typeOrder(it.malzeme);
     let separator = '';
     if(_lastType !== null && _lastType !== t && t >= 1 && t <= 4){
-      // Boş satır + grup başlığı
-      separator = `<tr><td colspan="5" style="height:6px;background:#fff;border:0"></td></tr>
-        <tr><td colspan="5" style="background:#eef0f5;font-weight:800;color:#1f4e8c;padding:6px 10px;font-size:9pt;letter-spacing:0.5px">${_typeLabel(t)||''}</td></tr>`;
+      separator = `<tr><td colspan="6" style="height:6px;background:#fff;border:0"></td></tr>
+        <tr><td colspan="6" style="background:#eef0f5;font-weight:800;color:#1f4e8c;padding:6px 10px;font-size:9pt;letter-spacing:0.5px">${_typeLabel(t)||''}</td></tr>`;
     } else if(_lastType === null && t >= 1 && t <= 4){
-      separator = `<tr><td colspan="5" style="background:#eef0f5;font-weight:800;color:#1f4e8c;padding:6px 10px;font-size:9pt;letter-spacing:0.5px">${_typeLabel(t)||''}</td></tr>`;
+      separator = `<tr><td colspan="6" style="background:#eef0f5;font-weight:800;color:#1f4e8c;padding:6px 10px;font-size:9pt;letter-spacing:0.5px">${_typeLabel(t)||''}</td></tr>`;
     }
     _lastType = t;
     _seqNo++;
@@ -4355,9 +4373,13 @@ function exportProcTalepFormu(){
       <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <span style="font-size:9pt;color:#1f4e8c">— ${esc(it.ebat)}</span>`:''}</td>
       <td>${fmtNum(it.miktar,2)}</td>
       <td>${esc(it.birim||'mt')}</td>
+      <td>${it.kg>0?fmtNum(it.kg,0)+' kg':'—'}</td>
       <td class="lft">${esc(it.notes.join(' · '))}</td>
     </tr>`;
   }).join('');
+  // Toplam ağırlık satırı
+  const _totKg = grouped.reduce((s,g)=>s+(g.kg||0),0);
+  const rowsWithTotal = rows + (_totKg > 0 ? `<tr><td colspan="4" style="text-align:right;font-weight:800;padding:8px 10px;background:#fff8e1;border-top:2px solid #1f4e8c">TOPLAM AĞIRLIK</td><td style="font-weight:800;background:#fff8e1;border-top:2px solid #1f4e8c">${fmtNum(_totKg,0)} kg</td><td style="background:#fff8e1;border-top:2px solid #1f4e8c"></td></tr>` : '');
   // Kategoriye göre dosya adı: "Talep Formu 2026-093 - Ana Yapı" gibi
   const _fnKat = _procFilterKat === 'all' ? '' : ` - ${(PROC_KAT_LABEL[_procFilterKat]||_procFilterKat).replace(/[\/\\:*?"<>|]/g,'')}`;
   const _dosyaAd = `Talep Formu ${esc(proj?.no||'')}${_fnKat}`;
@@ -4379,13 +4401,14 @@ function exportProcTalepFormu(){
       <div class="desc">Aşağıda belirtilen malzeme listesi için fiyat teklifinizi ve termin sürenizi bekliyoruz.</div>
       <table class="frm">
         <thead><tr>
-          <th style="width:48px">NO</th>
-          <th style="width:32%">MALZEME</th>
-          <th style="width:110px">MİKTAR</th>
-          <th style="width:80px">BİRİM</th>
+          <th style="width:44px">NO</th>
+          <th style="width:30%">MALZEME</th>
+          <th style="width:90px">MİKTAR</th>
+          <th style="width:70px">BİRİM</th>
+          <th style="width:90px">AĞIRLIK (KG)</th>
           <th>NOT</th>
         </tr></thead>
-        <tbody>${rows}</tbody>
+        <tbody>${rowsWithTotal}</tbody>
       </table>
       ${(() => {
         const _aktifKat = (_procFilterKat && _procFilterKat !== 'all') ? _procFilterKat : null;
@@ -6964,7 +6987,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v147';
+const APP_VERSION = 'v148';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
