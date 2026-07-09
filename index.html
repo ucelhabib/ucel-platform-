@@ -932,48 +932,62 @@ body.proc-fullscreen{overflow:hidden}
 </div>
 
 <div class="modal-bg" id="stockNewModal">
-  <div class="modal" style="max-width:560px">
-    <div class="modal-h"><h3>➕ Yeni Stok Kalemi</h3><button class="x" onclick="closeStockNew()">✕</button></div>
+  <div class="modal" style="max-width:640px">
+    <div class="modal-h"><h3 id="sn-title">➕ Yeni Stok Kalemi</h3><button class="x" onclick="closeStockNew()">✕</button></div>
     <div class="modal-b">
-      <div class="fgrid">
-        <div class="frow"><label>Kategori</label><input id="sn-kat" placeholder="HEA / HEB, IPE, BOYA, SARF..." list="sn-kats"><datalist id="sn-kats"></datalist></div>
-        <div class="frow"><label>Ürün / Ölçü</label><input id="sn-urun" placeholder="HEA 360 / 100×100×4 mm / RAL9002 EPOKSİ"></div>
+      <!-- ADIM 1: Kategori seçim ekranı -->
+      <div id="sn-step-1">
+        <div style="font-size:13px;color:#555;margin-bottom:12px">Hangi kategoride kalem eklemek istersiniz?</div>
+        <div id="sn-cat-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px"></div>
       </div>
-      <div class="frow">
-        <label>Birim</label>
-        <select id="sn-birim" onchange="_toggleStockNewFields()">
-          <option value="m">m (metre — boy uzunluğu üzerinden)</option>
-          <option value="m²">m² (saç — otomatik boyuttan hesap)</option>
-          <option value="adet">adet</option>
-          <option value="takım">takım (boya seti vb.)</option>
-          <option value="kg">kg</option>
-          <option value="litre">litre</option>
-          <option value="rulo">rulo</option>
-          <option value="paket">paket</option>
-          <option value="kutu">kutu</option>
-        </select>
-      </div>
-      <div id="sn-boy-block">
-        <div class="fgrid">
-          <div class="frow"><label>Boy 1 (mm)</label><input id="sn-b1" type="number" min="0" value="0"></div>
-          <div class="frow"><label>Adet 1</label><input id="sn-a1" type="number" min="0" value="0"></div>
+      <!-- ADIM 2: Form ekranı (kategoriye özel) -->
+      <div id="sn-step-2" style="display:none">
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#eef6ff;border-radius:8px;margin-bottom:12px">
+          <span id="sn-selected-cat-badge" style="padding:4px 12px;border-radius:14px;background:#1f4e8c;color:#fff;font-size:12px;font-weight:700"></span>
+          <button type="button" class="btn sec sm" onclick="_snBackToStep1()" style="padding:3px 10px;font-size:11px">← Kategori Değiştir</button>
         </div>
-        <div class="fgrid">
-          <div class="frow"><label>Boy 2 (mm)</label><input id="sn-b2" type="number" min="0" value="0"></div>
-          <div class="frow"><label>Adet 2</label><input id="sn-a2" type="number" min="0" value="0"></div>
+        <input type="hidden" id="sn-kat">
+        <!-- Kategoriye özel detay alanları (dinamik) -->
+        <div id="sn-detail-block" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:10px"></div>
+        <div class="frow" id="sn-urun-block"><label id="sn-urun-lbl">Ürün Adı <small style="color:#0a7c3a;font-weight:400">(yukarıdaki detaylardan otomatik oluşur — istersen değiştirebilirsin)</small></label><input id="sn-urun" placeholder="Örn. HEA 360"></div>
+        <div class="frow" id="sn-birim-block">
+          <label>Birim</label>
+          <select id="sn-birim" onchange="_toggleStockNewFields()">
+            <option value="m">m (metre)</option>
+            <option value="m²">m² (saç)</option>
+            <option value="adet">adet</option>
+            <option value="takım">takım</option>
+            <option value="kg">kg</option>
+            <option value="litre">litre</option>
+            <option value="rulo">rulo</option>
+            <option value="paket">paket</option>
+            <option value="kutu">kutu</option>
+          </select>
         </div>
-      </div>
-      <div id="sn-adet-block" style="display:none">
-        <div class="frow"><label id="sn-adet-lbl">Adet</label><input id="sn-adet" type="number" min="0" value="0" placeholder="Örn. 5"></div>
-      </div>
-      <div class="frow">
-        <label>Birim Ağırlık (kg) — <small style="color:#888;font-weight:400">boya, sarf gibi kalemler için manuel gir; HEA/IPE/SAÇ gibi profillerde boş bırakırsan otomatik hesaplanır</small></label>
-        <input id="sn-kgpm" type="number" min="0" step="0.01" value="0" placeholder="Örn. 25 kg/takım (boya için)">
+        <div id="sn-boy-block">
+          <div style="font-size:11px;color:#666;margin-bottom:4px">Elimizde bulunan boy uzunluklarını ve adetlerini gir:</div>
+          <div class="fgrid">
+            <div class="frow"><label>Boy 1 (mm)</label><input id="sn-b1" type="number" min="0" value="0" placeholder="Örn. 12000"></div>
+            <div class="frow"><label>Adet 1</label><input id="sn-a1" type="number" min="0" value="0" placeholder="Örn. 3"></div>
+          </div>
+          <div class="fgrid">
+            <div class="frow"><label>Boy 2 (mm) <small style="color:#888">opsiyonel</small></label><input id="sn-b2" type="number" min="0" value="0"></div>
+            <div class="frow"><label>Adet 2</label><input id="sn-a2" type="number" min="0" value="0"></div>
+          </div>
+        </div>
+        <div id="sn-adet-block" style="display:none">
+          <div class="frow"><label id="sn-adet-lbl">Adet</label><input id="sn-adet" type="number" min="0" value="0" placeholder="Örn. 5"></div>
+        </div>
+        <div class="frow" id="sn-kgpm-block">
+          <label id="sn-kgpm-lbl">Birim Ağırlık (kg)</label>
+          <input id="sn-kgpm" type="number" min="0" step="0.01" value="0" placeholder="0 bırakırsan sistem hesaplar">
+          <small id="sn-kgpm-hint" style="color:#888;font-size:11px;margin-top:3px;display:block"></small>
+        </div>
       </div>
     </div>
     <div class="modal-f">
       <button class="btn sec" onclick="closeStockNew()">Vazgeç</button>
-      <button class="btn ok" onclick="saveStockNew()">💾 Kaydet</button>
+      <button class="btn ok" id="sn-save-btn" onclick="saveStockNew()" style="display:none">💾 Kaydet</button>
     </div>
   </div>
 </div>
@@ -4619,6 +4633,7 @@ function renderStockTable(){
       <td data-label="Ağırlık" style="padding:6px 8px;text-align:center;color:#1f4e8c;font-weight:700;background:#fff8e1">${parseFloat(tot.kg).toLocaleString('en-US')} kg</td>
       <td data-label="Not" class="stk-edit" style="padding:6px 8px;font-size:11px;color:${noteText?'#333':'#999'};${editCell}" ondblclick="editStockCell('${it.id}','not_text',this)" title="📝 Çift tıkla not gir">${esc(noteText) || '📝 not ekle'}</td>
       ${canDelete ? `<td data-label="İşlem" style="padding:6px 4px;text-align:center;white-space:nowrap">
+        <button class="btn sec sm" onclick="event.stopPropagation();editStockItemFull('${it.id}')" title="Bu kalemi düzenle" style="padding:3px 8px;font-size:11px;margin-right:3px">✏️</button>
         <button class="btn err sm" onclick="event.stopPropagation();deleteStockItem('${it.id}')" title="Bu kalemi sil" style="padding:3px 8px;font-size:11px">🗑</button>
       </td>` : ''}
     </tr>`;
@@ -4668,6 +4683,51 @@ function renderStockDetail(it){
     </div>
   </td></tr>`;
 }
+// Stok kalemini yeni ürün ekleme wizard'ı ile düzenle (adım 2'de açar)
+let _snEditingId = null;
+function editStockItemFull(itemId){
+  const it = stockItems.find(x=>x.id===itemId); if(!it){ toast('Stok kalemi bulunamadı','err'); return; }
+  const canEdit = (me?.role === 'yonetici') || (me?.perms||[]).includes('*') || (me?.perms||[]).includes('stok') || me?.role === 'stok';
+  if(!canEdit){ toast('Düzenleme yetkisi yok','err'); return; }
+  // Modal aç, adım 1'i atla, adım 2'de mevcut değerlerle doldur
+  _snEditingId = itemId;
+  document.getElementById('stockNewModal').classList.add('show');
+  document.getElementById('sn-step-1').style.display = 'none';
+  document.getElementById('sn-step-2').style.display = '';
+  document.getElementById('sn-save-btn').style.display = '';
+  document.getElementById('sn-title').textContent = `✏️ Stok Kalemi Düzenle`;
+  // Kategori yerleştir
+  document.getElementById('sn-kat').value = it.kategori || '';
+  const preset = STOCK_CAT_PRESETS.find(p => p.k === it.kategori);
+  const badge = document.getElementById('sn-selected-cat-badge');
+  if(badge){
+    if(preset){ badge.textContent = `${preset.icon} ${preset.label}`; badge.style.background = preset.color; }
+    else { badge.textContent = `📦 ${it.kategori || 'Kategori yok'}`; badge.style.background = '#64748b'; }
+  }
+  document.getElementById('sn-birim').value = it.birim || 'm';
+  document.getElementById('sn-urun').value = it.urun || '';
+  // Detay alanlarını kategoriye göre üret ama boş bırak (kullanıcı düzenlerken elle güncelleyebilir)
+  _snRenderDetailFields(it.kategori);
+  // Boy / adet değerlerini yerleştir
+  if(it.birim === 'm'){
+    document.getElementById('sn-b1').value = it.boy1 || 0;
+    document.getElementById('sn-a1').value = it.adet1 || 0;
+    document.getElementById('sn-b2').value = it.boy2 || 0;
+    document.getElementById('sn-a2').value = it.adet2 || 0;
+  } else if(it.birim === 'm²'){
+    // Toplam m² = boy1×adet1/1000
+    const totm2 = ((it.boy1||0)*(it.adet1||0) + (it.boy2||0)*(it.adet2||0)) / 1000;
+    document.getElementById('sn-adet').value = totm2;
+  } else {
+    // Sayılabilir birim — boy1 > 1 ise boy1'i kullan (kaba), aksi halde adet1 topla
+    const totAdet = (it.boy1||0) > 1 ? ((it.boy1||0)*(it.adet1||0)) : ((it.adet1||0) + (it.adet2||0) + (it.adet3||0));
+    document.getElementById('sn-adet').value = totAdet;
+  }
+  document.getElementById('sn-kgpm').value = it.kg_per_meter || 0;
+  _toggleStockNewFields();
+  setTimeout(()=>document.getElementById('sn-urun').focus(), 50);
+}
+
 async function deleteStockItem(itemId){
   const it = stockItems.find(x=>x.id===itemId); if(!it){ toast('Stok kalemi bulunamadı','err'); return; }
   const canDel = (me?.role === 'yonetici') || (me?.perms||[]).includes('*') || (me?.perms||[]).includes('stok') || me?.role === 'stok';
@@ -4981,40 +5041,237 @@ async function submitStockMove(){
   await loadStockItems();
 }
 
+// Kategori preset'leri — her kategoriye özel form davranışı
+const STOCK_CAT_PRESETS = [
+  {k:'HEA',        label:'HEA Profil',    icon:'🏗️', color:'#1f4e8c', birim:'m',    boy:12000, urunPlaceholder:'Örn. HEA 300',      autokg:true},
+  {k:'HEB',        label:'HEB Profil',    icon:'🏗️', color:'#1f4e8c', birim:'m',    boy:12000, urunPlaceholder:'Örn. HEB 200',      autokg:true},
+  {k:'IPE',        label:'IPE Profil',    icon:'🏗️', color:'#1f4e8c', birim:'m',    boy:12000, urunPlaceholder:'Örn. IPE 400',      autokg:true},
+  {k:'UNP',        label:'UNP Profil',    icon:'🏗️', color:'#1f4e8c', birim:'m',    boy:12000, urunPlaceholder:'Örn. UNP 160',      autokg:true},
+  {k:'KUTU PROFİL',label:'Kutu Profil',   icon:'⬜',  color:'#1f4e8c', birim:'m',    boy:6000,  urunPlaceholder:'Örn. 100×100×4 mm', autokg:true},
+  {k:'BORU',       label:'Boru',          icon:'⭕',  color:'#1f4e8c', birim:'m',    boy:6000,  urunPlaceholder:'Örn. 168×8 mm',     autokg:true},
+  {k:'LAMA',       label:'Lama',          icon:'▬',  color:'#1f4e8c', birim:'m',    boy:6000,  urunPlaceholder:'Örn. 50×5',         autokg:true},
+  {k:'KÖŞEBENT',   label:'Köşebent',      icon:'📐', color:'#1f4e8c', birim:'m',    boy:6000,  urunPlaceholder:'Örn. 50×50×5',      autokg:true},
+  {k:'SAÇ',        label:'Saç',           icon:'🟨', color:'#dc2626', birim:'m²',   boy:1000,  urunPlaceholder:'Örn. SAÇ 10 mm',    autokg:true},
+  {k:'CIVATA-SOMUN',label:'Cıvata/Somun', icon:'🔩', color:'#6b3fa0', birim:'adet', boy:1,     urunPlaceholder:'Örn. M12*40 CIVATA',autokg:true},
+  {k:'BOYA',       label:'Boya',          icon:'🎨', color:'#ea580c', birim:'takım',boy:1,     urunPlaceholder:'Örn. RAL9002 EPOKSİ',autokg:false, kgHint:'Takım başına kg — örn. 25'},
+  {k:'C PROFİL',   label:'C Profil',      icon:'⌐',  color:'#0891b2', birim:'m',    boy:6000,  urunPlaceholder:'Örn. C 200×80×2.5',  autokg:false},
+  {k:'Z PROFİL',   label:'Z Profil',      icon:'ᴢ',  color:'#0891b2', birim:'m',    boy:6000,  urunPlaceholder:'Örn. Z 200×80×2.5',  autokg:false},
+  {k:'SARF',       label:'Sarf',          icon:'🧰', color:'#059669', birim:'adet', boy:1,     urunPlaceholder:'Örn. BEYAZ FİTİL',   autokg:false, kgHint:'Bilmiyorsan boş bırak'},
+  {k:'DİĞER',      label:'Diğer',         icon:'📦', color:'#64748b', birim:'adet', boy:1,     urunPlaceholder:'Ürün adı',          autokg:false}
+];
 function openStockNew(){
+  _snEditingId = null;  // yeni ekleme modu
+  // Adım 1'e sıfırla
+  document.getElementById('sn-step-1').style.display = '';
+  document.getElementById('sn-step-2').style.display = 'none';
+  document.getElementById('sn-save-btn').style.display = 'none';
+  document.getElementById('sn-title').textContent = '➕ Yeni Stok Kalemi — Kategori Seç';
+  // Form alanlarını sıfırla
   ['sn-kat','sn-urun','sn-b1','sn-a1','sn-b2','sn-a2','sn-adet','sn-kgpm'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=(['sn-b1','sn-a1','sn-b2','sn-a2','sn-adet','sn-kgpm'].includes(id)?'0':'')});
-  const bir = document.getElementById('sn-birim'); if(bir) bir.value = 'm';
-  _toggleStockNewFields();
+  // Kategori grid'ini oluştur
+  const grid = document.getElementById('sn-cat-grid');
+  if(grid){
+    grid.innerHTML = STOCK_CAT_PRESETS.map(p =>
+      `<button type="button" onclick="_snSelectCat('${p.k}')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 10px;border:2px solid #e5e7eb;border-radius:12px;background:#fff;cursor:pointer;transition:all .15s;font-family:inherit"
+        onmouseover="this.style.borderColor='${p.color}';this.style.background='${p.color}15'"
+        onmouseout="this.style.borderColor='#e5e7eb';this.style.background='#fff'">
+        <div style="font-size:28px">${p.icon}</div>
+        <div style="font-size:12px;font-weight:700;color:${p.color};text-align:center">${p.label}</div>
+      </button>`
+    ).join('');
+  }
   document.getElementById('stockNewModal').classList.add('show');
+}
+function _snSelectCat(k){
+  const preset = STOCK_CAT_PRESETS.find(p => p.k === k);
+  if(!preset) return;
+  document.getElementById('sn-step-1').style.display = 'none';
+  document.getElementById('sn-step-2').style.display = '';
+  document.getElementById('sn-save-btn').style.display = '';
+  document.getElementById('sn-title').textContent = `➕ ${preset.label} Ekle`;
+  document.getElementById('sn-kat').value = preset.k;
+  const badge = document.getElementById('sn-selected-cat-badge');
+  if(badge){ badge.textContent = `${preset.icon} ${preset.label}`; badge.style.background = preset.color; }
+  document.getElementById('sn-birim').value = preset.birim;
+  document.getElementById('sn-urun').placeholder = preset.urunPlaceholder;
+  document.getElementById('sn-b1').value = preset.boy;
+  document.getElementById('sn-a1').value = 0;
+  document.getElementById('sn-b2').value = 0;
+  document.getElementById('sn-a2').value = 0;
+  document.getElementById('sn-adet').value = 0;
+  document.getElementById('sn-kgpm').value = 0;
+  const hint = document.getElementById('sn-kgpm-hint');
+  if(hint) hint.textContent = preset.kgHint || (preset.autokg ? 'HEA/IPE/SAÇ gibi profillerde 0 bırakırsan sistem otomatik hesaplar' : 'Bu kalem için birim başına kg değeri yaz');
+  // Kategoriye özel detay alanları
+  _snRenderDetailFields(k);
+  setTimeout(()=>{ const first=document.querySelector('#sn-detail-block input'); if(first) first.focus(); else document.getElementById('sn-urun').focus(); }, 50);
+  _toggleStockNewFields();
+}
+// Kategoriye özel input alanlarını üretir (en, boy, kalınlık, çap, M, boyu vb.)
+function _snRenderDetailFields(k){
+  const box = document.getElementById('sn-detail-block'); if(!box) return;
+  const _fld = (id, lbl, ph, val) => `<div class="frow" style="min-width:100px"><label style="font-size:11px">${lbl}</label><input id="${id}" type="text" placeholder="${ph||''}" value="${val||''}" oninput="_snRebuildUrun()"></div>`;
+  const _numFld = (id, lbl, ph, val) => `<div class="frow" style="min-width:100px"><label style="font-size:11px">${lbl}</label><input id="${id}" type="number" min="0" step="0.1" placeholder="${ph||''}" value="${val||''}" oninput="_snRebuildUrun()"></div>`;
+  let html = '';
+  switch(k){
+    case 'HEA': case 'HEB': case 'IPE': case 'UNP':
+      html = `<div style="font-size:11px;color:#666;margin-bottom:6px">📐 Profil detayı:</div>
+        <div class="fgrid" style="grid-template-columns:1fr">${_numFld('snd-profno','Profil No (örn. 300)','300')}</div>`;
+      break;
+    case 'KUTU PROFİL':
+      html = `<div style="font-size:11px;color:#666;margin-bottom:6px">📐 Kutu Profil ölçüleri (mm):</div>
+        <div class="fgrid" style="grid-template-columns:repeat(3,1fr);gap:6px">
+          ${_numFld('snd-en','En','100')}${_numFld('snd-boy2','Boy','100')}${_numFld('snd-kal','Kalınlık','4')}
+        </div>`;
+      break;
+    case 'BORU':
+      html = `<div style="font-size:11px;color:#666;margin-bottom:6px">📐 Boru ölçüleri (mm):</div>
+        <div class="fgrid" style="grid-template-columns:repeat(2,1fr);gap:6px">
+          ${_numFld('snd-cap','Dış Çap','168')}${_numFld('snd-kal','Et Kalınlığı','4')}
+        </div>`;
+      break;
+    case 'LAMA':
+      html = `<div style="font-size:11px;color:#666;margin-bottom:6px">📐 Lama ölçüleri (mm):</div>
+        <div class="fgrid" style="grid-template-columns:repeat(2,1fr);gap:6px">
+          ${_numFld('snd-en','En','50')}${_numFld('snd-kal','Kalınlık','5')}
+        </div>`;
+      break;
+    case 'KÖŞEBENT': case 'C PROFİL': case 'Z PROFİL':
+      html = `<div style="font-size:11px;color:#666;margin-bottom:6px">📐 Ölçüler (mm):</div>
+        <div class="fgrid" style="grid-template-columns:repeat(3,1fr);gap:6px">
+          ${_numFld('snd-en','En','50')}${_numFld('snd-boy2','Boy','50')}${_numFld('snd-kal','Kalınlık','5')}
+        </div>`;
+      break;
+    case 'SAÇ':
+      html = `<div style="font-size:11px;color:#666;margin-bottom:6px">📐 Saç ölçüleri (mm):</div>
+        <div class="fgrid" style="grid-template-columns:repeat(3,1fr);gap:6px">
+          ${_numFld('snd-en','En (levha)','1500')}${_numFld('snd-boy2','Boy (levha)','6000')}${_numFld('snd-kal','Kalınlık','10')}
+        </div>`;
+      break;
+    case 'CIVATA-SOMUN':
+      html = `<div style="font-size:11px;color:#666;margin-bottom:6px">🔩 Bağlantı elemanı detayı:</div>
+        <div class="fgrid" style="grid-template-columns:repeat(3,1fr);gap:6px">
+          <div class="frow"><label style="font-size:11px">Tip</label>
+            <select id="snd-tip" oninput="_snRebuildUrun()">
+              <option value="CIVATA">Cıvata</option>
+              <option value="SOMUN">Somun</option>
+              <option value="PUL">Pul</option>
+              <option value="RONDELA">Rondela</option>
+            </select>
+          </div>
+          ${_numFld('snd-cap','Çap (M)','12')}${_numFld('snd-boy2','Boy (mm)','40')}
+        </div>`;
+      break;
+    case 'BOYA':
+      html = `<div style="font-size:11px;color:#666;margin-bottom:6px">🎨 Boya detayı:</div>
+        <div class="fgrid" style="grid-template-columns:repeat(2,1fr);gap:6px">
+          ${_fld('snd-ral','RAL Kodu','9002')}
+          <div class="frow"><label style="font-size:11px">Tip</label>
+            <select id="snd-tip" oninput="_snRebuildUrun()">
+              <option value="EPOKSİ">Epoksi</option>
+              <option value="ALKID">Alkid</option>
+              <option value="POLIURETAN">Poliüretan</option>
+              <option value="ASTAR">Astar</option>
+              <option value="PRİMER">Primer</option>
+            </select>
+          </div>
+        </div>`;
+      break;
+    case 'SARF':
+      html = `<div style="font-size:11px;color:#666;margin-bottom:6px">🧰 Sarf malzeme adı:</div>
+        <div class="fgrid" style="grid-template-columns:1fr">${_fld('snd-ad','Sarf Adı','Örn. BEYAZ FİTİL 4×50')}</div>`;
+      break;
+    default:
+      html = `<div style="font-size:11px;color:#666">Serbest ürün — sadece "Ürün Adı" alanını doldur.</div>`;
+  }
+  box.innerHTML = html;
+}
+// Detay alanlarından ürün adını otomatik oluştur
+function _snRebuildUrun(){
+  const k = document.getElementById('sn-kat').value;
+  const _v = (id) => document.getElementById(id)?.value?.trim() || '';
+  let urun = '';
+  switch(k){
+    case 'HEA': case 'HEB': case 'IPE': case 'UNP': {
+      const n = _v('snd-profno'); if(n) urun = `${k} ${n}`; break;
+    }
+    case 'KUTU PROFİL': case 'KÖŞEBENT': case 'C PROFİL': case 'Z PROFİL': {
+      const e = _v('snd-en'), b = _v('snd-boy2'), t = _v('snd-kal');
+      if(e && b && t) urun = `${e}×${b}×${t} mm`;
+      else if(e && t) urun = `${e}×${t} mm`;
+      break;
+    }
+    case 'BORU': {
+      const c = _v('snd-cap'), t = _v('snd-kal');
+      if(c && t) urun = `${c}×${t} mm`; break;
+    }
+    case 'LAMA': {
+      const e = _v('snd-en'), t = _v('snd-kal');
+      if(e && t) urun = `${e}×${t}`; break;
+    }
+    case 'SAÇ': {
+      const kal = _v('snd-kal');
+      if(kal) urun = `SAÇ ${kal} mm`; break;
+    }
+    case 'CIVATA-SOMUN': {
+      const tip = _v('snd-tip'), cap = _v('snd-cap'), boy = _v('snd-boy2');
+      if(tip === 'CIVATA' && cap && boy) urun = `M${cap}*${boy} CIVATA`;
+      else if(cap && tip) urun = `M${cap} ${tip}`;
+      break;
+    }
+    case 'BOYA': {
+      const ral = _v('snd-ral'), tip = _v('snd-tip');
+      if(ral && tip) urun = `RAL${ral} ${tip}`;
+      break;
+    }
+    case 'SARF': {
+      urun = _v('snd-ad'); break;
+    }
+  }
+  if(urun) document.getElementById('sn-urun').value = urun;
+}
+function _snBackToStep1(){
+  document.getElementById('sn-step-1').style.display = '';
+  document.getElementById('sn-step-2').style.display = 'none';
+  document.getElementById('sn-save-btn').style.display = 'none';
+  document.getElementById('sn-title').textContent = '➕ Yeni Stok Kalemi — Kategori Seç';
 }
 function _toggleStockNewFields(){
   const bir = document.getElementById('sn-birim')?.value || 'm';
   const boyBlock = document.getElementById('sn-boy-block');
   const adetBlock = document.getElementById('sn-adet-block');
   const adetLbl = document.getElementById('sn-adet-lbl');
-  // m ve m² için "Boy × Adet" mantığı; diğer birimler için tek "Adet" kutusu
-  const useBoy = (bir === 'm' || bir === 'm²');
+  // m için "Boy × Adet"; m² için tek toplam m² kutusu; diğer birimler için tek "Adet" kutusu
+  const useBoy = (bir === 'm');
   if(boyBlock) boyBlock.style.display  = useBoy ? '' : 'none';
   if(adetBlock) adetBlock.style.display = useBoy ? 'none' : '';
-  if(adetLbl) adetLbl.textContent = (bir === 'm²' ? 'Toplam m²' : (bir[0].toUpperCase()+bir.slice(1)));
+  if(adetLbl){
+    if(bir === 'm²') adetLbl.textContent = 'Toplam m² (elimizde bulunan)';
+    else adetLbl.textContent = bir[0].toUpperCase()+bir.slice(1);
+  }
 }
 function closeStockNew(){ document.getElementById('stockNewModal').classList.remove('show'); }
 async function saveStockNew(){
   const _kat = document.getElementById('sn-kat').value.trim();
   const _ad  = document.getElementById('sn-urun').value.trim();
   const _bir = document.getElementById('sn-birim')?.value || 'm';
-  const _useBoy = (_bir === 'm' || _bir === 'm²');
-  // Manuel birim ağırlık (kg/adet, kg/takım, kg/kutu vb.) — kullanıcı girdiyse onu kullan
+  // Manuel birim ağırlık — kullanıcı girdiyse onu kullan
   const _kgpmManual = parseFloat(document.getElementById('sn-kgpm')?.value) || 0;
   const _kgpm = _kgpmManual > 0 ? _kgpmManual : _guessKgPerMeter(_kat, _ad);
   // Birim m/m² → boy×adet mantığı; diğer birimler → boy1=1, adet1=girilen adet
   let _b1=0,_a1=0,_b2=0,_a2=0;
-  if(_useBoy){
+  if(_bir === 'm'){
+    // metre birim — boy×adet formatı
     _b1 = +document.getElementById('sn-b1').value||0;
     _a1 = +document.getElementById('sn-a1').value||0;
     _b2 = +document.getElementById('sn-b2').value||0;
     _a2 = +document.getElementById('sn-a2').value||0;
+  } else if(_bir === 'm²'){
+    // m² birim — kullanıcı doğrudan m² sayısı girer (sn-adet). _stockAvailable (boy×adet)/1000 hesabı için boy1=1000
+    _b1 = 1000;
+    _a1 = +document.getElementById('sn-adet').value||0;
   } else {
+    // Sayılabilir birim (adet/takım/kg/litre/rulo/paket/kutu) — boy1=1, adet1=girilen
     _b1 = 1;
     _a1 = +document.getElementById('sn-adet').value||0;
   }
@@ -5027,10 +5284,19 @@ async function saveStockNew(){
     updated_by: me.id
   };
   if(!d.kategori || !d.urun){toast('Kategori ve Ürün zorunlu','err');return}
-  const {error} = await sb.from('stock_items').insert(d);
-  if(error){toast('Hata: '+errTr(error),'err');return}
-  toast('Yeni kalem eklendi','ok');
-  await notify(`➕ ${me.full_name} stok listesine yeni kalem ekledi: ${d.kategori} · ${d.urun}`, '➕', 'system');
+  // Düzenleme modu → UPDATE, aksi halde INSERT
+  if(_snEditingId){
+    const {error} = await sb.from('stock_items').update(d).eq('id', _snEditingId);
+    if(error){toast('Hata: '+errTr(error),'err');return}
+    toast('Kalem güncellendi','ok');
+    try { await notify(`✏️ ${me.full_name} stok kalemini güncelledi: ${d.kategori} · ${d.urun}`, '✏️', 'stok'); } catch(e){}
+    _snEditingId = null;
+  } else {
+    const {error} = await sb.from('stock_items').insert(d);
+    if(error){toast('Hata: '+errTr(error),'err');return}
+    toast('Yeni kalem eklendi','ok');
+    await notify(`➕ ${me.full_name} stok listesine yeni kalem ekledi: ${d.kategori} · ${d.urun}`, '➕', 'system');
+  }
   closeStockNew();
   await loadStockItems();
 }
@@ -6558,7 +6824,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v140';
+const APP_VERSION = 'v142';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
