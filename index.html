@@ -4510,9 +4510,13 @@ async function loadStockItems(){
       cats.map(c=>`<option value="${esc(c)}">${esc(c)} (${stockItems.filter(i=>i.kategori===c).length})</option>`).join('');
     sel.value = cur;
   }
-  // datalist for new item form
+  // datalist for new item form — hem mevcut kategoriler hem standart öneriler
   const dl = document.getElementById('sn-kats');
-  if(dl) dl.innerHTML = cats.map(c=>`<option value="${esc(c)}">`).join('');
+  if(dl){
+    const _STK_PRESETS = ['HEA','HEB','IPE','UNP','SAÇ','BORU','KUTU PROFİL','LAMA','KÖŞEBENT','C PROFİL','Z PROFİL','BOYA','SARF','CIVATA-SOMUN','DİĞER'];
+    const _tumOneri = [...new Set([...cats, ..._STK_PRESETS])].sort();
+    dl.innerHTML = _tumOneri.map(c=>`<option value="${esc(c)}">`).join('');
+  }
   renderStockTable();
 }
 
@@ -6550,7 +6554,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v138';
+const APP_VERSION = 'v139';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
