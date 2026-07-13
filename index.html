@@ -2288,8 +2288,11 @@ function renderNotifs(){
         const ub=!read?'background:#eff6ff;border-left:3px solid var(--pl)':'';
         const hasRef = n.ref_type && n.ref_id;
         const linkLabel = hasRef ? (n.ref_type==='project'?'🔗 Projeyi Aç':'🔗 Görevi Aç') : '';
+        // Bildirim metninden faz adını çıkar — varsa "Adıma Git" butonu göster
+        const focusPhase = hasRef && n.ref_type === 'project' ? _extractPhaseFromNotifText(n.text) : null;
+        const focusLink = focusPhase ? ` <a href="#" onclick="event.stopPropagation();openNotifRef('${n.ref_type}','${n.ref_id}','${focusPhase}');return false;" style="color:#0891b2;margin-left:6px;font-weight:600">🎯 Adıma Git</a>` : '';
         return `<div class="notif-item" style="${ub}" onclick="markRead('${n.id}')">
-          <div style="display:flex;gap:6px"><span>${n.icon||'🔔'}</span><div style="flex:1">${esc(n.text)}<div class="when">⏱️ ${ago} ${dl}${hasRef?` <a href="#" onclick="event.stopPropagation();openNotifRef('${n.ref_type}','${n.ref_id}');return false;" style="color:var(--pl);margin-left:6px">${linkLabel}</a>`:''}</div></div></div></div>`;
+          <div style="display:flex;gap:6px"><span>${n.icon||'🔔'}</span><div style="flex:1">${esc(n.text)}<div class="when">⏱️ ${ago} ${dl}${hasRef?` <a href="#" onclick="event.stopPropagation();openNotifRef('${n.ref_type}','${n.ref_id}');return false;" style="color:var(--pl);margin-left:6px">${linkLabel}</a>`:''}${focusLink}</div></div></div></div>`;
       }).join('');
   }
 
@@ -2362,13 +2365,39 @@ function _updateAppBadge(){
   } catch(e){}
 }
 // Bildirim panelinde bir elemana tıklanınca ilgili projeye götür
-function openNotifRef(refType, refId){
+// Bildirim metninden faz anahtarını çıkar (Türkçe eş anlamlıları çözümler)
+function _extractPhaseFromNotifText(text){
+  const u = (text||'').toLocaleUpperCase('tr-TR');
+  if(/TEKLİF|TEKLIF|PROJELENDİRME|PROJELENDIRME|TEKLİFPROJE/.test(u)) return 'teklifproje';
+  if(/SATIN\s*ALMA|SATINALMA/.test(u)) return 'satinalma';
+  if(/ÜRETİM|URETIM/.test(u)) return 'uretim';
+  if(/SEVKİYAT|SEVK/.test(u)) return 'sevk';
+  if(/SAHA\s*MONTAJ|MONTAJ/.test(u)) return 'montaj';
+  if(/MUHASEBE|FATURA|ÖDEME/.test(u)) return 'muhasebe';
+  return null;
+}
+function openNotifRef(refType, refId, focusPhase){
   if(!refType || !refId) return;
+  document.getElementById('nPanel').classList.remove('show');
   if(refType === 'project'){
-    document.getElementById('nPanel').classList.remove('show');
     openProj(refId);
+    // Belirli bir faza odaklan — modal açıldıktan sonra ilgili satırı bul, scroll et ve vurgula
+    if(focusPhase){
+      setTimeout(() => {
+        const row = document.getElementById('ph-row-' + focusPhase);
+        if(row){
+          row.scrollIntoView({behavior:'smooth', block:'center'});
+          const orig = row.style.background;
+          row.style.background = '#fff8dc';
+          row.style.boxShadow = '0 0 0 3px #f1c40f88';
+          setTimeout(() => {
+            row.style.background = orig || '#fff';
+            row.style.boxShadow = '';
+          }, 2500);
+        }
+      }, 600);
+    }
   } else if(refType === 'task'){
-    document.getElementById('nPanel').classList.remove('show');
     openTask(null, refId);
   }
 }
@@ -5675,7 +5704,7 @@ function renderPhases(project){
     }
     const PHASE_BORDER = {teklifproje:'#6b3fa0',satinalma:'#0aa3c7',uretim:'#d97706',sevk:'#1f4e8c',montaj:'#15803d',muhasebe:'#b91c1c'};
     const borderColor = PHASE_BORDER[ph] || '#cdd2dc';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-left:4px solid ${borderColor};border-bottom:1px solid #eef0f5;background:#fff;flex-wrap:wrap">
+    return `<div data-phase="${ph}" id="ph-row-${ph}" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-left:4px solid ${borderColor};border-bottom:1px solid #eef0f5;background:#fff;flex-wrap:wrap;transition:background .4s">
       <div style="min-width:170px;font-size:13px;color:${overdue?'#c00':'#333'};font-weight:${overdue?'700':'600'}">
         ${DI[ph]||''} ${DN[ph]||ph}${overdue?' ⚠️':''}${isPending?' ⏳':''}
       </div>
@@ -7102,7 +7131,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v153';
+const APP_VERSION = 'v154';
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
