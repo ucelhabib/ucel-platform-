@@ -14,7 +14,6 @@
 <title>Üçel Yapısal Çelik - Yönetim Platformu</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -443,19 +442,6 @@ body.proc-fullscreen{overflow:hidden}
         </div>
         <div class="banner"><span class="ico">👑</span><div><strong>Yönetici görünümü.</strong> Tüm 7 birimi görür ve yönetebilirsiniz. <strong>Canlı çoklu kullanıcı</strong> — herkesin değişiklikleri anlık size yansır.</div></div>
         <div class="kpi-grid" id="kpiGrid"></div>
-        <div class="section-h"><h2>📊 Analiz</h2></div>
-        <div id="chartsGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin-bottom:20px">
-          <div style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);padding:14px 18px">
-            <div style="font-size:13px;font-weight:700;color:#1f4e8c;margin-bottom:6px">💰 Son 12 Ay Teklif Tutarları</div>
-            <div style="font-size:11px;color:#888;margin-bottom:10px" id="chartRevSub">— TL</div>
-            <div style="position:relative;height:220px"><canvas id="chartRevenue"></canvas></div>
-          </div>
-          <div style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);padding:14px 18px">
-            <div style="font-size:13px;font-weight:700;color:#1f4e8c;margin-bottom:6px">🎯 Aktif Projelerin Aşama Dağılımı</div>
-            <div style="font-size:11px;color:#888;margin-bottom:10px" id="chartPhaseSub">— aktif proje</div>
-            <div style="position:relative;height:220px"><canvas id="chartPhaseDist"></canvas></div>
-          </div>
-        </div>
         <div class="section-h"><h2>🏢 Birim Bazlı Özet</h2></div>
         <div class="dept-grid" id="deptGrid"></div>
         <div class="section-h"><h2>👥 Ekip Yükü</h2></div>
@@ -1988,108 +1974,6 @@ function renderOverviewAdmin(){
       <td>${(u.label||'').replace(/^[^ ]+ /,'')}</td><td>${ts.length}</td>
       <td><span class="pill ${od.length>0?'pl-red':'pl-green'}">${od.length}</span></td></tr>`;
   }).join('');
-  // Grafikleri çiz (Chart.js yüklüyse)
-  _renderDashboardCharts(op, ttl);
-}
-// Yönetici dashboard için 2 grafik: Aylık teklif tutarı + Aşama dağılımı halka
-let _chartRevenue = null;
-let _chartPhaseDist = null;
-function _renderDashboardCharts(activeProjects, totalActiveTL){
-  if(typeof Chart === 'undefined') return; // Chart.js yüklenmemişse sessizce atla
-  // 1) SON 12 AY TEKLİF TUTARI (BAR)
-  const now = new Date();
-  const _AYLAR = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
-  const monthKeys = [], monthLabels = [];
-  for(let i=11; i>=0; i--){
-    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
-    monthKeys.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
-    monthLabels.push(`${_AYLAR[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`);
-  }
-  const monthlyRevenue = new Array(12).fill(0);
-  projects.forEach(p => {
-    const created = p.created_at ? new Date(p.created_at) : null;
-    if(!created) return;
-    const key = `${created.getFullYear()}-${String(created.getMonth()+1).padStart(2,'0')}`;
-    const idx = monthKeys.indexOf(key);
-    if(idx >= 0) monthlyRevenue[idx] += +p.amount || 0;
-  });
-  const revSubEl = document.getElementById('chartRevSub');
-  if(revSubEl){
-    const buAy = monthlyRevenue[11] || 0;
-    const gecenAy = monthlyRevenue[10] || 0;
-    const fark = gecenAy > 0 ? ((buAy - gecenAy) / gecenAy * 100) : 0;
-    const farkTxt = gecenAy > 0
-      ? (fark > 0 ? `<span style="color:#0a7c3a">↑ %${Math.abs(fark).toFixed(0)}</span>` : (fark < 0 ? `<span style="color:#c33">↓ %${Math.abs(fark).toFixed(0)}</span>` : `<span style="color:#666">= aynı</span>`))
-      : '';
-    revSubEl.innerHTML = `Bu ay: <b>${fmtTL0(buAy)}</b> ${farkTxt} · Yıllık: <b>${fmtTL0(monthlyRevenue.reduce((s,v)=>s+v,0))}</b>`;
-  }
-  const revCtx = document.getElementById('chartRevenue');
-  if(revCtx){
-    if(_chartRevenue) _chartRevenue.destroy();
-    _chartRevenue = new Chart(revCtx, {
-      type: 'bar',
-      data: {
-        labels: monthLabels,
-        datasets: [{
-          label: 'Teklif Tutarı',
-          data: monthlyRevenue,
-          backgroundColor: monthLabels.map((_,i) => i === 11 ? '#059669' : '#1f4e8c'),
-          borderRadius: 6,
-          maxBarThickness: 30
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: (c) => fmtTL0(c.parsed.y) } }
-        },
-        scales: {
-          y: { ticks: { callback: (v) => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : (v >= 1e3 ? (v/1e3).toFixed(0)+'K' : v) }, grid: { color: '#f1f4f8' } },
-          x: { grid: { display: false } }
-        }
-      }
-    });
-  }
-  // 2) AŞAMA DAĞILIMI (HALKA)
-  const phaseMap = {
-    teklifproje: {label:'📐 Teklif/Proj.', color:'#6b3fa0'},
-    satinalma:   {label:'🛒 Satın Alma', color:'#0aa3c7'},
-    uretim:      {label:'🔧 Üretim',     color:'#d97706'},
-    sevk:        {label:'🚚 Sevkiyat',   color:'#1f4e8c'},
-    montaj:      {label:'🏗️ Montaj',     color:'#15803d'},
-    muhasebe:    {label:'💰 Muhasebe',   color:'#b91c1c'}
-  };
-  const phaseCounts = {};
-  Object.keys(phaseMap).forEach(k => phaseCounts[k] = 0);
-  activeProjects.forEach(p => {
-    const stages = (p.stages && p.stages.length) ? p.stages : [p.stage];
-    stages.forEach(s => { if(phaseCounts[s] !== undefined) phaseCounts[s]++; });
-  });
-  const distSubEl = document.getElementById('chartPhaseSub');
-  if(distSubEl) distSubEl.innerHTML = `<b>${activeProjects.length}</b> aktif proje · toplam ${Object.values(phaseCounts).reduce((s,v)=>s+v,0)} aşama`;
-  const distCtx = document.getElementById('chartPhaseDist');
-  if(distCtx){
-    if(_chartPhaseDist) _chartPhaseDist.destroy();
-    _chartPhaseDist = new Chart(distCtx, {
-      type: 'doughnut',
-      data: {
-        labels: Object.values(phaseMap).map(v => v.label),
-        datasets: [{
-          data: Object.keys(phaseMap).map(k => phaseCounts[k]),
-          backgroundColor: Object.values(phaseMap).map(v => v.color),
-          borderWidth: 2, borderColor: '#fff'
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false, cutout: '62%',
-        plugins: {
-          legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
-          tooltip: { callbacks: { label: (c) => `${c.label}: ${c.parsed} proje` } }
-        }
-      }
-    });
-  }
 }
 
 function renderOverviewUnit(){
@@ -7247,7 +7131,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v155'; // Dashboard grafikleri (aylık ciro + aşama dağılımı)
+const APP_VERSION = 'v154'; // Bildirimlerde faz-odaklı yönlendirme
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
@@ -7558,6 +7442,7 @@ async function openFiles(projectId, taskId){
   document.getElementById('fmStatus').textContent = '';
   await loadFiles();
   document.getElementById('filesModal').classList.add('show');
+}
 function closeFiles(){document.getElementById('filesModal').classList.remove('show'); _filesCtx=null}
 async function loadFiles(){
   if(!_filesCtx) return;
