@@ -563,7 +563,7 @@ body.proc-fullscreen{overflow:hidden}
             <select id="shipProj" onchange="renderShipments()" style="flex:1;min-width:200px;padding:6px 10px;border:1px solid #cdd2dc;border-radius:6px;font-size:13px"><option value="">— Proje seç —</option></select>
             <button class="btn sec sm" onclick="printShipmentReport()" title="Tüm proje raporu (yazdır/PDF/Excel)">📊 Proje Raporu</button>
             <button class="btn sec sm" onclick="printDailyShipmentReport()" title="Belirli bir günün raporu">📅 Günlük Rapor</button>
-            <button class="btn ok sm" onclick="completeShipping()" style="background:#0a7;color:#fff" title="Yüklemeyi sonlandır ve final rapor al">🏁 Yüklemeyi Tamamla</button>
+            <button class="btn ok sm" id="btnCompleteShip" onclick="completeShipping()" style="background:#0a7;color:#fff" title="Yüklemeyi sonlandır ve final rapor al">🏁 Yüklemeyi Tamamla</button>
             <button class="btn" onclick="openShipmentModal()">+ Yeni Yükleme</button>
           </div>
           <div id="shipSummary" style="font-size:11px;color:#666;margin-bottom:8px"></div>
@@ -6257,6 +6257,25 @@ async function renderShipments(){
   if(sumEl){
     sumEl.innerHTML = `<strong>${items.length}</strong> yükleme · Toplam: <strong style="color:#1f4e8c">${totalKg.toLocaleString('en-US',{maximumFractionDigits:0})} kg</strong>`;
   }
+  // Yüklemeyi Tamamla butonunun state'ini güncelle — sevkiyat fazı %100 ise disable
+  const btnCS = document.getElementById('btnCompleteShip');
+  if(btnCS){
+    const _proj = projects.find(p => p.id === pid);
+    const _sevkDone = ((_proj && _proj.phases && _proj.phases.sevk) || 0) >= 100;
+    if(_sevkDone){
+      btnCS.disabled = true;
+      btnCS.style.background = '#9aa4b2';
+      btnCS.style.cursor = 'not-allowed';
+      btnCS.innerHTML = '✅ Tamamlandı';
+      btnCS.title = 'Sevkiyat fazı %100 — bu proje için yükleme zaten tamamlandı';
+    } else {
+      btnCS.disabled = false;
+      btnCS.style.background = '#0a7';
+      btnCS.style.cursor = '';
+      btnCS.innerHTML = '🏁 Yüklemeyi Tamamla';
+      btnCS.title = 'Yüklemeyi sonlandır ve final rapor al';
+    }
+  }
   if(items.length === 0){
     listEl.innerHTML = '<div style="padding:30px;text-align:center;color:#888">Bu projede henüz yükleme yok. Sağdaki <strong>+ Yeni Yükleme</strong> ile başla.</div>';
     return;
@@ -6444,6 +6463,11 @@ async function completeShipping(){
   const proj = projects.find(p => p.id === pid);
   const items = shipments.filter(s => s.project_id === pid);
   if(items.length === 0){ toast('Bu projede yükleme yok, önce yükleme ekle','err'); return; }
+  // Guard: sevkiyat zaten %100 ise tekrar tamamlama
+  if(((proj && proj.phases && proj.phases.sevk) || 0) >= 100){
+    toast('Bu projenin sevkiyatı zaten tamamlanmış','err');
+    return;
+  }
   const st = _calcShipmentStats(items);
   const onay = confirm(
     `🏁 PROJE YÜKLEMESİ TAMAMLANIYOR\n\n` +
@@ -7247,7 +7271,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v155'; // Dashboard grafikleri (aylık ciro + aşama dağılımı)
+const APP_VERSION = 'v156'; // Sevkiyat: tamamlanan projede buton disable + guard
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
