@@ -457,10 +457,6 @@ body.proc-fullscreen{overflow:hidden}
             <div style="position:relative;height:220px"><canvas id="chartPhaseDist"></canvas></div>
           </div>
         </div>
-        <div class="section-h"><h2>🏢 Birim Bazlı Özet</h2></div>
-        <div class="dept-grid" id="deptGrid"></div>
-        <div class="section-h"><h2>👥 Ekip Yükü</h2></div>
-        <div class="table-wrap"><table><thead><tr><th>Çalışan</th><th>Birim</th><th>Açık</th><th>Geciken</th></tr></thead><tbody id="teamMini"></tbody></table></div>
       </div>
 
       <div class="page" id="page-projects">
@@ -1989,8 +1985,6 @@ function renderOverviewAdmin(){
   document.querySelectorAll('#page-overview .section-h').forEach(s=>s.style.display='');
   const ph0 = document.querySelector('#page-overview .page-h .role-extra-actions');
   if(ph0) ph0.innerHTML = '';
-  const secH0 = document.querySelector('#page-overview .section-h h2');
-  if(secH0) secH0.innerHTML = '🏢 Birim Bazlı Özet';
   kpiEl.innerHTML=`
     <div class="kpi"><div class="kpi-label">Açık Proje</div><div class="kpi-val">${op.length}</div><div class="kpi-sub">Tüm birimler</div></div>
     <div class="kpi ok"><div class="kpi-label">Toplam Tonaj</div><div class="kpi-val g" style="font-size:18px">${fmtNum(tn*1000, 0)} kg</div><div class="kpi-sub">Aktif</div></div>
@@ -1998,26 +1992,7 @@ function renderOverviewAdmin(){
     <div class="kpi"><div class="kpi-label">Açık Görev</div><div class="kpi-val">${ot.length}</div><div class="kpi-sub">Tüm ekip</div></div>
     <div class="kpi ok amount-only"><div class="kpi-label">Aktif Ciro</div><div class="kpi-val g" style="font-size:18px">${fmtTL0(ttl)}</div><div class="kpi-sub">Sözleşme</div></div>
     <div class="kpi w"><div class="kpi-label">Teklif/Çizim</div><div class="kpi-val">${projects.filter(p=>p.stage==='teklifproje').length}</div><div class="kpi-sub">Hazırlık</div></div>`;
-  document.getElementById('deptGrid').innerHTML=ALL_D.map(d=>{
-    const dt=tasks.filter(t=>t.dept===d);
-    const o=dt.filter(t=>!t.done),ovd=o.filter(t=>t.due&&t.due<td);
-    const pr=projects.filter(p=>p.stage===d);
-    return `<div class="dept-card" onclick="goto('d-${d}')">
-      <div class="dept-head ${DCH[d]}"><span class="nm">${DN[d]}</span><span class="ic">${DI[d]}</span></div>
-      <div class="dept-body">
-        <div class="row"><span class="lbl">Açık görev</span><span class="val">${o.length}</span></div>
-        <div class="row"><span class="lbl">Geciken</span><span class="val ${ovd.length>0?'r':'g'}">${ovd.length}</span></div>
-        <div class="row"><span class="lbl">Aktif proje</span><span class="val">${pr.length}</span></div>
-        <div class="row"><span class="lbl">Tamamlanan</span><span class="val g">${dt.filter(t=>t.done).length}</span></div>
-      </div></div>`;
-  }).join('');
-  document.getElementById('teamMini').innerHTML=Object.values(allProfiles).filter(u=>u.role!=='yonetici').map(u=>{
-    const ts=tasks.filter(t=>t.assignee_id===u.id&&!t.done);
-    const od=ts.filter(t=>t.due&&t.due<td);
-    return `<tr><td><span class="av-mini" style="background:${u.color}">${u.initials}</span> ${u.full_name}</td>
-      <td>${(u.label||'').replace(/^[^ ]+ /,'')}</td><td>${ts.length}</td>
-      <td><span class="pill ${od.length>0?'pl-red':'pl-green'}">${od.length}</span></td></tr>`;
-  }).join('');
+  // Birim Bazlı Özet ve Ekip Yükü tabloları kaldırıldı (v159)
   _renderDashboardCharts(op);
 }
 let _chartRevenue = null;
@@ -7311,7 +7286,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v158'; // Timezone fix + Sorumlu kaldırıldı + Proje Adı CSS + Hata Bildir sistemi
+const APP_VERSION = 'v159'; // Birim Bazlı Özet + Ekip Yükü tabloları kaldırıldı (sadece grafikler + KPI)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
