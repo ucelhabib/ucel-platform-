@@ -1222,20 +1222,13 @@ body.proc-fullscreen{overflow:hidden}
   <div class="modal" style="max-width:720px">
     <div class="modal-h"><h3 id="smTitle">🚚 Yeni Yükleme Kaydı</h3><button class="x" onclick="closeShipmentModal()">✕</button></div>
     <div class="modal-b">
-      <div class="frow" style="margin-bottom:12px;padding:10px 12px;background:#f5f7fa;border-radius:8px;border:1px solid var(--bd)">
-        <label style="display:block;margin-bottom:6px;font-weight:700">Yükleme Tipi</label>
-        <div style="display:flex;gap:14px;flex-wrap:wrap">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500"><input type="radio" name="sh-tip" value="kamyon" checked onchange="_toggleShipType()"> 🚛 Kamyon / Dorse</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500"><input type="radio" name="sh-tip" value="konteyner" onchange="_toggleShipType()"> 📦 Konteyner</label>
-        </div>
-      </div>
       <div class="fgrid">
         <div class="frow"><label>Tarih</label><input id="sh-tarih" type="date"></div>
         <div class="frow"><label>Tonaj (kg)</label><input id="sh-tonaj" type="text" inputmode="decimal" class="num-input"></div>
-        <div class="frow ship-kamyon"><label>Çekici Plakası</label><input id="sh-cekici" maxlength="20" style="text-transform:uppercase"></div>
-        <div class="frow ship-kamyon"><label>Dorse Plakası</label><input id="sh-dorse" maxlength="20" style="text-transform:uppercase"></div>
-        <div class="frow ship-konteyner" style="display:none"><label>Konteyner No</label><input id="sh-konteyner" maxlength="20" style="text-transform:uppercase" placeholder="MSKU 1234567"></div>
-        <div class="frow ship-konteyner" style="display:none"><label>Mühür No</label><input id="sh-muhur" maxlength="20" style="text-transform:uppercase" placeholder="ABC123456"></div>
+        <div class="frow"><label>🚛 Çekici Plakası</label><input id="sh-cekici" maxlength="20" style="text-transform:uppercase" placeholder="42 ATJ 148"></div>
+        <div class="frow"><label>🚚 Dorse Plakası</label><input id="sh-dorse" maxlength="20" style="text-transform:uppercase" placeholder="42 ATL 435"></div>
+        <div class="frow"><label>📦 Konteyner No <span style="color:#888;font-weight:400">(opsiyonel)</span></label><input id="sh-konteyner" maxlength="20" style="text-transform:uppercase" placeholder="MSKU 1234567"></div>
+        <div class="frow"><label>🔒 Mühür No <span style="color:#888;font-weight:400">(opsiyonel)</span></label><input id="sh-muhur" maxlength="20" style="text-transform:uppercase" placeholder="ABC123456"></div>
         <div class="frow"><label>Giriş Saati</label><input id="sh-giris" type="datetime-local"></div>
         <div class="frow"><label>Çıkış Saati</label><input id="sh-cikis" type="datetime-local"></div>
         <div class="frow"><label>Sürücü</label><input id="sh-surucu"></div>
@@ -6293,7 +6286,8 @@ async function renderShipments(){
     return `<div style="border:1px solid #eef0f5;border-left:4px solid #1f4e8c;border-radius:8px;padding:12px 14px;margin-bottom:10px;background:#fafbfd">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
         <div style="flex:1;min-width:220px">
-          <div style="font-weight:800;color:#1f4e8c;font-size:14px">${s.yukleme_tipi==='konteyner' ? `📦 ${esc(s.konteyner_no||'—')}${s.muhur_no?` <span style="color:#888">🔒 ${esc(s.muhur_no)}</span>`:''}` : `🚛 ${esc(s.cekici_plaka||'—')}${s.dorse_plaka?` <span style="color:#888">/ 🚚 ${esc(s.dorse_plaka)}</span>`:''}`}</div>
+          <div style="font-weight:800;color:#1f4e8c;font-size:14px">🚛 ${esc(s.cekici_plaka||'—')}${s.dorse_plaka?` <span style="color:#888">/ 🚚 ${esc(s.dorse_plaka)}</span>`:''}</div>
+          ${(s.konteyner_no||s.muhur_no)?`<div style="font-size:12px;color:#0aa3c7;margin-top:2px">📦 ${esc(s.konteyner_no||'—')}${s.muhur_no?` <span style="color:#888">🔒 ${esc(s.muhur_no)}</span>`:''}</div>`:''}
           <div style="font-size:12px;color:#444;margin-top:4px">📅 ${esc(tarih)} · 🕐 ${esc(giris)} → 🕑 ${esc(cikis)}${sure?` <span style="color:#888">(${sure})</span>`:''}</div>
           ${s.surucu?`<div style="font-size:12px;color:#666;margin-top:2px">👤 ${esc(s.surucu)}${s.tedarikci?` · 🏢 ${esc(s.tedarikci)}`:''}</div>`:''}
           ${s.irsaliye_no?`<div style="font-size:12px;color:#666;margin-top:2px">📋 İrsaliye: <strong>${esc(s.irsaliye_no)}</strong></div>`:''}
@@ -6635,12 +6629,6 @@ function _removeShipPhoto(i){
   _renderShipGallery();
 }
 
-// v160: Yükleme tipi seçimine göre alanları göster/gizle
-function _toggleShipType(){
-  const tip = document.querySelector('input[name="sh-tip"]:checked')?.value || 'kamyon';
-  document.querySelectorAll('.ship-kamyon').forEach(el => el.style.display = (tip === 'kamyon') ? '' : 'none');
-  document.querySelectorAll('.ship-konteyner').forEach(el => el.style.display = (tip === 'konteyner') ? '' : 'none');
-}
 // Yardımcı: datetime-local input → UTC ISO (kayıt için)
 function _dtLocalToIso(v){ return v ? new Date(v).toISOString() : null; }
 // Yardımcı: UTC ISO → datetime-local input formatı (yerel gösterim için)
@@ -6680,16 +6668,9 @@ function openShipmentModal(id){
     document.getElementById('sh-irsno').value = s.irsaliye_no || '';
     document.getElementById('sh-not').value = s.not_text || '';
     _shipGallery = _shipPhotosOf(s);
-    // Yükleme tipi radio'yu ayarla
-    const _tipVal = s.yukleme_tipi || (s.konteyner_no ? 'konteyner' : 'kamyon');
-    document.querySelectorAll('input[name="sh-tip"]').forEach(r => r.checked = (r.value === _tipVal));
-    _toggleShipType();
   } else {
     ['sh-tonaj','sh-cekici','sh-dorse','sh-konteyner','sh-muhur','sh-giris','sh-cikis','sh-surucu','sh-tedarikci','sh-irsno','sh-not'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';});
     document.getElementById('sh-tarih').value = new Date().toISOString().slice(0,10);
-    // Varsayılan kamyon
-    document.querySelectorAll('input[name="sh-tip"]').forEach(r => r.checked = (r.value === 'kamyon'));
-    _toggleShipType();
   }
   document.getElementById('sh-photos').value = '';
   // Çoklu dosya seçimi → galeri'ye ekle
@@ -6731,17 +6712,14 @@ async function _uploadShipPhoto(file, type){
 async function saveShipment(){
   const pid = document.getElementById('shipProj').value;
   if(!pid){ toast('Önce üstten proje seç','err'); return; }
-  const _tipEl = document.querySelector('input[name="sh-tip"]:checked');
-  const _tip = _tipEl ? _tipEl.value : 'kamyon';
   const row = {
     project_id: pid,
     tarih: document.getElementById('sh-tarih').value || null,
     tonaj: parseTR(document.getElementById('sh-tonaj').value) || null,
-    yukleme_tipi: _tip,
-    cekici_plaka: _tip === 'kamyon' ? (document.getElementById('sh-cekici').value.toUpperCase().trim() || null) : null,
-    dorse_plaka: _tip === 'kamyon' ? (document.getElementById('sh-dorse').value.toUpperCase().trim() || null) : null,
-    konteyner_no: _tip === 'konteyner' ? (document.getElementById('sh-konteyner').value.toUpperCase().trim() || null) : null,
-    muhur_no: _tip === 'konteyner' ? (document.getElementById('sh-muhur').value.toUpperCase().trim() || null) : null,
+    cekici_plaka: document.getElementById('sh-cekici').value.toUpperCase().trim() || null,
+    dorse_plaka: document.getElementById('sh-dorse').value.toUpperCase().trim() || null,
+    konteyner_no: document.getElementById('sh-konteyner').value.toUpperCase().trim() || null,
+    muhur_no: document.getElementById('sh-muhur').value.toUpperCase().trim() || null,
     giris_saati: _dtLocalToIso(document.getElementById('sh-giris').value),
     cikis_saati: _dtLocalToIso(document.getElementById('sh-cikis').value),
     surucu: document.getElementById('sh-surucu').value.trim() || null,
@@ -7315,7 +7293,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v160'; // Rapor sayfa no + Konteyner/Kamyon tipi + Tümünü gör önplan + Tüm uzantılar
+const APP_VERSION = 'v161'; // Konteyner/Mühür daimi input (radio kaldırıldı)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
