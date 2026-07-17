@@ -5829,9 +5829,11 @@ function renderPhases(project){
           <div style="width:${val}%;height:100%;background:${val===100?'#0a7':val>0?'#1f4e8c':'#ccc'};transition:width .3s"></div>
           ${isPending ? `<div style="position:absolute;top:0;right:0;bottom:0;width:${100-val}%;background:repeating-linear-gradient(45deg,#fc3,#fc3 4px,#ffd 4px,#ffd 8px);opacity:0.6"></div>`:''}
         </div>
-        ${editable
-          ? `<input type="number" min="0" max="100" value="${val}" style="width:60px;font-size:12px;padding:3px 6px;border:1px solid #cdd2dc;border-radius:6px" onchange="updatePhase('${project.id}','${ph}',this.value,this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">`
-          : `<span style="width:50px;text-align:right;font-size:12px;color:#666">%${val}</span>`
+        ${editable && (val < 100 || adminEdit)
+          ? `<input type="number" min="0" max="100" value="${val}" style="width:60px;font-size:12px;padding:3px 6px;border:1px solid ${val===100?'#0a7':'#cdd2dc'};border-radius:6px${val===100?';background:#eafaf0':''}" onchange="updatePhase('${project.id}','${ph}',this.value,this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" title="${val===100?'Bu faz tamamlanmış — geri almak için değeri değiştir':''}">`
+          : val === 100
+            ? `<span title="Faz tamamlandı — geri alma yetkisi yalnızca yöneticide" style="width:60px;text-align:center;font-size:12px;color:#0a7;background:#eafaf0;border:1px solid #0a7;border-radius:6px;padding:3px 4px;font-weight:700">🔒 100</span>`
+            : `<span style="width:50px;text-align:right;font-size:12px;color:#666">%${val}</span>`
         }
         ${adminEdit
           ? `<input type="date" value="${deadline||''}" title="Hedef tarih (yalnızca yönetici düzenler)" style="font-size:11px;padding:2px 4px;border:1px solid #cdd2dc;border-radius:6px" onchange="updatePhaseDate('${project.id}','${ph}',this.value)">`
@@ -5881,6 +5883,14 @@ async function updatePhase(projectId, phase, value, inputEl){
   if(!canEditPhase(phase)){toast('Bu fazı güncelleyemezsin','err');return}
   const proj = projects.find(p=>p.id===projectId); if(!proj){toast('Proje yok','err');return}
   const prev = parseInt((proj.phases||{})[phase]||0);
+  // Geriye alma koruması: %100 fazı düşürüyorsa onay iste (yanlışlıkla azaltmayı önler)
+  if(prev === 100 && v < 100){
+    const emin = confirm(`⚠️ TAMAMLANMIŞ FAZ GERİ ALINIYOR\n\n${DN[phase]||phase} fazı %100 durumundan %${v}'e düşürülecek.\n\nEmin misin?\n\n(İptal edersen değer değişmez)`);
+    if(!emin){
+      if(inputEl) inputEl.value = prev; // input'u eski değere geri döndür
+      return;
+    }
+  }
   if(inputEl) inputEl.disabled = true;
   const {data, error} = await sb.rpc('update_project_phase', {p_project_id: projectId, p_phase: phase, p_value: v});
   if(inputEl) inputEl.disabled = false;
@@ -6631,6 +6641,15 @@ function _removeShipPhoto(i){
 }
 
 function openShipmentModal(id){
+  // Yeni yükleme (id yok) ve seçili projede sevkiyat %100 ise uyarı
+  if(!id){
+    const _pid = document.getElementById('shipProj')?.value;
+    const _proj = _pid ? projects.find(p => p.id === _pid) : null;
+    if(_proj && ((_proj.phases && _proj.phases.sevk) || 0) >= 100){
+      const _ok = confirm(`⚠️ Bu projenin sevkiyatı zaten TAMAMLANMIŞ (%100).\n\n${_proj.no || ''} · ${_proj.customer || ''}\n\nEk yükleme (iade / sonradan çıkan malzeme vb.) için devam etmek istiyor musun?`);
+      if(!_ok) return;
+    }
+  }
   editShipId = id || null;
   document.getElementById('smTitle').textContent = id ? '🚚 Yükleme Düzenle' : '🚚 Yeni Yükleme Kaydı';
   document.getElementById('shDel').style.display = id ? 'inline-flex' : 'none';
@@ -7271,7 +7290,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v156'; // Sevkiyat: tamamlanan projede buton disable + guard
+const APP_VERSION = 'v157'; // Faz kilit + sevk yükleme uyarı + backend guard + confirm
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){

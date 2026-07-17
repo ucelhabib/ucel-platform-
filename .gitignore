@@ -1,0 +1,30 @@
+# Hassas veri / notlar — asla commit edilmez
+supabase.txt
+supabase-*.txt
+credentials.txt
+secrets.txt
+.env
+.env.*
+*.key
+*.pem
+*.p12
+
+# Test / scratch dosyaları
+_test_*.txt
+_test_*.html
+tail.html
+head.html
+final.html
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Yedekler
+*.bak
+*.backup
+*~
