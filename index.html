@@ -4618,10 +4618,10 @@ function exportProcTalepFormu(){
     const t = _typeOrder(it.malzeme);
     let separator = '';
     if(_lastType !== null && _lastType !== t && t >= 1 && t <= 4){
-      separator = `<tr><td colspan="6" style="height:6px;background:#fff;border:0"></td></tr>
-        <tr><td colspan="6" style="background:#eef0f5;font-weight:800;color:#1f4e8c;padding:6px 10px;font-size:9pt;letter-spacing:0.5px">${_typeLabel(t)||''}</td></tr>`;
+      separator = `<tr><td colspan="5" style="height:6px;background:#fff;border:0"></td></tr>
+        <tr><td colspan="5" style="background:#eef0f5;font-weight:800;color:#1f4e8c;padding:6px 10px;font-size:9pt;letter-spacing:0.5px">${_typeLabel(t)||''}</td></tr>`;
     } else if(_lastType === null && t >= 1 && t <= 4){
-      separator = `<tr><td colspan="6" style="background:#eef0f5;font-weight:800;color:#1f4e8c;padding:6px 10px;font-size:9pt;letter-spacing:0.5px">${_typeLabel(t)||''}</td></tr>`;
+      separator = `<tr><td colspan="5" style="background:#eef0f5;font-weight:800;color:#1f4e8c;padding:6px 10px;font-size:9pt;letter-spacing:0.5px">${_typeLabel(t)||''}</td></tr>`;
     }
     _lastType = t;
     _seqNo++;
@@ -4630,13 +4630,10 @@ function exportProcTalepFormu(){
       <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <span style="font-size:9pt;color:#1f4e8c">— ${esc(it.ebat)}</span>`:''}</td>
       <td>${fmtNum(it.miktar,2)}</td>
       <td>${esc(it.birim||'mt')}</td>
-      <td>${it.kg>0?fmtNum(it.kg,0)+' kg':'—'}</td>
       <td class="lft">${esc(it.notes.join(' · '))}</td>
     </tr>`;
   }).join('');
-  // Toplam ağırlık satırı
-  const _totKg = grouped.reduce((s,g)=>s+(g.kg||0),0);
-  const rowsWithTotal = rows + (_totKg > 0 ? `<tr><td colspan="4" style="text-align:right;font-weight:800;padding:8px 10px;background:#fff8e1;border-top:2px solid #1f4e8c">TOPLAM AĞIRLIK</td><td style="font-weight:800;background:#fff8e1;border-top:2px solid #1f4e8c">${fmtNum(_totKg,0)} kg</td><td style="background:#fff8e1;border-top:2px solid #1f4e8c"></td></tr>` : '');
+  const rowsWithTotal = rows;
   // Kategoriye göre dosya adı: "Talep Formu 2026-093 - Ana Yapı" gibi
   const _fnKat = _procFilterKat === 'all' ? '' : ` - ${(PROC_KAT_LABEL[_procFilterKat]||_procFilterKat).replace(/[\/\\:*?"<>|]/g,'')}`;
   const _dosyaAd = `Talep Formu ${esc(proj?.no||'')}${_fnKat}`;
@@ -4659,10 +4656,9 @@ function exportProcTalepFormu(){
       <table class="frm">
         <thead><tr>
           <th style="width:44px">NO</th>
-          <th style="width:30%">MALZEME</th>
-          <th style="width:90px">MİKTAR</th>
-          <th style="width:70px">BİRİM</th>
-          <th style="width:90px">AĞIRLIK (KG)</th>
+          <th style="width:34%">MALZEME</th>
+          <th style="width:100px">MİKTAR</th>
+          <th style="width:80px">BİRİM</th>
           <th>NOT</th>
         </tr></thead>
         <tbody>${rowsWithTotal}</tbody>
@@ -7293,7 +7289,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v161'; // Konteyner/Mühür daimi input (radio kaldırıldı)
+const APP_VERSION = 'v162'; // Talep Formu PDF - AĞIRLIK sütunu ve toplam kaldırıldı (takip formu değişmedi) + Hata Bildir trigger fix
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
