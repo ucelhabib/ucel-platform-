@@ -2412,7 +2412,7 @@ function renderNotifs(){
         const read=(n.read_by||[]).includes(me.id);
         const ub=!read?'background:#eff6ff;border-left:3px solid var(--pl)':'';
         const hasRef = n.ref_type && n.ref_id;
-        const linkLabel = hasRef ? (n.ref_type==='project'?'🔗 Projeyi Aç':'🔗 Görevi Aç') : '';
+        const linkLabel = hasRef ? (n.ref_type==='project'?'🔗 Projeyi Aç': n.ref_type==='issue_report' ? '🐛 Raporu Aç':'🔗 Görevi Aç') : '';
         // Bildirim metninden faz adını çıkar — varsa "Adıma Git" butonu göster
         const focusPhase = hasRef && n.ref_type === 'project' ? _extractPhaseFromNotifText(n.text) : null;
         const focusLink = focusPhase ? ` <a href="#" onclick="event.stopPropagation();openNotifRef('${n.ref_type}','${n.ref_id}','${focusPhase}');return false;" style="color:#0891b2;margin-left:6px;font-weight:600">🎯 Adıma Git</a>` : '';
@@ -2524,7 +2524,83 @@ function openNotifRef(refType, refId, focusPhase){
     }
   } else if(refType === 'task'){
     openTask(null, refId);
+  } else if(refType === 'issue_report'){
+    openIssueReportDetail(refId);
   }
+}
+// v167 — Hata raporu detay modal (yönetici için)
+async function openIssueReportDetail(id){
+  const {data, error} = await sb.from('issue_reports').select('*').eq('id', id).single();
+  if(error){toast('Rapor yüklenemedi: '+errTr(error),'err');return}
+  const reporter = allProfiles[data.reporter_id] || {full_name:'?', label:''};
+  const priColor = {kritik:'#c33',yuksek:'#e67e22',orta:'#f1c40f',dusuk:'#7fb069'}[data.priority] || '#888';
+  const priLbl = {kritik:'🔴 Kritik',yuksek:'🟠 Yüksek',orta:'🟡 Orta',dusuk:'🟢 Düşük'}[data.priority] || data.priority;
+  const stLbl = {open:'🔵 Açık',in_progress:'🟠 İnceleniyor',resolved:'✅ Çözüldü',wont_fix:'⚫ Yapılmayacak'}[data.status] || data.status;
+  const tarih = new Date(data.created_at).toLocaleString('tr-TR');
+  const isAdmin = me?.role === 'yonetici';
+  let host = document.getElementById('irDetailModal');
+  if(!host){
+    host = document.createElement('div');
+    host.id = 'irDetailModal';
+    host.className = 'modal-bg';
+    host.style.zIndex = '9600';
+    host.onclick = e => { if(e.target === host) host.classList.remove('show'); };
+    document.body.appendChild(host);
+  }
+  host.innerHTML = `<div class="modal" style="max-width:640px">
+    <div class="modal-h">
+      <h3>🐛 Hata Raporu Detayı <span style="font-size:12px;color:${priColor};margin-left:8px">${priLbl}</span></h3>
+      <button class="x" onclick="document.getElementById('irDetailModal').classList.remove('show')">✕</button>
+    </div>
+    <div class="modal-b" style="max-height:65vh;overflow-y:auto">
+      <div style="background:#f5f7fa;border:1px solid #e3e7ee;border-radius:8px;padding:10px 12px;font-size:12px;color:#666;margin-bottom:14px;line-height:1.6">
+        👤 <b>${esc(reporter.full_name)}</b>${reporter.label?` <span style="color:#888">(${esc(reporter.label)})</span>`:''}<br>
+        📍 Sayfa: <code>${esc(data.page||'?')}</code><br>
+        📱 Cihaz: <code>${esc(data.device||'?')}</code> · Sürüm: <code>${esc(data.version||'?')}</code><br>
+        ⏱️ ${esc(tarih)} · Durum: ${stLbl}
+      </div>
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;color:#888;font-weight:700;margin-bottom:4px">NE YAPMAYA ÇALIŞIYORDU</div>
+        <div style="background:#fffbea;border-left:3px solid #f0ad4e;padding:10px 12px;border-radius:6px;font-size:13px;white-space:pre-wrap">${esc(data.user_action||'')}</div>
+      </div>
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;color:#888;font-weight:700;margin-bottom:4px">NE OLDU</div>
+        <div style="background:#fef2f2;border-left:3px solid #c33;padding:10px 12px;border-radius:6px;font-size:13px;white-space:pre-wrap">${esc(data.what_happened||'')}</div>
+      </div>
+      ${data.screenshot_url ? `<div style="margin-bottom:14px">
+        <div style="font-size:12px;color:#888;font-weight:700;margin-bottom:4px">📷 GÖRSEL</div>
+        <a href="${esc(data.screenshot_url)}" target="_blank" style="display:inline-block">
+          <img src="${esc(data.screenshot_url)}" alt="Ekran görüntüsü" style="max-width:100%;max-height:400px;border-radius:8px;border:1px solid #e3e7ee">
+        </a>
+      </div>` : ''}
+      ${data.resolution_note ? `<div style="margin-bottom:14px">
+        <div style="font-size:12px;color:#888;font-weight:700;margin-bottom:4px">✅ ÇÖZÜM NOTU</div>
+        <div style="background:#eafaf0;border-left:3px solid #0a7;padding:10px 12px;border-radius:6px;font-size:13px;white-space:pre-wrap">${esc(data.resolution_note)}</div>
+      </div>` : ''}
+    </div>
+    <div class="modal-f">
+      ${isAdmin ? `<button class="btn sec" onclick="_irSetStatus('${data.id}','in_progress')">🟠 İnceleniyor</button>
+      <button class="btn ok" onclick="_irResolveReport('${data.id}')">✅ Çözüldü</button>
+      <button class="btn err" onclick="_irSetStatus('${data.id}','wont_fix')">⚫ Yapılmayacak</button>` : ''}
+      <button class="btn sec" onclick="document.getElementById('irDetailModal').classList.remove('show')">Kapat</button>
+    </div>
+  </div>`;
+  host.classList.add('show');
+}
+async function _irSetStatus(id, newStatus){
+  const {error} = await sb.from('issue_reports').update({status: newStatus, resolved_at: (newStatus==='resolved' || newStatus==='wont_fix') ? new Date().toISOString() : null}).eq('id', id);
+  if(error){toast('Güncellenemedi: '+errTr(error),'err');return}
+  toast('Durum güncellendi','ok');
+  document.getElementById('irDetailModal')?.classList.remove('show');
+}
+async function _irResolveReport(id){
+  const note = prompt('Çözüm notu (opsiyonel):','');
+  const update = {status:'resolved', resolved_at: new Date().toISOString()};
+  if(note && note.trim()) update.resolution_note = note.trim();
+  const {error} = await sb.from('issue_reports').update(update).eq('id', id);
+  if(error){toast('Güncellenemedi: '+errTr(error),'err');return}
+  toast('Çözüldü olarak işaretlendi','ok');
+  document.getElementById('irDetailModal')?.classList.remove('show');
 }
 
 /* ============ CHAT ============ */
@@ -7374,7 +7450,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v166'; // Hata Bildir görsel + Talep PDF: SAÇ hesap detayı gizlendi (iç bilgi tedarikçiye sızmaz)
+const APP_VERSION = 'v167'; // Hata raporu detay modal + durum yönetimi (İnceleniyor / Çözüldü / Yapılmayacak)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
