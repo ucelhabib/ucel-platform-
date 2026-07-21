@@ -4045,7 +4045,22 @@ async function saveProcCatalog(){
     // (SARF/BOYA gibi sayılabilir birimler için pratik: 15 adet talep, 195 rulo stok → 15 birim düş)
     const avail = _stockAvailable(cat);
     if(avail > 0){
-      stockMatches.push({cat, miktar, avail, birim: cat.birim, row, birimUyusmuyor: pickedBirim !== cat.birim, talepBirim: pickedBirim});
+      const _match = {cat, miktar, avail, birim: cat.birim, row, birimUyusmuyor: pickedBirim !== cat.birim, talepBirim: pickedBirim};
+      // v168: SAÇ için m² ↔ adet dönüşümü (ebat bilgisinden hesap)
+      if(isSac && ebat){
+        const _eb = /(\d+)\s*[×xX]\s*(\d+)/.exec(ebat);
+        if(_eb){
+          const _en = parseInt(_eb[1]) || 0;
+          const _boy = parseInt(_eb[2]) || 0;
+          if(_en > 0 && _boy > 0){
+            _match.isSac = true;
+            _match.m2PerAdet = (_en * _boy) / 1e6;
+            _match.stokBirim = cat.birim || 'm²';
+            _match.birimUyusmuyor = false; // sac için özel dönüşüm var, uyarı gösterme
+          }
+        }
+      }
+      stockMatches.push(_match);
     }
   }
   if(rows.length === 0){toast('En az bir kaleme miktar gir','err');return}
@@ -4056,6 +4071,15 @@ async function saveProcCatalog(){
   if(stockMatches.length > 0){
     const lines = stockMatches.map(d=>{
       const fmt = v=>(+v).toLocaleString('en-US',{maximumFractionDigits:2});
+      // v168: SAÇ için m² → adet dönüşümü
+      if(d.isSac){
+        const stokAdetEsdeg = Math.floor(d.avail / d.m2PerAdet);
+        const takeAdet = Math.min(d.miktar, stokAdetEsdeg);
+        const takeM2 = takeAdet * d.m2PerAdet;
+        const kalanAdet = d.miktar - takeAdet;
+        const kalanTxt = kalanAdet > 0 ? ` → satın al: ${kalanAdet} adet` : ' → satın alma listesine eklenmez (stoktan karşılandı)';
+        return `  • ${d.cat.urun}: talep ${d.miktar} adet (${fmt(d.miktar * d.m2PerAdet)} m²) · stokta ${fmt(d.avail)} ${d.stokBirim} (≈${stokAdetEsdeg} adet) · düşülecek: ${takeAdet} adet (${fmt(takeM2)} m²)${kalanTxt}`;
+      }
       const take = Math.min(d.miktar, d.avail);
       const kalan = d.miktar - take;
       const kalanTxt = kalan > 0 ? ` → satın al: ${fmt(kalan)} ${d.talepBirim||d.birim}` : ' → satın alma listesine eklenmez (stoktan karşılandı)';
@@ -4071,14 +4095,27 @@ async function saveProcCatalog(){
     );
     if(ok){
       for(const d of stockMatches){
-        const take = Math.min(d.miktar, d.avail);
         try {
-          await _deductFromStock(d.cat, take, _procProjectId);
-          // Talep formundaki miktarı, stoktan düşülen kadar AZALT
-          d.row.miktar = Math.max(0, +(d.row.miktar - take).toFixed(3));
-          d.row.stok_dusum = take;   // takip formunda görünsün
-          deducted++;
-          totalTaken += take;
+          if(d.isSac){
+            // v168: SAÇ için m² üzerinden düşüş, adet üzerinden talep azalt
+            const stokAdetEsdeg = Math.floor(d.avail / d.m2PerAdet);
+            const takeAdet = Math.min(d.miktar, stokAdetEsdeg);
+            const takeM2 = takeAdet * d.m2PerAdet;
+            if(takeAdet > 0){
+              await _deductFromStock(d.cat, takeM2, _procProjectId);
+              d.row.miktar = Math.max(0, d.row.miktar - takeAdet);
+              d.row.stok_dusum = takeAdet; // adet cinsinden takip
+              deducted++;
+              totalTaken += takeAdet;
+            }
+          } else {
+            const take = Math.min(d.miktar, d.avail);
+            await _deductFromStock(d.cat, take, _procProjectId);
+            d.row.miktar = Math.max(0, +(d.row.miktar - take).toFixed(3));
+            d.row.stok_dusum = take;
+            deducted++;
+            totalTaken += take;
+          }
         } catch(e){ console.error('deduct fail',d.cat.urun,e); }
       }
       await loadStockItems();
@@ -7450,7 +7487,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v167'; // Hata raporu detay modal + durum yönetimi (İnceleniyor / Çözüldü / Yapılmayacak)
+const APP_VERSION = 'v168'; // SAÇ stok düşüş m² ↔ adet dönüşümü (ebattan hesap) + hata raporu detay modal
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
