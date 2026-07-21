@@ -747,6 +747,11 @@ body.proc-fullscreen{overflow:hidden}
           <option value="kritik">🔴 Kritik — Sistem hiç çalışmıyor</option>
         </select>
       </div>
+      <div class="frow" style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--m);margin-bottom:6px;font-weight:600">📷 Ekran görüntüsü / dosya <small style="font-weight:400;color:#888">(opsiyonel — 1 dosya, max 5 MB)</small></label>
+        <input type="file" id="ir-file" accept="image/*,.pdf" onchange="_irPreviewFile(event)" style="font-size:12px">
+        <div id="ir-preview" style="margin-top:8px"></div>
+      </div>
       <div id="ir-autoinfo" style="background:#f5f7fa;border:1px solid #e3e7ee;border-radius:6px;padding:8px 10px;font-size:11px;color:#666;margin-top:14px"></div>
       <div id="ir-status" style="margin-top:10px;font-size:12px"></div>
     </div>
@@ -4596,6 +4601,8 @@ function printProcurement(){
 function _cleanSupplierNote(s){
   if(!s) return '';
   let txt = String(s);
+  // v163: SAÇ hesap detayını sil — "İhtiyaç 1550 kg + %18 fire = 1829 kg → 3 adet ..." iç bilgidir, tedarikçiye gitmez
+  txt = txt.replace(/İhtiyaç\s+[\d.,]+\s*kg[^→\n]*→[^\n·]*(?:\([^)]*\))?/gi, '').trim();
   // İç bilgi içeren parçaları kaldır — "·" ile ayrılmış olabilir
   txt = txt.split('·').map(part => {
     const p = part.trim();
@@ -4604,6 +4611,7 @@ function _cleanSupplierNote(s){
     if(/stoktan/i.test(p)) return '';
     if(/stoğa eklenemedi/i.test(p)) return '';
     if(/^📥|^⚠️|^📦/.test(p)) return '';
+    if(/^İhtiyaç\s+[\d.,]+\s*kg/i.test(p)) return ''; // SAÇ hesap notu (yedek kontrol)
     return p;
   }).filter(Boolean).join(' · ');
   return txt;
@@ -7366,7 +7374,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v164'; // v163.1 fix: SAÇ sipariş input focus kaybı düzeltildi (partial DOM update)
+const APP_VERSION = 'v166'; // Hata Bildir görsel + Talep PDF: SAÇ hesap detayı gizlendi (iç bilgi tedarikçiye sızmaz)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
@@ -7789,6 +7797,27 @@ setInterval(_tickClock, 20000); // 20 sn'de bir güncelle
 document.addEventListener('DOMContentLoaded', _tickClock);
 _tickClock();
 // v158 — Hata / Öneri Bildir sistemi
+let _irSelectedFile = null;
+function _irPreviewFile(e){
+  const f = e.target.files?.[0] || null;
+  const prev = document.getElementById('ir-preview');
+  if(!f){ _irSelectedFile = null; if(prev) prev.innerHTML = ''; return; }
+  if(f.size > 5 * 1024 * 1024){
+    _irSelectedFile = null;
+    e.target.value = '';
+    if(prev) prev.innerHTML = '<span style="color:var(--err);font-size:12px">⚠️ Dosya 5 MB\'dan büyük — daha küçük bir dosya seç</span>';
+    return;
+  }
+  _irSelectedFile = f;
+  if(prev){
+    if(f.type.startsWith('image/')){
+      const url = URL.createObjectURL(f);
+      prev.innerHTML = `<div style="display:flex;align-items:center;gap:10px"><img src="${url}" style="max-width:140px;max-height:120px;border-radius:6px;border:1px solid var(--bd)"><div style="font-size:11px;color:#666">${esc(f.name)} <small>(${(f.size/1024).toFixed(0)} KB)</small></div></div>`;
+    } else {
+      prev.innerHTML = `<div style="font-size:12px;color:#666">📎 ${esc(f.name)} <small>(${(f.size/1024).toFixed(0)} KB)</small></div>`;
+    }
+  }
+}
 function openIssueReport(){
   const modal = document.getElementById('issueReportModal');
   if(!modal) return;
@@ -7796,6 +7825,11 @@ function openIssueReport(){
   document.getElementById('ir-what').value = '';
   document.getElementById('ir-priority').value = 'orta';
   document.getElementById('ir-status').innerHTML = '';
+  const fInp = document.getElementById('ir-file');
+  if(fInp) fInp.value = '';
+  const prev = document.getElementById('ir-preview');
+  if(prev) prev.innerHTML = '';
+  _irSelectedFile = null;
   // Otomatik bilgileri göster
   const activePage = document.querySelector('.page.active')?.id || document.querySelector('.page[style*="block"]')?.id || 'bilinmiyor';
   const ua = navigator.userAgent;
@@ -7824,7 +7858,19 @@ async function submitIssueReport(){
   const cihaz = /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac/.test(ua) ? 'Mac' : 'diğer';
   const tarayici = /Edg/.test(ua) ? 'Edge' : /Chrome/.test(ua) ? 'Chrome' : /Firefox/.test(ua) ? 'Firefox' : /Safari/.test(ua) ? 'Safari' : '?';
   status.innerHTML = '<span style="color:var(--m)">Gönderiliyor…</span>';
+  let screenshotUrl = null;
   try {
+    // Görsel/dosya varsa önce upload
+    if(_irSelectedFile){
+      status.innerHTML = '<span style="color:var(--m)">📤 Görsel yükleniyor…</span>';
+      const ts = Date.now();
+      const safe = _irSelectedFile.name.replace(/[^\w.\-]/g,'_');
+      const path = `bugs/${me.id}/${ts}_${safe}`;
+      const up = await sb.storage.from('project-files').upload(path, _irSelectedFile, {contentType: _irSelectedFile.type || 'application/octet-stream'});
+      if(up.error) throw new Error('Görsel yüklenemedi: ' + up.error.message);
+      screenshotUrl = sb.storage.from('project-files').getPublicUrl(path).data.publicUrl;
+      status.innerHTML = '<span style="color:var(--m)">Rapor gönderiliyor…</span>';
+    }
     const { error } = await sb.from('issue_reports').insert({
       reporter_id: me.id,
       page: activePage,
@@ -7833,7 +7879,8 @@ async function submitIssueReport(){
       device: cihaz + ' · ' + tarayici,
       version: APP_VERSION,
       priority: priority,
-      status: 'open'
+      status: 'open',
+      screenshot_url: screenshotUrl
     });
     if(error) throw error;
     status.innerHTML = '<span style="color:#0a7">✅ Raporun gönderildi. Yönetici bildirim aldı, en kısa sürede döneceğiz.</span>';
