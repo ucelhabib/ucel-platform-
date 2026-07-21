@@ -3571,20 +3571,37 @@ function renderProcCatalog(){
     const isSac = (it.kategori || '').toUpperCase().startsWith('SAÇ') || (it.kategori || '').toUpperCase().startsWith('SAC');
     const en = _procPickedEbat.get(it.id)?.en || '';
     const boy = _procPickedEbat.get(it.id)?.boy || '';
-    const sacInput = isSac && sel ? `
-      <div style="grid-column:3 / -1;display:flex;align-items:center;gap:6px;padding:4px 0 6px;font-size:12px;color:#555">
-        📐 Ebat (mm):
-        <input type="number" min="0" step="1" placeholder="en"  value="${en}"  oninput="setProcCatEbat('${it.id}','en', this.value)"  style="width:90px;padding:3px 6px;border:1px solid #cdd;border-radius:4px;font-size:12px">
-        <span style="color:#888">×</span>
-        <input type="number" min="0" step="1" placeholder="boy" value="${boy}" oninput="setProcCatEbat('${it.id}','boy',this.value)" style="width:90px;padding:3px 6px;border:1px solid #cdd;border-radius:4px;font-size:12px">
-        <small style="color:#888">en × boy</small>
-      </div>` : '';
     const curMiktar = _procPicked.get(it.id);
+    // v163: SAÇ için ayrı satır düzeni — kg + fire % + fireli kg + ebat + hesaplanan adet
+    if(isSac && sel){
+      const h = _sacHesap(it, it.id);
+      const modBtns = canMod ? `<div style="display:flex;gap:2px;justify-content:end"><button class="icon-btn" title="Düzenle" onclick="editCatalogItem('${it.id}')" style="padding:2px 4px;font-size:11px">✏️</button><button class="icon-btn" title="Sil" onclick="deleteCatalogItem('${it.id}')" style="padding:2px 4px;font-size:11px">🗑</button></div>` : '';
+      return `<div style="display:grid;grid-template-columns:26px 90px 1fr 85px 32px 65px 90px ${canMod?'56px':'0px'};gap:5px;align-items:center;padding:6px 10px;border-bottom:1px solid #f0f2f5;background:#eef6ff">
+        <input type="checkbox" checked onchange="toggleProcCatPick('${it.id}',this.checked)">
+        <div style="font-size:11px;color:#666">${esc(it.kategori)}</div>
+        <div style="font-weight:600;font-size:13px">${esc(it.urun)} ${it.kg_per_meter>0?`<small style="color:#888">(${it.kg_per_meter} kg/m²)</small>`:''}</div>
+        <input type="number" min="0" step="1" placeholder="ihtiyaç" value="${curMiktar !== undefined ? curMiktar : ''}" oninput="setProcCatMiktar('${it.id}',this.value)" style="padding:3px 6px;border:2px solid #dc2626;border-radius:4px;font-size:12px" title="İhtiyaç KG (firesiz)">
+        <div style="font-size:11px;font-weight:700;color:#333;text-align:center">kg</div>
+        <input type="number" min="0" max="100" step="0.1" placeholder="fire %" value="${_procPickedFire.get(it.id) ?? ''}" oninput="setProcCatFire('${it.id}',this.value)" style="padding:3px 6px;border:2px solid #1f4e8c;border-radius:4px;font-size:12px" title="Fire % (opsiyonel)">
+        <div style="font-size:11px;text-align:center;font-weight:700;padding:4px 6px;background:#1f2937;color:#fff;border-radius:4px;white-space:nowrap" title="İhtiyaç × (1 + fire/100) = fireli kg">${h.fireliKg > 0 ? fmtNum(h.fireliKg,0)+' kg' : '— kg'}</div>
+        ${modBtns}
+        <div style="grid-column:3 / -1;display:flex;align-items:center;gap:6px;padding:6px 0 2px;font-size:12px;color:#555">
+          📐 Ebat (mm):
+          <input type="number" min="0" step="1" placeholder="en" value="${en}" oninput="setProcCatEbat('${it.id}','en',this.value)" style="width:80px;padding:3px 6px;border:2px solid #059669;border-radius:4px;font-size:12px">
+          <span style="color:#888">×</span>
+          <input type="number" min="0" step="1" placeholder="boy" value="${boy}" oninput="setProcCatEbat('${it.id}','boy',this.value)" style="width:80px;padding:3px 6px;border:2px solid #059669;border-radius:4px;font-size:12px">
+          <div style="margin-left:auto;padding:5px 12px;background:#fbbf24;color:#1f2937;border-radius:6px;font-weight:800;font-size:12.5px;border:1px solid #d97706" title="Hesaplanan adet (yukarı yuvarlandı) — gerçek sipariş kg'ı parantez içinde">
+            ${h.adet > 0 ? `≈ ${h.adet} adet <small style="font-weight:500;opacity:.8">(≈${fmtNum(h.gercekKg,0)} kg)</small>` : '— adet'}
+          </div>
+        </div>
+      </div>`;
+    }
+    // Diğer kategoriler (mevcut düzen)
     return `<div style="display:grid;grid-template-columns:26px 110px 1fr 100px 70px ${canMod?'56px':'0px'};gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid #f0f2f5;background:${sel?'#eef6ff':'#fff'}">
       <input type="checkbox" ${sel?'checked':''} onchange="toggleProcCatPick('${it.id}',this.checked)">
       <div style="font-size:11px;color:#666">${esc(it.kategori)}</div>
       <div style="font-weight:600;font-size:13px">${esc(it.urun)} ${it.kg_per_meter>0?`<small style="color:#888">(${it.kg_per_meter} kg/${(it.birim==='adet'?'adet':'m')})</small>`:''}</div>
-      <input type="number" min="0" step="0.01" placeholder="${isSac?'adet':'miktar'}" id="pc-miktar-${it.id}" value="${curMiktar !== undefined ? curMiktar : ''}" oninput="setProcCatMiktar('${it.id}',this.value)" style="padding:3px 6px;border:1px solid #cdd;border-radius:4px;font-size:12px" ${sel?'':'disabled'}>
+      <input type="number" min="0" step="0.01" placeholder="miktar" id="pc-miktar-${it.id}" value="${curMiktar !== undefined ? curMiktar : ''}" oninput="setProcCatMiktar('${it.id}',this.value)" style="padding:3px 6px;border:1px solid #cdd;border-radius:4px;font-size:12px" ${sel?'':'disabled'}>
       <select id="pc-birim-${it.id}" onchange="setProcCatBirim('${it.id}',this.value)" style="padding:3px 4px;border:1px solid #cdd;border-radius:4px;font-size:12px" ${sel?'':'disabled'}>
         <option value="m" ${defBirim==='m'?'selected':''}>m</option>
         <option value="kg" ${defBirim==='kg'?'selected':''}>kg</option>
@@ -3598,7 +3615,6 @@ function renderProcCatalog(){
         <option value="kutu" ${defBirim==='kutu'?'selected':''}>kutu</option>
       </select>
       ${canMod ? `<div style="display:flex;gap:2px"><button class="icon-btn" title="Düzenle" onclick="editCatalogItem('${it.id}')" style="padding:2px 4px;font-size:11px">✏️</button><button class="icon-btn" title="Sil" onclick="deleteCatalogItem('${it.id}')" style="padding:2px 4px;font-size:11px">🗑</button></div>` : ''}
-      ${sacInput}
     </div>`;
   }).join('');
   document.getElementById('pc-list').innerHTML = html || '<div style="padding:20px;text-align:center;color:#888">Eşleşen kalem yok</div>';
@@ -3607,6 +3623,7 @@ function renderProcCatalog(){
 const _procPicked = new Map();
 const _procPickedBirim = new Map();
 const _procPickedEbat = new Map();   // SAÇ vb. için {en, boy} (mm)
+const _procPickedFire = new Map();   // SAÇ için fire %
 function toggleProcCatPick(itemId, checked){
   if(checked){
     _procSelected.add(itemId);
@@ -3619,15 +3636,37 @@ function toggleProcCatPick(itemId, checked){
     _procPicked.delete(itemId);
     _procPickedBirim.delete(itemId);
     _procPickedEbat.delete(itemId);
+    _procPickedFire.delete(itemId);
   }
   renderProcCatalog();
 }
-function setProcCatMiktar(itemId, val){ _procPicked.set(itemId, parseFloat(val)||0); }
+function setProcCatMiktar(itemId, val){ _procPicked.set(itemId, parseFloat(val)||0); renderProcCatalog(); }
 function setProcCatBirim(itemId, val){ _procPickedBirim.set(itemId, val); }
 function setProcCatEbat(itemId, key, val){
   const cur = _procPickedEbat.get(itemId) || {en:'', boy:''};
   cur[key] = val;
   _procPickedEbat.set(itemId, cur);
+  renderProcCatalog();
+}
+function setProcCatFire(itemId, val){
+  const v = parseFloat(val);
+  _procPickedFire.set(itemId, (isNaN(v) || v < 0) ? 0 : v);
+  renderProcCatalog();
+}
+// v163: SAÇ için tüm hesaplamalar
+function _sacHesap(item, itemId){
+  const kg = parseFloat(_procPicked.get(itemId) || 0);
+  const fire = parseFloat(_procPickedFire.get(itemId) || 0);
+  const ebat = _procPickedEbat.get(itemId) || {};
+  const en = parseInt(ebat.en) || 0;
+  const boy = parseInt(ebat.boy) || 0;
+  const kgm2 = parseFloat(item.kg_per_meter || 0); // SAÇ için kg/m² olarak kullanılır
+  const fireliKg = kg * (1 + fire/100);
+  const m2Per = (en * boy) / 1e6;
+  const kgPerAdet = m2Per * kgm2;
+  const adet = (kgPerAdet > 0 && fireliKg > 0) ? Math.ceil(fireliKg / kgPerAdet) : 0;
+  const gercekKg = adet * kgPerAdet;
+  return { kg, fire, fireliKg, en, boy, kgPerAdet, adet, gercekKg };
 }
 
 async function editCatalogItem(itemId){
@@ -3854,21 +3893,36 @@ async function saveProcCatalog(){
   let sira = procItems.length;
   for(const id of _procSelected){
     const cat = stockItems.find(x=>x.id===id); if(!cat) continue;
-    const miktar = _procPicked.get(id) || 0;
-    if(miktar <= 0) continue;
-    const pickedBirim = _procPickedBirim.get(id) || cat.birim || 'm';
-    const fb = (cat.kg_per_meter && cat.kg_per_meter > 0) ? 'kg' : 'birim';
-    // SAÇ vb. için en × boy ebatı
     const isSac = (cat.kategori || '').toUpperCase().startsWith('SAÇ') || (cat.kategori || '').toUpperCase().startsWith('SAC');
-    const eb = _procPickedEbat.get(id);
-    let ebat = '';
-    if(isSac && eb && (eb.en || eb.boy)){
-      const en = parseInt(eb.en) || 0;
-      const boy = parseInt(eb.boy) || 0;
-      if(en > 0 && boy > 0) ebat = `${en}×${boy} mm`;
-      else if(en > 0) ebat = `${en} mm`;
-      else if(boy > 0) ebat = `${boy} mm`;
+    // v163: SAÇ için özel işleme — kullanıcı kg girer, sistem adet hesaplar
+    let miktar, pickedBirim, ebat = '', originalIhtiyac, fireOran = 0, fireliKgVal = 0, hesapKgVal = 0;
+    if(isSac){
+      const h = _sacHesap(cat, id);
+      if(h.kg <= 0){toast(`${cat.urun}: İhtiyaç kg gir`,'err'); continue}
+      if(h.en <= 0 || h.boy <= 0){toast(`${cat.urun}: Ebat (en × boy) gir`,'err'); continue}
+      if(h.adet <= 0){toast(`${cat.urun}: Ebat/kg değerleri hatalı — adet hesaplanamadı`,'err'); continue}
+      miktar = h.adet;
+      pickedBirim = 'adet';
+      ebat = `${h.en}×${h.boy} mm`;
+      originalIhtiyac = h.kg;      // firesiz ihtiyaç
+      fireOran = h.fire;
+      fireliKgVal = h.fireliKg;
+      hesapKgVal = h.gercekKg;      // sipariş edilecek gerçek kg (adet × birim kg)
+    } else {
+      miktar = _procPicked.get(id) || 0;
+      if(miktar <= 0) continue;
+      pickedBirim = _procPickedBirim.get(id) || cat.birim || 'm';
+      const eb = _procPickedEbat.get(id);
+      if(eb && (eb.en || eb.boy)){
+        const en = parseInt(eb.en) || 0;
+        const boy = parseInt(eb.boy) || 0;
+        if(en > 0 && boy > 0) ebat = `${en}×${boy} mm`;
+        else if(en > 0) ebat = `${en} mm`;
+        else if(boy > 0) ebat = `${boy} mm`;
+      }
+      originalIhtiyac = miktar;
     }
+    const fb = (cat.kg_per_meter && cat.kg_per_meter > 0) ? 'kg' : 'birim';
     // Katalog kategorisinden satın alma kategorisine eşle (helper kullan)
     const _procKat = _catalogToProcKat(cat);
     const row = {
@@ -3878,10 +3932,14 @@ async function saveProcCatalog(){
       fiyat_birimi: fb,
       catalog_id: id, kg_per_meter: cat.kg_per_meter || 0,
       ebat: ebat || null,
-      original_ihtiyac: miktar,
+      original_ihtiyac: originalIhtiyac,
       proc_kategori: _procKat,
       created_by: me.id
     };
+    // v163: SAÇ için detay bilgisini not olarak sakla (fire + fireli kg + gerçek kg)
+    if(isSac && originalIhtiyac > 0){
+      row.not_text = `İhtiyaç ${fmtNum(originalIhtiyac,0)} kg${fireOran > 0 ? ` + %${fireOran} fire = ${fmtNum(fireliKgVal,0)} kg` : ''} → ${miktar} adet ${ebat} (≈${fmtNum(hesapKgVal,0)} kg)`;
+    }
     rows.push(row);
     // Stok kontrolü — birim uyuşmuyor olsa bile katalog eşleşiyorsa 1:1 kabul edilerek düşülür
     // (SARF/BOYA gibi sayılabilir birimler için pratik: 15 adet talep, 195 rulo stok → 15 birim düş)
@@ -4042,7 +4100,7 @@ async function saveProcCatalog(){
   }
 
   closeProcCatalog();
-  _procSelected.clear(); _procPicked.clear(); _procPickedEbat.clear();
+  _procSelected.clear(); _procPicked.clear(); _procPickedEbat.clear(); _procPickedFire.clear();
   await loadProcurement(_procProjectId);
   if(insertedCount > 0){
     const proj = projects.find(p=>p.id===_procProjectId);
@@ -7289,7 +7347,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v162'; // Talep Formu PDF - AĞIRLIK sütunu ve toplam kaldırıldı (takip formu değişmedi) + Hata Bildir trigger fix
+const APP_VERSION = 'v163'; // SAÇ sipariş: kg + fire % + otomatik adet hesabı (sadece SAÇ kategorisi)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
