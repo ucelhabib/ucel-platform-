@@ -3583,14 +3583,14 @@ function renderProcCatalog(){
         <input type="number" min="0" step="1" placeholder="ihtiyaç" value="${curMiktar !== undefined ? curMiktar : ''}" oninput="setProcCatMiktar('${it.id}',this.value)" style="padding:3px 6px;border:2px solid #dc2626;border-radius:4px;font-size:12px" title="İhtiyaç KG (firesiz)">
         <div style="font-size:11px;font-weight:700;color:#333;text-align:center">kg</div>
         <input type="number" min="0" max="100" step="0.1" placeholder="fire %" value="${_procPickedFire.get(it.id) ?? ''}" oninput="setProcCatFire('${it.id}',this.value)" style="padding:3px 6px;border:2px solid #1f4e8c;border-radius:4px;font-size:12px" title="Fire % (opsiyonel)">
-        <div style="font-size:11px;text-align:center;font-weight:700;padding:4px 6px;background:#1f2937;color:#fff;border-radius:4px;white-space:nowrap" title="İhtiyaç × (1 + fire/100) = fireli kg">${h.fireliKg > 0 ? fmtNum(h.fireliKg,0)+' kg' : '— kg'}</div>
+        <div id="pc-firelikg-${it.id}" style="font-size:11px;text-align:center;font-weight:700;padding:4px 6px;background:#1f2937;color:#fff;border-radius:4px;white-space:nowrap" title="İhtiyaç × (1 + fire/100) = fireli kg">${h.fireliKg > 0 ? fmtNum(h.fireliKg,0)+' kg' : '— kg'}</div>
         ${modBtns}
         <div style="grid-column:3 / -1;display:flex;align-items:center;gap:6px;padding:6px 0 2px;font-size:12px;color:#555">
           📐 Ebat (mm):
           <input type="number" min="0" step="1" placeholder="en" value="${en}" oninput="setProcCatEbat('${it.id}','en',this.value)" style="width:80px;padding:3px 6px;border:2px solid #059669;border-radius:4px;font-size:12px">
           <span style="color:#888">×</span>
           <input type="number" min="0" step="1" placeholder="boy" value="${boy}" oninput="setProcCatEbat('${it.id}','boy',this.value)" style="width:80px;padding:3px 6px;border:2px solid #059669;border-radius:4px;font-size:12px">
-          <div style="margin-left:auto;padding:5px 12px;background:#fbbf24;color:#1f2937;border-radius:6px;font-weight:800;font-size:12.5px;border:1px solid #d97706" title="Hesaplanan adet (yukarı yuvarlandı) — gerçek sipariş kg'ı parantez içinde">
+          <div id="pc-adet-${it.id}" style="margin-left:auto;padding:5px 12px;background:#fbbf24;color:#1f2937;border-radius:6px;font-weight:800;font-size:12.5px;border:1px solid #d97706" title="Hesaplanan adet (yukarı yuvarlandı) — gerçek sipariş kg'ı parantez içinde">
             ${h.adet > 0 ? `≈ ${h.adet} adet <small style="font-weight:500;opacity:.8">(≈${fmtNum(h.gercekKg,0)} kg)</small>` : '— adet'}
           </div>
         </div>
@@ -3640,18 +3640,37 @@ function toggleProcCatPick(itemId, checked){
   }
   renderProcCatalog();
 }
-function setProcCatMiktar(itemId, val){ _procPicked.set(itemId, parseFloat(val)||0); renderProcCatalog(); }
+function setProcCatMiktar(itemId, val){
+  _procPicked.set(itemId, parseFloat(val)||0);
+  _updateSacPreview(itemId);
+}
 function setProcCatBirim(itemId, val){ _procPickedBirim.set(itemId, val); }
 function setProcCatEbat(itemId, key, val){
   const cur = _procPickedEbat.get(itemId) || {en:'', boy:''};
   cur[key] = val;
   _procPickedEbat.set(itemId, cur);
-  renderProcCatalog();
+  _updateSacPreview(itemId);
 }
 function setProcCatFire(itemId, val){
   const v = parseFloat(val);
   _procPickedFire.set(itemId, (isNaN(v) || v < 0) ? 0 : v);
-  renderProcCatalog();
+  _updateSacPreview(itemId);
+}
+// v163.1 — sadece SAÇ önizleme kutucuklarını güncelle (full re-render değil, focus korunur)
+function _updateSacPreview(itemId){
+  const item = stockItems.find(x => x.id === itemId);
+  if(!item) return;
+  const isSac = (item.kategori || '').toUpperCase().startsWith('SAÇ') || (item.kategori || '').toUpperCase().startsWith('SAC');
+  if(!isSac) return;
+  const h = _sacHesap(item, itemId);
+  const fireliEl = document.getElementById('pc-firelikg-' + itemId);
+  if(fireliEl) fireliEl.textContent = h.fireliKg > 0 ? fmtNum(h.fireliKg,0)+' kg' : '— kg';
+  const adetEl = document.getElementById('pc-adet-' + itemId);
+  if(adetEl){
+    adetEl.innerHTML = h.adet > 0
+      ? `≈ ${h.adet} adet <small style="font-weight:500;opacity:.8">(≈${fmtNum(h.gercekKg,0)} kg)</small>`
+      : '— adet';
+  }
 }
 // v163: SAÇ için tüm hesaplamalar
 function _sacHesap(item, itemId){
@@ -7347,7 +7366,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v163'; // SAÇ sipariş: kg + fire % + otomatik adet hesabı (sadece SAÇ kategorisi)
+const APP_VERSION = 'v164'; // v163.1 fix: SAÇ sipariş input focus kaybı düzeltildi (partial DOM update)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
