@@ -3032,6 +3032,12 @@ function renderProcList(){
     : procItems.filter(it => (it.proc_kategori||'ana_yapi') === _procFilterKat);
   if(items.length === 0){
     el.innerHTML = `<div style="padding:30px;text-align:center;color:var(--m)">Bu kategoride kalem yok.<br><small>Üstteki "Tümü" sekmesine dönebilirsin.</small></div>`;
+    // v171: bar update (tutarsızlık fix — önceki render kalıntısı gitsin)
+    const _bar = document.getElementById('procSummaryBar');
+    if(_bar){
+      const _filtTxt = _procFilterKat === 'all' ? '' : ` · Filtre: <strong style="color:${PROC_KAT_COLOR[_procFilterKat]||'#1f4e8c'}">${esc(PROC_KAT_LABEL[_procFilterKat]||_procFilterKat)}</strong>`;
+      _bar.innerHTML = `<strong>0 kalem</strong>${_filtTxt}${_procFilterKat==='all'?'':` · <small>(toplam ${procItems.length} kalem)</small>`}`;
+    }
     return;
   }
   let totalTutar = 0, totalNet = 0, totalKg = 0, totalSiparisKg = 0, totalStokKg = 0, gelenSayi = 0, eksikSayi = 0;
@@ -4019,27 +4025,26 @@ async function saveProcCatalog(){
       const h = _sacHesap(cat, id);
       if(h.kg <= 0){toast(`${cat.urun}: İhtiyaç kg gir`,'err'); continue}
       if(h.en <= 0 || h.boy <= 0){toast(`${cat.urun}: Ebat (en × boy) gir`,'err'); continue}
-      // v169: Stoktan kullanılacak adet — tam sac cinsinden (floor)
-      sacStokDusumAdet = h.m2Per > 0 ? Math.floor(Math.min(h.ihtiyacM2, h.stokM2) / h.m2Per) : 0;
-      sacStokDusumM2 = sacStokDusumAdet * h.m2Per;
+      // v171: Adet cinsi hesap — ceil ile, min 1 sac düşer eğer ihtiyaç kısmi de olsa
       sacIhtiyacAdet = h.m2Per > 0 ? Math.ceil(h.ihtiyacM2 / h.m2Per) : 0;
-      // Sipariş m² = 0 ise (stok yetiyor) satır atlanır — talep listesine eklenmez
-      if(h.siparisM2 <= 0){
-        toast(`${cat.urun}: Stok yetiyor (${fmtNum(h.stokM2,2)} m² · ihtiyaç ${fmtNum(h.ihtiyacM2,2)} m²) — talep listesine eklenmedi`, 'info');
-        // Yine de stoktan kullanılan sac miktarı düşür (fiziksel olarak kullanılacak)
-        if(sacStokDusumM2 > 0){
-          try { await _deductFromStock(cat, sacStokDusumM2, _procProjectId); } catch(e){ console.warn('sac stok düş:', e); }
-        }
-        continue;
-      }
-      if(h.adet <= 0){toast(`${cat.urun}: Ebat/kg değerleri hatalı — adet hesaplanamadı`,'err'); continue}
-      miktar = h.adet;
+      sacStokDusumAdet = Math.max(0, sacIhtiyacAdet - h.adet); // ihtiyaç adet - sipariş adet
+      sacStokDusumM2 = sacStokDusumAdet * h.m2Per;
+      // v170.1: Sipariş m² = 0 (stok yetiyor) → satır takip formuna eklenir (miktar=0, sadece bilgi) ama Talep PDF filter ile gizlenir
+      // Sipariş m² > 0 → normal satır
       pickedBirim = 'adet';
       ebat = `${h.en}×${h.boy} mm`;
-      originalIhtiyac = sacIhtiyacAdet;   // v169.1: takip formunda adet cinsinden ihtiyaç
+      originalIhtiyac = sacIhtiyacAdet;
       fireOran = h.fire;
       fireliKgVal = h.fireliKg;
       hesapKgVal = h.gercekKg;
+      if(h.siparisM2 <= 0){
+        // Stok yetiyor — satır 0 miktar ile eklenir, stok_dusum = ihtiyaç adet
+        miktar = 0;
+        toast(`${cat.urun}: Stok yetiyor — takip formunda gösteriliyor (Talep PDF'te görünmez)`, 'info');
+      } else {
+        if(h.adet <= 0){toast(`${cat.urun}: Ebat/kg değerleri hatalı — adet hesaplanamadı`,'err'); continue}
+        miktar = h.adet;
+      }
     } else {
       miktar = _procPicked.get(id) || 0;
       if(miktar <= 0) continue;
@@ -7528,7 +7533,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v170'; // SAÇ takip formu - STOKTAN kolonu + gerçek stok düşüşü + ihtiyaç adet cinsi
+const APP_VERSION = 'v171'; // SAÇ stok düşüş ceil (kısmi de olsa 1 sac düşer) + filtre bar tutarlılığı + yeşil durum satırı
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
