@@ -4013,23 +4013,33 @@ async function saveProcCatalog(){
     const isSac = (cat.kategori || '').toUpperCase().startsWith('SAÇ') || (cat.kategori || '').toUpperCase().startsWith('SAC');
     // v163: SAÇ için özel işleme — kullanıcı kg girer, sistem adet hesaplar
     let miktar, pickedBirim, ebat = '', originalIhtiyac, fireOran = 0, fireliKgVal = 0, hesapKgVal = 0;
+    // v169.1: SAÇ için stok düşüş bilgileri (satır dışında tanımla, aşağıda kullanılacak)
+    let sacStokDusumAdet = 0, sacStokDusumM2 = 0, sacIhtiyacAdet = 0;
     if(isSac){
       const h = _sacHesap(cat, id);
       if(h.kg <= 0){toast(`${cat.urun}: İhtiyaç kg gir`,'err'); continue}
       if(h.en <= 0 || h.boy <= 0){toast(`${cat.urun}: Ebat (en × boy) gir`,'err'); continue}
-      // v169: Sipariş m² = 0 ise (stok yetiyor) satır atlanır — talep listesine eklenmez
+      // v169: Stoktan kullanılacak adet — tam sac cinsinden (floor)
+      sacStokDusumAdet = h.m2Per > 0 ? Math.floor(Math.min(h.ihtiyacM2, h.stokM2) / h.m2Per) : 0;
+      sacStokDusumM2 = sacStokDusumAdet * h.m2Per;
+      sacIhtiyacAdet = h.m2Per > 0 ? Math.ceil(h.ihtiyacM2 / h.m2Per) : 0;
+      // Sipariş m² = 0 ise (stok yetiyor) satır atlanır — talep listesine eklenmez
       if(h.siparisM2 <= 0){
         toast(`${cat.urun}: Stok yetiyor (${fmtNum(h.stokM2,2)} m² · ihtiyaç ${fmtNum(h.ihtiyacM2,2)} m²) — talep listesine eklenmedi`, 'info');
+        // Yine de stoktan kullanılan sac miktarı düşür (fiziksel olarak kullanılacak)
+        if(sacStokDusumM2 > 0){
+          try { await _deductFromStock(cat, sacStokDusumM2, _procProjectId); } catch(e){ console.warn('sac stok düş:', e); }
+        }
         continue;
       }
       if(h.adet <= 0){toast(`${cat.urun}: Ebat/kg değerleri hatalı — adet hesaplanamadı`,'err'); continue}
       miktar = h.adet;
       pickedBirim = 'adet';
       ebat = `${h.en}×${h.boy} mm`;
-      originalIhtiyac = h.kg;      // firesiz ihtiyaç
+      originalIhtiyac = sacIhtiyacAdet;   // v169.1: takip formunda adet cinsinden ihtiyaç
       fireOran = h.fire;
       fireliKgVal = h.fireliKg;
-      hesapKgVal = h.gercekKg;      // sipariş edilecek gerçek kg (adet × birim kg)
+      hesapKgVal = h.gercekKg;
     } else {
       miktar = _procPicked.get(id) || 0;
       if(miktar <= 0) continue;
@@ -4060,7 +4070,14 @@ async function saveProcCatalog(){
     };
     // v163: SAÇ için detay bilgisini not olarak sakla (fire + fireli kg + gerçek kg)
     if(isSac && originalIhtiyac > 0){
-      row.not_text = `İhtiyaç ${fmtNum(originalIhtiyac,0)} kg${fireOran > 0 ? ` + %${fireOran} fire = ${fmtNum(fireliKgVal,0)} kg` : ''} → ${miktar} adet ${ebat} (≈${fmtNum(hesapKgVal,0)} kg)`;
+      row.not_text = `İhtiyaç ${fmtNum(_procPicked.get(id) || 0,0)} kg${fireOran > 0 ? ` + %${fireOran} fire = ${fmtNum(fireliKgVal,0)} kg` : ''} → ${miktar} adet ${ebat} (≈${fmtNum(hesapKgVal,0)} kg)`;
+    }
+    // v169.1: SAÇ için stok düşüş — hem STOKTAN kolonuna yaz hem stok tablosundan sessiz düş
+    if(isSac && sacStokDusumAdet > 0){
+      row.stok_dusum = sacStokDusumAdet;
+      try {
+        await _deductFromStock(cat, sacStokDusumM2, _procProjectId);
+      } catch(e){ console.warn('sac stok düş fail:', e); }
     }
     rows.push(row);
     // v169: SAÇ için stok match uyarı dialog SKIP — sipariş m² zaten UI'da stok düşülmüş olarak gösteriliyor
@@ -7511,7 +7528,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v169'; // SAÇ katalog UI - 4 renkli m² göstergesi (ihtiyaç/stok/sipariş/adet)
+const APP_VERSION = 'v170'; // SAÇ takip formu - STOKTAN kolonu + gerçek stok düşüşü + ihtiyaç adet cinsi
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
