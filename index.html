@@ -3666,13 +3666,17 @@ function renderProcCatalog(){
         <input type="number" min="0" max="100" step="0.1" placeholder="fire %" value="${_procPickedFire.get(it.id) ?? ''}" oninput="setProcCatFire('${it.id}',this.value)" style="padding:3px 6px;border:2px solid #1f4e8c;border-radius:4px;font-size:12px" title="Fire % (opsiyonel)">
         <div id="pc-firelikg-${it.id}" style="font-size:11px;text-align:center;font-weight:700;padding:4px 6px;background:#1f2937;color:#fff;border-radius:4px;white-space:nowrap" title="İhtiyaç × (1 + fire/100) = fireli kg">${h.fireliKg > 0 ? fmtNum(h.fireliKg,0)+' kg' : '— kg'}</div>
         ${modBtns}
-        <div style="grid-column:3 / -1;display:flex;align-items:center;gap:6px;padding:6px 0 2px;font-size:12px;color:#555">
-          📐 Ebat (mm):
-          <input type="number" min="0" step="1" placeholder="en" value="${en}" oninput="setProcCatEbat('${it.id}','en',this.value)" style="width:80px;padding:3px 6px;border:2px solid #059669;border-radius:4px;font-size:12px">
+        <!-- v169: 4 renkli m² göstergesi + ebat + adet -->
+        <div style="grid-column:3 / -1;display:flex;align-items:center;gap:6px;padding:6px 0 2px;font-size:12px;color:#555;flex-wrap:wrap">
+          <div id="pc-ihtiyacm2-${it.id}" style="padding:4px 10px;background:#fee2e2;color:#991b1b;border-radius:6px;font-weight:700;font-size:12px;border:2px solid #dc2626;white-space:nowrap" title="İhtiyaç m² (fireli kg / kg-per-m²)">🔴 ${h.ihtiyacM2 > 0 ? fmtNum(h.ihtiyacM2,2)+' m²' : '— m²'}</div>
+          <div id="pc-stokm2-${it.id}" style="padding:4px 10px;background:#fef3c7;color:#92400e;border-radius:6px;font-weight:700;font-size:12px;border:2px solid #d97706;white-space:nowrap" title="Güncel stok m²">🟡 ${h.stokM2 > 0 ? fmtNum(h.stokM2,2)+' m²' : '0 m²'}</div>
+          <div id="pc-siparism2-${it.id}" style="padding:4px 10px;background:#d1fae5;color:#065f46;border-radius:6px;font-weight:700;font-size:12px;border:2px solid #059669;white-space:nowrap" title="Sipariş edilecek m² = İhtiyaç - Stok">🟢 ${h.siparisM2 > 0 ? fmtNum(h.siparisM2,2)+' m²' : '0 m² (stok yetiyor)'}</div>
+          <span style="color:#888;margin-left:8px">📐 Ebat (mm):</span>
+          <input type="number" min="0" step="1" placeholder="en" value="${en}" oninput="setProcCatEbat('${it.id}','en',this.value)" style="width:75px;padding:3px 6px;border:2px solid #6b7280;border-radius:4px;font-size:12px">
           <span style="color:#888">×</span>
-          <input type="number" min="0" step="1" placeholder="boy" value="${boy}" oninput="setProcCatEbat('${it.id}','boy',this.value)" style="width:80px;padding:3px 6px;border:2px solid #059669;border-radius:4px;font-size:12px">
-          <div id="pc-adet-${it.id}" style="margin-left:auto;padding:5px 12px;background:#fbbf24;color:#1f2937;border-radius:6px;font-weight:800;font-size:12.5px;border:1px solid #d97706" title="Hesaplanan adet (yukarı yuvarlandı) — gerçek sipariş kg'ı parantez içinde">
-            ${h.adet > 0 ? `≈ ${h.adet} adet <small style="font-weight:500;opacity:.8">(≈${fmtNum(h.gercekKg,0)} kg)</small>` : '— adet'}
+          <input type="number" min="0" step="1" placeholder="boy" value="${boy}" oninput="setProcCatEbat('${it.id}','boy',this.value)" style="width:75px;padding:3px 6px;border:2px solid #6b7280;border-radius:4px;font-size:12px">
+          <div id="pc-adet-${it.id}" style="margin-left:auto;padding:5px 12px;background:#dbeafe;color:#1e40af;border-radius:6px;font-weight:800;font-size:12.5px;border:2px solid #2563eb;white-space:nowrap" title="Sipariş m² üzerinden hesaplanan adet (yukarı yuvarlandı)">
+            🔵 ${h.adet > 0 ? `${h.adet} adet <small style="font-weight:500;opacity:.8">(${fmtNum(h.gercekM2,2)} m²)</small>` : '— adet'}
           </div>
         </div>
       </div>`;
@@ -3746,10 +3750,17 @@ function _updateSacPreview(itemId){
   const h = _sacHesap(item, itemId);
   const fireliEl = document.getElementById('pc-firelikg-' + itemId);
   if(fireliEl) fireliEl.textContent = h.fireliKg > 0 ? fmtNum(h.fireliKg,0)+' kg' : '— kg';
+  // v169: 3 renkli m² göstergesi
+  const ihtEl = document.getElementById('pc-ihtiyacm2-' + itemId);
+  if(ihtEl) ihtEl.textContent = '🔴 ' + (h.ihtiyacM2 > 0 ? fmtNum(h.ihtiyacM2,2)+' m²' : '— m²');
+  const stokEl = document.getElementById('pc-stokm2-' + itemId);
+  if(stokEl) stokEl.textContent = '🟡 ' + (h.stokM2 > 0 ? fmtNum(h.stokM2,2)+' m²' : '0 m²');
+  const sipEl = document.getElementById('pc-siparism2-' + itemId);
+  if(sipEl) sipEl.textContent = '🟢 ' + (h.siparisM2 > 0 ? fmtNum(h.siparisM2,2)+' m²' : '0 m² (stok yetiyor)');
   const adetEl = document.getElementById('pc-adet-' + itemId);
   if(adetEl){
     adetEl.innerHTML = h.adet > 0
-      ? `≈ ${h.adet} adet <small style="font-weight:500;opacity:.8">(≈${fmtNum(h.gercekKg,0)} kg)</small>`
+      ? `🔵 ${h.adet} adet <small style="font-weight:500;opacity:.8">(${fmtNum(h.gercekM2,2)} m²)</small>`
       : '— adet';
   }
 }
@@ -3762,11 +3773,17 @@ function _sacHesap(item, itemId){
   const boy = parseInt(ebat.boy) || 0;
   const kgm2 = parseFloat(item.kg_per_meter || 0); // SAÇ için kg/m² olarak kullanılır
   const fireliKg = kg * (1 + fire/100);
+  // v169: m² bazlı hesap
+  const ihtiyacM2 = (kgm2 > 0 && fireliKg > 0) ? (fireliKg / kgm2) : 0;
+  const stokM2 = _stockAvailable(item);
+  const siparisM2 = Math.max(0, ihtiyacM2 - stokM2);
   const m2Per = (en * boy) / 1e6;
   const kgPerAdet = m2Per * kgm2;
-  const adet = (kgPerAdet > 0 && fireliKg > 0) ? Math.ceil(fireliKg / kgPerAdet) : 0;
+  // v169: adet artık sipariş m² üzerinden (stok düşülmüş)
+  const adet = (m2Per > 0 && siparisM2 > 0) ? Math.ceil(siparisM2 / m2Per) : 0;
   const gercekKg = adet * kgPerAdet;
-  return { kg, fire, fireliKg, en, boy, kgPerAdet, adet, gercekKg };
+  const gercekM2 = adet * m2Per;
+  return { kg, fire, fireliKg, ihtiyacM2, stokM2, siparisM2, en, boy, m2Per, kgPerAdet, adet, gercekKg, gercekM2 };
 }
 
 async function editCatalogItem(itemId){
@@ -4000,6 +4017,11 @@ async function saveProcCatalog(){
       const h = _sacHesap(cat, id);
       if(h.kg <= 0){toast(`${cat.urun}: İhtiyaç kg gir`,'err'); continue}
       if(h.en <= 0 || h.boy <= 0){toast(`${cat.urun}: Ebat (en × boy) gir`,'err'); continue}
+      // v169: Sipariş m² = 0 ise (stok yetiyor) satır atlanır — talep listesine eklenmez
+      if(h.siparisM2 <= 0){
+        toast(`${cat.urun}: Stok yetiyor (${fmtNum(h.stokM2,2)} m² · ihtiyaç ${fmtNum(h.ihtiyacM2,2)} m²) — talep listesine eklenmedi`, 'info');
+        continue;
+      }
       if(h.adet <= 0){toast(`${cat.urun}: Ebat/kg değerleri hatalı — adet hesaplanamadı`,'err'); continue}
       miktar = h.adet;
       pickedBirim = 'adet';
@@ -4041,6 +4063,8 @@ async function saveProcCatalog(){
       row.not_text = `İhtiyaç ${fmtNum(originalIhtiyac,0)} kg${fireOran > 0 ? ` + %${fireOran} fire = ${fmtNum(fireliKgVal,0)} kg` : ''} → ${miktar} adet ${ebat} (≈${fmtNum(hesapKgVal,0)} kg)`;
     }
     rows.push(row);
+    // v169: SAÇ için stok match uyarı dialog SKIP — sipariş m² zaten UI'da stok düşülmüş olarak gösteriliyor
+    if(isSac) continue;
     // Stok kontrolü — birim uyuşmuyor olsa bile katalog eşleşiyorsa 1:1 kabul edilerek düşülür
     // (SARF/BOYA gibi sayılabilir birimler için pratik: 15 adet talep, 195 rulo stok → 15 birim düş)
     const avail = _stockAvailable(cat);
@@ -7487,7 +7511,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v168'; // SAÇ stok düşüş m² ↔ adet dönüşümü (ebattan hesap) + hata raporu detay modal
+const APP_VERSION = 'v169'; // SAÇ katalog UI - 4 renkli m² göstergesi (ihtiyaç/stok/sipariş/adet)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
