@@ -4894,6 +4894,23 @@ function exportProcTalepFormu(){
       .talep-hdr .tarih-kutu{flex-shrink:0;padding:8px 14px;background:#1f4e8c;color:#fff;font-weight:700;font-size:10.5pt;border-radius:6px;letter-spacing:0.5px;white-space:nowrap}
       .talep-proje{font-size:13pt;font-weight:800;color:#1f4e8c;padding:6px 0;margin-bottom:8px;letter-spacing:0.3px}
       .talep-desc{font-size:12pt;font-weight:700;color:#1f2937;padding:8px 0 12px;line-height:1.4}
+      /* v175: Header ve footer her sayfada sabit
+         Chrome PDF motoru position:fixed öğeleri her yazdırılan sayfada tekrarlar.
+         @page margin ile içerik için üst/alt boşluk açıyoruz — fixed öğeler bu boşluğa yerleşir. */
+      @media print {
+        @page{size:A4 portrait;margin:32mm 14mm 34mm 14mm}
+        body{margin:0}
+        .page{min-height:auto !important;padding:0 !important;display:block !important}
+        .talep-hdr{position:fixed;top:6mm;left:14mm;right:14mm;background:#fff;margin:0;padding:4px 0 8px;border-bottom:3px solid #1f4e8c;z-index:100}
+        .talep-hdr .logo img{height:44px}
+        .talep-hdr .baslik .t1{font-size:16pt}
+        .talep-hdr .baslik .t2{font-size:14pt}
+        .talep-hdr .tarih-kutu{padding:6px 10px;font-size:9pt}
+        .talep-footer-fixed{position:fixed;bottom:4mm;left:0;right:0;padding:0;z-index:100}
+        .talep-footer-fixed .footer{margin:0;padding:0;border:none}
+        .talep-footer-fixed img{width:100%;display:block;max-height:26mm;object-fit:contain}
+        .no-print{display:none !important}
+      }
     </style></head><body>
     <div class="pdf-toolbar no-print">
       <div style="font-weight:700;font-size:14px">📋 Talep Formu — ${esc(proj?.no||'')}</div>
@@ -4932,7 +4949,7 @@ function exportProcTalepFormu(){
 ${esc(_pdfNote)}</div>` : '';
       })()}
       <div style="flex:1"></div>
-      ${_pdfFooter()}
+      <div class="talep-footer-fixed">${_pdfFooter()}</div>
     </div>
     </body></html>`;
   const w = window.open('','_blank');
@@ -7552,7 +7569,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v174'; // Talep PDF flex layout - logo/başlık/tarih overlap fix (Ali Osman raporu)
+const APP_VERSION = 'v175'; // Talep PDF: header + footer her sayfada sabit (position:fixed)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
