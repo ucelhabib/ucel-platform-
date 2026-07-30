@@ -4884,14 +4884,14 @@ function exportProcTalepFormu(){
   const _dosyaAd = `Talep Formu ${esc(proj?.no||'')}${_fnKat}`;
   const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>${_dosyaAd}</title>
     <style>${_pdfStyle()}
-      /* v173: Kurumsal Talep Formu düzeni */
-      .talep-hdr{position:relative;padding:12px 0 8px;border-bottom:3px solid #1f4e8c;margin-bottom:20px}
-      .talep-hdr .logo{position:absolute;left:0;top:12px}
-      .talep-hdr .logo img{height:70px}
-      .talep-hdr .baslik{text-align:center;padding:8px 0 4px}
-      .talep-hdr .baslik .t1{font-size:22pt;font-weight:800;color:#1f4e8c;letter-spacing:2px;line-height:1.1}
-      .talep-hdr .baslik .t2{font-size:20pt;font-weight:800;color:#1f4e8c;letter-spacing:2px;line-height:1.1;margin-top:2px}
-      .talep-hdr .tarih-kutu{position:absolute;right:0;top:12px;padding:8px 14px;background:#1f4e8c;color:#fff;font-weight:700;font-size:11pt;border-radius:6px;letter-spacing:0.5px}
+      /* v174: Kurumsal Talep Formu düzeni - flex layout (overlap fix) */
+      .talep-hdr{display:flex;align-items:center;gap:20px;padding:14px 0;border-bottom:3px solid #1f4e8c;margin-bottom:20px}
+      .talep-hdr .logo{flex-shrink:0;width:180px}
+      .talep-hdr .logo img{height:56px;max-width:100%;object-fit:contain}
+      .talep-hdr .baslik{flex:1;text-align:center;min-width:0}
+      .talep-hdr .baslik .t1{font-size:20pt;font-weight:800;color:#1f4e8c;letter-spacing:2px;line-height:1.1}
+      .talep-hdr .baslik .t2{font-size:18pt;font-weight:800;color:#1f4e8c;letter-spacing:2px;line-height:1.1;margin-top:2px}
+      .talep-hdr .tarih-kutu{flex-shrink:0;padding:8px 14px;background:#1f4e8c;color:#fff;font-weight:700;font-size:10.5pt;border-radius:6px;letter-spacing:0.5px;white-space:nowrap}
       .talep-proje{font-size:13pt;font-weight:800;color:#1f4e8c;padding:6px 0;margin-bottom:8px;letter-spacing:0.3px}
       .talep-desc{font-size:12pt;font-weight:700;color:#1f2937;padding:8px 0 12px;line-height:1.4}
     </style></head><body>
@@ -7552,7 +7552,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v173'; // Talep PDF kurumsal düzen: başlık orta, tarih sağ üst, EBAT ayrı kolon, meta+desc kalın
+const APP_VERSION = 'v174'; // Talep PDF flex layout - logo/başlık/tarih overlap fix (Ali Osman raporu)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
