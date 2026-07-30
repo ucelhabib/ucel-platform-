@@ -4602,7 +4602,7 @@ function _pdfStyle(){
     .desc{font-size:11pt;color:#333;margin:4px 0 10px}
     table.frm{width:100%;border-collapse:collapse;font-size:11pt}
     table.frm th{background:#1f4e8c;color:#fff;padding:8px 6px;border:1px solid #1f4e8c;text-align:center;font-weight:800;letter-spacing:0.5px}
-    table.frm td{padding:7px 8px;border:1px solid #d4d8de;text-align:center;vertical-align:middle}
+    table.frm td{padding:7px 8px;border:1px solid #d4d8de;text-align:center;vertical-align:middle;color:#111}
     table.frm td.lft{text-align:left}
     table.frm td.no{font-weight:800;width:40px}
     .footer{margin-top:auto;padding-top:14px;border-top:1px solid #eee}
@@ -4617,7 +4617,7 @@ function _pdfStyle(){
     .addr-bar{background:#1f4e8c;color:#fff;padding:7px 14px;font-size:9pt;margin:8px -14mm 0;display:flex;justify-content:space-between;align-items:center}
     .addr-bar a{color:#fff;text-decoration:none;font-weight:700}
     tfoot td{background:#fff8e1;font-weight:700}
-    @media print { body{margin:0} @page{size:A4 portrait;margin:0} .page{min-height:auto} .no-print{display:none !important} }
+    @media print { body{margin:0} @page{size:A4 portrait;margin:0} .page{min-height:auto} .no-print{display:none !important} *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important} }
     /* Üst çubuk — sadece ekranda görünür */
     .pdf-toolbar{position:sticky;top:0;background:#1f4e8c;color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;justify-content:space-between;z-index:99;box-shadow:0 2px 8px rgba(0,0,0,.15);font-family:'Segoe UI',Arial,sans-serif}
     .pdf-toolbar .btn-print{background:#ff7a00;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer}
@@ -4872,7 +4872,7 @@ function exportProcTalepFormu(){
     return separator + `<tr>
       <td class="no">${_seqNo}.</td>
       <td class="lft"><b>${esc(it.malzeme)}</b></td>
-      <td>${it.ebat ? esc(it.ebat) : '—'}</td>
+      <td style="white-space:nowrap">${it.ebat ? esc(it.ebat) : '—'}</td>
       <td>${fmtNum(it.miktar,2)}</td>
       <td>${esc(it.birim||'mt')}</td>
       <td class="lft">${esc(it.notes.join(' · '))}</td>
@@ -4882,7 +4882,7 @@ function exportProcTalepFormu(){
   // Kategoriye göre dosya adı: "Talep Formu 2026-093 - Ana Yapı" gibi
   const _fnKat = _procFilterKat === 'all' ? '' : ` - ${(PROC_KAT_LABEL[_procFilterKat]||_procFilterKat).replace(/[\/\\:*?"<>|]/g,'')}`;
   const _dosyaAd = `Talep Formu ${esc(proj?.no||'')}${_fnKat}`;
-  const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>${_dosyaAd}</title>
+  const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no"><title>${_dosyaAd}</title>
     <style>${_pdfStyle()}
       /* v174: Kurumsal Talep Formu düzeni - flex layout (overlap fix) */
       .talep-hdr{display:flex;align-items:center;gap:20px;padding:14px 0;border-bottom:3px solid #1f4e8c;margin-bottom:20px}
@@ -4926,9 +4926,9 @@ function exportProcTalepFormu(){
         <thead><tr>
           <th style="width:44px">NO</th>
           <th style="width:28%">MALZEME</th>
-          <th style="width:110px">EBAT</th>
-          <th style="width:90px">MİKTAR</th>
-          <th style="width:70px">BİRİM</th>
+          <th style="width:130px;white-space:nowrap">EBAT</th>
+          <th style="width:80px">MİKTAR</th>
+          <th style="width:60px">BİRİM</th>
           <th>NOT</th>
         </tr></thead>
         <tbody>${rowsWithTotal}</tbody>
@@ -7560,7 +7560,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v177'; // Talep PDF footer sayfa altına sabit (flex spacer için page min-height:297mm)
+const APP_VERSION = 'v178'; // Talep PDF: EBAT nowrap + renk koyulaştırma (print-color-adjust) + telefon algılamayı kapat
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
