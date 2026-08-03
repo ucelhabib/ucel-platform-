@@ -3007,7 +3007,11 @@ function _procCalc(item){
   const toplamIhtiyac = miktar + stokDusum;                   // Proje toplam ihtiyacı
   const kalan = miktar - gelen;
   const fiyat = parseFloat(item.birim_fiyat||0);
-  const kgPm = parseFloat(item.kg_per_meter||0);
+  // v180: kg_per_meter kayıtlı değilse cıvata/somun/pul/rondela için otomatik hesapla (DIN standart tablo)
+  let kgPm = parseFloat(item.kg_per_meter||0);
+  if(!kgPm){
+    try { kgPm = _guessKgPerMeter(item.proc_kategori || '', item.malzeme || '', item.ebat || '') || 0; } catch(e){}
+  }
   const fb = item.fiyat_birimi || 'birim';
   const isKgUnit = (item.birim||'').toLowerCase() === 'kg';
   // Kg hesabını her iki miktar için ayrı ayrı yap (sipariş kg + proje toplam kg)
@@ -4724,19 +4728,53 @@ function printProcurement(){
   const proj = projects.find(p=>p.id===_procProjectId);
   const dt = new Date().toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
   let totT=0, totK=0, totTv=0, totN=0, totKg=0;
-  const rows = procItems.map((it,i)=>{
+  // v180: Aynı malzeme+ebat+birim satırlarını birleştir (talep formundaki gibi — cıvata/somun/pul için kritik)
+  const _normTR = (s) => (s||'').toString().trim().replace(/\s+/g,' ').toLocaleUpperCase('tr-TR');
+  const groupMap = new Map();
+  procItems.forEach(it => {
+    const key = `${_normTR(it.malzeme)}|${_normTR(it.ebat)}|${_normTR(it.birim)}|${it.proc_kategori||''}`;
     const c = _procCalc(it);
+    const _siparis = parseFloat(it.miktar||0);
+    const _stok = parseFloat(it.stok_dusum||0);
+    const _ihtiyac = parseFloat(it.original_ihtiyac||0) || (_siparis + _stok);
+    if(groupMap.has(key)){
+      const g = groupMap.get(key);
+      g.items.push(it);
+      g.siparis += _siparis;
+      g.stokDusum += _stok;
+      g.ihtiyac += _ihtiyac;
+      g.gelen += c.gelen;
+      g.tutar += c.tutar; g.kdv += c.kdv; g.tevkifat += c.tevkifat; g.net += c.net;
+      g.projeKg += c.projeKg; g.toplamKg += c.toplamKg; g.stokKg += (c.stokKg||0);
+    } else {
+      groupMap.set(key, {
+        first: it,
+        items: [it],
+        siparis: _siparis, stokDusum: _stok, ihtiyac: _ihtiyac,
+        gelen: c.gelen, tutar: c.tutar, kdv: c.kdv, tevkifat: c.tevkifat, net: c.net,
+        projeKg: c.projeKg, toplamKg: c.toplamKg, stokKg: (c.stokKg||0)
+      });
+    }
+  });
+  const groups = Array.from(groupMap.values());
+  const rows = groups.map((g,i)=>{
+    const it = g.first;
+    const c = { gelen:g.gelen, tutar:g.tutar, kdv:g.kdv, tevkifat:g.tevkifat, net:g.net,
+                projeKg:g.projeKg, toplamKg:g.toplamKg, stokKg:g.stokKg,
+                durum:(g.siparis<=0?'tamamlandi':(g.gelen===0?'beklemede':(g.gelen<g.siparis?'kismi':'tamamlandi'))),
+                fiyatBirimi: it.fiyat_birimi || 'birim' };
     totT += c.tutar; totK += c.kdv; totTv += c.tevkifat; totN += c.net;
-    // Toplam ağırlık PROJE bazlı (sipariş + stoktan karşılanan) — takip formuyla aynı
     totKg += c.projeKg;
-    const dl = _procDelvOf(it.id);
+    // Tüm alt kalemlerin teslimatlarını birleştir
+    const dl = g.items.flatMap(x => _procDelvOf(x.id));
     const dStr = dl.length === 0 ? '<em style="color:#999">— teslimat yok —</em>' :
       dl.map(d=>`<div style="font-size:11px;padding:2px 0">📦 <b>${d.tarih}</b> · ${fmtNum(d.miktar,2)} ${esc(it.birim)}${d.gercek_kg?` (${fmtNum(d.gercek_kg,2)} kg)`:''}${d.irsaliye_no?` · İrs: <b>${esc(d.irsaliye_no)}</b>`:''}${d.fatura_no?` · Fat: <b>${esc(d.fatura_no)}</b>`:''}${d.tedarikci?` · ${esc(d.tedarikci)}`:''}${d.fatura_tutari?` · ${fmtTL(d.fatura_tutari)}`:''}${d.not_text?` · <i>${esc(d.not_text)}</i>`:''}</div>`).join('');
-    const stat = c.durum==='tamamlandi'?'🟢 Tamam':(c.durum==='kismi'?`🟡 %${Math.round(c.gelen/parseFloat(it.miktar)*100)}`:'🔴 Bekliyor');
-    const _siparis = parseFloat(it.miktar) || 0;
-    const _stokDusum = +it.stok_dusum || 0;
-    const _ihtiyac = (+it.original_ihtiyac) || (_siparis + _stokDusum);
+    const stat = c.durum==='tamamlandi'?'🟢 Tamam':(c.durum==='kismi'?`🟡 %${Math.round(c.gelen/(g.siparis||1)*100)}`:'🔴 Bekliyor');
+    const _siparis = g.siparis;
+    const _stokDusum = g.stokDusum;
+    const _ihtiyac = g.ihtiyac;
     const _yuvarlama = (_siparis + _stokDusum) - _ihtiyac;
+    const _grupBadge = g.items.length > 1 ? ` <span style="background:#6b3fa0;color:#fff;padding:1px 6px;border-radius:8px;font-size:8pt;font-weight:700">×${g.items.length}</span>` : '';
     const _fmt = v=>(+v).toLocaleString('en-US',{maximumFractionDigits:2});
     // Kategoriye göre satır arkaplanı (yumuşak/soluk renkler)
     const _katBg = {
@@ -4752,11 +4790,11 @@ function printProcurement(){
     const _katLabel  = PROC_KAT_LABEL[it.proc_kategori || 'ana_yapi'] || '';
     return `<tr style="background:${_katBg}">
       <td class="ctr" style="border-left:3px solid ${_katBorder}">${i+1}</td>
-      <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <small>(${esc(it.ebat)})</small>`:''}<br><small style="color:${_katBorder};font-weight:700;font-size:8pt">${esc(_katLabel)}</small></td>
+      <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <small>(${esc(it.ebat)})</small>`:''}${_grupBadge}<br><small style="color:${_katBorder};font-weight:700;font-size:8pt">${esc(_katLabel)}</small></td>
       <td><b style="color:#1f4e8c">${_fmt(_ihtiyac)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small></td>
       <td>${_stokDusum>0?`<b style="color:#0a7">${_fmt(_stokDusum)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small>`:'<span style="color:#bbb">—</span>'}</td>
       <td><b>${_fmt(_siparis)} ${esc(it.birim)}</b>${_yuvarlama>0.01?`<br><small style="color:#0a7;font-size:8pt;font-weight:600">+${_fmt(_yuvarlama)} stoğa</small>`:''}</td>
-      <td><b style="color:#b91c1c">${c.projeKg>0?_fmt(c.projeKg)+' kg':'—'}</b>${c.stokDusum>0?`<br><small style="color:#0a7c3a;font-size:8pt;font-weight:600">stok: ${_fmt(c.stokKg||(c.projeKg-c.toplamKg))} kg</small>`:''}</td>
+      <td><b style="color:#b91c1c">${c.projeKg>0?_fmt(c.projeKg)+' kg':'—'}</b>${g.stokDusum>0?`<br><small style="color:#0a7c3a;font-size:8pt;font-weight:600">stok: ${_fmt(c.stokKg||(c.projeKg-c.toplamKg))} kg</small>`:''}</td>
       <td>${fmtTL(it.birim_fiyat)}/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</td>
       <td>${fmtTL(c.tutar)}</td>
       <td>%${it.kdv_orani}<br>${fmtTL(c.kdv)}</td>
@@ -7638,7 +7676,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v179'; // Sol menüde birim canlı durum noktası (Supabase Presence, tüm ekip görür)
+const APP_VERSION = 'v180'; // Detaylı Rapor: cıvata gruplama + otomatik cıvata/somun/pul ağırlığı (_guessKgPerMeter fallback)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
