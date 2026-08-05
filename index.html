@@ -2727,8 +2727,9 @@ let _chatPendingFile = null;
 function onChatFilePick(inp){
   const f = inp.files && inp.files[0];
   if(!f) return;
-  if(f.size > 20 * 1024 * 1024){
-    toast('Dosya en fazla 20 MB olabilir','err');
+  // v181: 20 MB → 100 MB (Süleyman'ın takım dosyası yükleyememe raporu)
+  if(f.size > 100 * 1024 * 1024){
+    toast('Dosya en fazla 100 MB olabilir','err');
     inp.value = '';
     return;
   }
@@ -7676,7 +7677,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v180'; // Detaylı Rapor: cıvata gruplama + otomatik cıvata/somun/pul ağırlığı (_guessKgPerMeter fallback)
+const APP_VERSION = 'v181'; // Sohbet dosya limit 20MB → 100MB (frontend + Supabase bucket) - Süleyman raporu
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
