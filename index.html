@@ -247,6 +247,8 @@ tr.compact td .pill{font-size:10px;padding:2px 7px}
 @media (max-width:720px){
   #mobileNav{display:flex !important}
   .main{padding-bottom:70px}
+  /* v182: Sohbet mobil - alt tab bar + iPhone safe-area için input alanı görünsün */
+  .chat-container{height:calc(100dvh - 260px) !important;min-height:300px !important;margin-bottom:env(safe-area-inset-bottom,0)}
   /* Mobilde saat kutusunu kompaktla — sadece saat görünsün */
   #topClock{white-space:nowrap}
   #topClock .clock-day-date{display:block;font-size:10.5px;opacity:0.85}
@@ -670,7 +672,7 @@ body.proc-fullscreen{overflow:hidden}
             <button class="btn sec" onclick="renderChat()">↻ Yenile</button>
           </div>
         </div>
-        <div style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);display:flex;flex-direction:column;height:calc(100vh - 200px);min-height:400px">
+        <div class="chat-container" style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);display:flex;flex-direction:column;height:calc(100vh - 200px);min-height:400px">
           <div id="chatList" style="flex:1;overflow-y:auto;padding:16px 18px"></div>
           <div id="chatAttachPreview" style="display:none;padding:6px 14px;border-top:1px solid var(--bd);background:#fff7e0;font-size:12px"></div>
           <div style="padding:10px 14px;border-top:1px solid var(--bd);background:#fafbfd;display:flex;gap:8px;align-items:center">
@@ -7677,7 +7679,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v181'; // Sohbet dosya limit 20MB → 100MB (frontend + Supabase bucket) - Süleyman raporu
+const APP_VERSION = 'v182'; // Sohbet mobil - alt input alanı tab bar altında kalmıyor (100dvh + safe-area)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
