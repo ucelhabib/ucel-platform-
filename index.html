@@ -451,6 +451,8 @@ body.proc-fullscreen{overflow:hidden}
           </div>
         </div>
         <div class="banner"><span class="ico">👑</span><div><strong>Yönetici görünümü.</strong> Tüm 7 birimi görür ve yönetebilirsiniz. <strong>Canlı çoklu kullanıcı</strong> — herkesin değişiklikleri anlık size yansır.</div></div>
+        <!-- v183: Dikkat Edilecekler paneli — eksik/aksayan projeler -->
+        <div id="sysAlertsBox" style="display:none;background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);margin-bottom:14px;overflow:hidden"></div>
         <div class="kpi-grid" id="kpiGrid"></div>
         <div class="section-h"><h2>📊 Analiz</h2></div>
         <div id="chartsGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin-bottom:20px">
@@ -2182,6 +2184,113 @@ function _renderDashboardCharts(activeProjects){
       }
     });
   }
+  // v183: Sistem uyarıları — eksik/aksayan projeler
+  try { renderSysAlerts(); } catch(e){ console.warn('sysAlerts:', e); }
+}
+
+// v183: Yönetici Uyarı Sistemi — proje/görev bazlı eksiklikleri, gecikmeleri, aksaklıkları tespit et
+function getSystemAlerts(){
+  const alerts = [];
+  const now = new Date();
+  const today = now.toISOString().slice(0,10);
+  projects.forEach(p => {
+    if(p.stage === 'tamamlandi') return; // biten projeleri atla
+    const projLabel = `${p.no} · ${p.customer||'(müşteri yok)'}`;
+    // 1) Sevk tarihi eksik → EN KRİTİK
+    if(!p.shipdate){
+      alerts.push({sev:'crit', pid:p.id, plabel:projLabel, tip:'sevk_yok', msg:'📅 Sevk tarihi girilmemiş — ekip aceleci değil'});
+    } else {
+      const shipD = new Date(p.shipdate+'T00:00:00');
+      const diffDays = Math.floor((shipD - now) / 86400000);
+      if(diffDays < 0){
+        alerts.push({sev:'crit', pid:p.id, plabel:projLabel, tip:'sevk_gecti', msg:`🔴 Sevk tarihi ${-diffDays} gün önce geçti — proje hala aktif`});
+      } else if(diffDays <= 7){
+        alerts.push({sev:'warn', pid:p.id, plabel:projLabel, tip:'sevk_yakin', msg:`⏰ Sevk tarihine ${diffDays} gün kaldı`});
+      }
+    }
+    // 2) Bedel eksik
+    if(!p.amount || +p.amount === 0){
+      alerts.push({sev:'warn', pid:p.id, plabel:projLabel, tip:'bedel_yok', msg:'💰 Proje bedeli girilmemiş — muhasebe/gelir takibi eksik'});
+    }
+    // 3) Tonaj eksik
+    if(!p.tonnage || +p.tonnage === 0){
+      alerts.push({sev:'warn', pid:p.id, plabel:projLabel, tip:'tonaj_yok', msg:'⚖️ Tonaj girilmemiş — üretim/lojistik planlama zor'});
+    }
+    // 4) Aşama yok
+    if(!p.stages || p.stages.length === 0){
+      if(!p.stage) alerts.push({sev:'crit', pid:p.id, plabel:projLabel, tip:'asama_yok', msg:'🎯 Aşama seçilmemiş — hangi birim çalışacak belirsiz'});
+    }
+    // 5) Müşteri yok (nadir ama olabilir)
+    if(!p.customer){
+      alerts.push({sev:'warn', pid:p.id, plabel:projLabel, tip:'musteri_yok', msg:'👤 Müşteri belirtilmemiş'});
+    }
+    // 6) Klasör yok (ortak dosya paylaşımı eksik)
+    if(!p.folder_path){
+      alerts.push({sev:'info', pid:p.id, plabel:projLabel, tip:'klasor_yok', msg:'📁 Ortak klasör linki girilmemiş — ekip dosyalara ulaşamaz'});
+    }
+    // 7) Faz gecikti — 30+ gündür ilerlemiyor (updated_at ile)
+    if(p.updated_at){
+      const upd = new Date(p.updated_at);
+      const stagnantDays = Math.floor((now - upd) / 86400000);
+      if(stagnantDays >= 30){
+        alerts.push({sev:'warn', pid:p.id, plabel:projLabel, tip:'faz_durgun', msg:`🐌 ${stagnantDays} gündür güncellenmedi — proje takılmış olabilir`});
+      }
+    }
+  });
+  // 8) Görev gecikti — bitiş tarihi geçmiş açık görevler
+  const openTasks = (tasks || []).filter(t => !t.done && t.due);
+  openTasks.forEach(t => {
+    if(t.due < today){
+      const p = projects.find(x => x.id === t.project_id);
+      const pLabel = p ? `${p.no}` : '(proje yok)';
+      const diffDays = Math.floor((now - new Date(t.due+'T00:00:00')) / 86400000);
+      alerts.push({sev:'warn', pid:t.project_id, plabel:pLabel, tip:'gorev_gec', msg:`📋 "${t.title}" görevi ${diffDays} gün geçti (${DN[t.dept]||t.dept})`});
+    }
+  });
+  // Severity + proje no'ya göre sırala
+  const sevOrder = {crit:0, warn:1, info:2};
+  alerts.sort((a,b) => (sevOrder[a.sev]-sevOrder[b.sev]) || (a.plabel||'').localeCompare(b.plabel||''));
+  return alerts;
+}
+function renderSysAlerts(){
+  const box = document.getElementById('sysAlertsBox');
+  if(!box || me?.role !== 'yonetici'){ if(box) box.style.display='none'; return; }
+  const alerts = getSystemAlerts();
+  if(alerts.length === 0){
+    box.style.display = 'block';
+    box.innerHTML = `<div style="background:linear-gradient(135deg,#dcfce7 0%,#bbf7d0 100%);padding:12px 18px;border-left:4px solid #16a34a;font-size:13px;font-weight:600;color:#15803d">✅ Sistem temiz — dikkat gereken bir eksik/aksama yok.</div>`;
+    return;
+  }
+  const crit = alerts.filter(a => a.sev === 'crit');
+  const warn = alerts.filter(a => a.sev === 'warn');
+  const info = alerts.filter(a => a.sev === 'info');
+  const badge = crit.length > 0 ? `<span style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:800">${crit.length} kritik</span>` : '';
+  const warnBadge = warn.length > 0 ? `<span style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:800">${warn.length} uyarı</span>` : '';
+  const infoBadge = info.length > 0 ? `<span style="background:#64748b;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:800">${info.length} bilgi</span>` : '';
+  const rows = alerts.slice(0, 20).map(a => {
+    const bg = a.sev === 'crit' ? '#fef2f2' : (a.sev === 'warn' ? '#fffbeb' : '#f8fafc');
+    const border = a.sev === 'crit' ? '#dc2626' : (a.sev === 'warn' ? '#f59e0b' : '#94a3b8');
+    return `<div style="padding:10px 14px;border-bottom:1px solid #eef1f5;background:${bg};display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openProj('${a.pid}')" title="Projeyi aç">
+      <div style="width:4px;height:36px;background:${border};border-radius:2px;flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;color:#1f2937;font-size:12px;margin-bottom:2px">${esc(a.plabel)}</div>
+        <div style="font-size:13px;color:#374151">${a.msg}</div>
+      </div>
+      <div style="color:#94a3b8;font-size:18px;flex-shrink:0">›</div>
+    </div>`;
+  }).join('');
+  const moreLine = alerts.length > 20 ? `<div style="padding:8px 14px;text-align:center;background:#f8fafc;color:#64748b;font-size:11px;font-weight:600">+ ${alerts.length - 20} uyarı daha (ilk 20 gösteriliyor)</div>` : '';
+  box.style.display = 'block';
+  box.innerHTML = `
+    <div style="padding:12px 18px;background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);border-bottom:2px solid #f59e0b;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:20px">🚨</span>
+      <strong style="font-size:14px;color:#78350f">Dikkat Edilecekler (${alerts.length})</strong>
+      ${badge} ${warnBadge} ${infoBadge}
+      <span style="color:#78350f;font-size:11px;margin-left:auto">Satıra tıklayarak projeyi aç</span>
+    </div>
+    ${rows}
+    ${moreLine}
+  `;
 }
 
 function renderOverviewUnit(){
@@ -6430,6 +6539,18 @@ async function saveProj(){
     d.stages = stagesSelected;
   }
   if(!d.no||!d.customer||!d.title){toast('Proje No, Müşteri ve Adı zorunlu','err');return}
+  // v183: Kritik eksik alan uyarısı (sadece yönetici) — deadline yoksa ekip acele etmiyor
+  if(me?.role === 'yonetici'){
+    const eksik = [];
+    if(!d.shipdate) eksik.push('📅 Sevk tarihi');
+    if(!d.amount || d.amount == 0) eksik.push('💰 Proje bedeli');
+    if(!d.tonnage || d.tonnage == 0) eksik.push('⚖️ Tonaj (kg)');
+    if(!stagesSelected || stagesSelected.length === 0) eksik.push('🎯 Aşama seçimi');
+    if(eksik.length > 0){
+      const onay = confirm(`⚠️ Şu alanlar boş:\n\n${eksik.join('\n')}\n\nBu alanlar boş kalırsa ekip aceleci olmaz ve süreç yavaşlar.\n\nYine de kaydedeyim mi?`);
+      if(!onay) return;
+    }
+  }
   if(editP){
     const oldP=projects.find(x=>x.id===editP);
     const oldStages = (oldP?.stages||[]).slice().sort().join(',');
@@ -7679,7 +7800,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v182'; // Sohbet mobil - alt input alanı tab bar altında kalmıyor (100dvh + safe-area)
+const APP_VERSION = 'v183'; // Yönetici Uyarı Sistemi: pasif panel + aktif kaydetme uyarısı + eksik/gecikme denetimi
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
