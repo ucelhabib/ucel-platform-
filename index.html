@@ -450,7 +450,7 @@ body.proc-fullscreen{overflow:hidden}
             <button class="btn" onclick="openProj()">+ Yeni Proje</button>
           </div>
         </div>
-        <div class="banner"><span class="ico">👑</span><div><strong>Yönetici görünümü.</strong> Tüm 7 birimi görür ve yönetebilirsiniz. <strong>Canlı çoklu kullanıcı</strong> — herkesin değişiklikleri anlık size yansır.</div></div>
+        <!-- v184: Yönetici banner kaldırıldı (kullanıcı isteği) -->
         <!-- v183: Dikkat Edilecekler paneli — eksik/aksayan projeler -->
         <div id="sysAlertsBox" style="display:none;background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);margin-bottom:14px;overflow:hidden"></div>
         <div class="kpi-grid" id="kpiGrid"></div>
@@ -2264,9 +2264,7 @@ function renderSysAlerts(){
   const crit = alerts.filter(a => a.sev === 'crit');
   const warn = alerts.filter(a => a.sev === 'warn');
   const info = alerts.filter(a => a.sev === 'info');
-  const badge = crit.length > 0 ? `<span style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:800">${crit.length} kritik</span>` : '';
-  const warnBadge = warn.length > 0 ? `<span style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:800">${warn.length} uyarı</span>` : '';
-  const infoBadge = info.length > 0 ? `<span style="background:#64748b;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:800">${info.length} bilgi</span>` : '';
+  // v184: Rozetler ve "Satıra tıklayarak" metni kaldırıldı (kullanıcı isteği)
   const rows = alerts.slice(0, 20).map(a => {
     const bg = a.sev === 'crit' ? '#fef2f2' : (a.sev === 'warn' ? '#fffbeb' : '#f8fafc');
     const border = a.sev === 'crit' ? '#dc2626' : (a.sev === 'warn' ? '#f59e0b' : '#94a3b8');
@@ -2282,11 +2280,9 @@ function renderSysAlerts(){
   const moreLine = alerts.length > 20 ? `<div style="padding:8px 14px;text-align:center;background:#f8fafc;color:#64748b;font-size:11px;font-weight:600">+ ${alerts.length - 20} uyarı daha (ilk 20 gösteriliyor)</div>` : '';
   box.style.display = 'block';
   box.innerHTML = `
-    <div style="padding:12px 18px;background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);border-bottom:2px solid #f59e0b;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div style="padding:12px 18px;background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);border-bottom:2px solid #f59e0b;display:flex;align-items:center;gap:10px">
       <span style="font-size:20px">🚨</span>
       <strong style="font-size:14px;color:#78350f">Dikkat Edilecekler (${alerts.length})</strong>
-      ${badge} ${warnBadge} ${infoBadge}
-      <span style="color:#78350f;font-size:11px;margin-left:auto">Satıra tıklayarak projeyi aç</span>
     </div>
     ${rows}
     ${moreLine}
@@ -7800,7 +7796,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v183'; // Yönetici Uyarı Sistemi: pasif panel + aktif kaydetme uyarısı + eksik/gecikme denetimi
+const APP_VERSION = 'v184'; // Yönetici banner kaldırıldı + Dikkat Edilecekler rozetler/açıklama sadeleştirildi
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
