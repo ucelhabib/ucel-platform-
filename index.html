@@ -2202,10 +2202,14 @@ function getSystemAlerts(){
     } else {
       const shipD = new Date(p.shipdate+'T00:00:00');
       const diffDays = Math.floor((shipD - now) / 86400000);
-      if(diffDays < 0){
-        alerts.push({sev:'crit', pid:p.id, plabel:projLabel, tip:'sevk_gecti', msg:`🔴 Sevk tarihi ${-diffDays} gün önce geçti — proje hala aktif`});
-      } else if(diffDays <= 7){
-        alerts.push({sev:'warn', pid:p.id, plabel:projLabel, tip:'sevk_yakin', msg:`⏰ Sevk tarihine ${diffDays} gün kaldı`});
+      const sevkPct = +((p.phases||{}).sevk || 0);
+      // v185: Sevk %100 ise gecikti/yaklaşıyor uyarısı verme — sevkiyat gerçekleşmiş
+      if(sevkPct < 100){
+        if(diffDays < 0){
+          alerts.push({sev:'crit', pid:p.id, plabel:projLabel, tip:'sevk_gecti', msg:`🔴 Sevk tarihi ${-diffDays} gün önce geçti — sevkiyat hala açık (%${sevkPct})`});
+        } else if(diffDays <= 7){
+          alerts.push({sev:'warn', pid:p.id, plabel:projLabel, tip:'sevk_yakin', msg:`⏰ Sevk tarihine ${diffDays} gün kaldı`});
+        }
       }
     }
     // 2) Bedel eksik
@@ -7796,7 +7800,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v184'; // Yönetici banner kaldırıldı + Dikkat Edilecekler rozetler/açıklama sadeleştirildi
+const APP_VERSION = 'v185'; // Sevk gecikti uyarısı: sevk fazı %100 ise uyarma (sevkiyat zamanında yapıldı, montaj devam)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
