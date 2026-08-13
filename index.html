@@ -54,7 +54,7 @@ button,input,select,textarea{font-family:inherit;font-size:inherit}
   display:flex;align-items:center;justify-content:space-between;gap:10px;
   position:sticky;top:0;z-index:200;box-shadow:0 2px 10px rgba(0,0,0,.2)}
 .auth-strip .left{display:flex;align-items:center;gap:12px;min-width:0;flex:1}
-.auth-strip .logo-mini{height:32px;width:auto;background:#fff;padding:3px 6px;border-radius:5px;flex-shrink:0}
+.auth-strip .logo-mini{height:32px;width:auto;flex-shrink:0}
 .auth-strip .av{width:32px;height:32px;border-radius:50%;color:#fff;font-weight:700;font-size:13px;
   display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .auth-strip .name{font-weight:700;font-size:13px}
@@ -7860,7 +7860,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v188'; // Bildirim spam filtresi (60sn dedupe) + Proje silme prompt teyit + Login kurumsal alt bar + bM null fix
+const APP_VERSION = 'v189'; // Topbar logosunun beyaz arka planı kaldırıldı
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
