@@ -392,6 +392,17 @@ body.proc-fullscreen{overflow:hidden}
       <div class="login-hint">
         <strong>🌐 ÜÇEL Steel Construction</strong><br>
         Yapısal Çelik · İş Akışı Yönetim Platformu
+        <!-- v188: Login sayfası kurumsal alt bar -->
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e5e7eb;display:flex;justify-content:center;gap:10px;flex-wrap:wrap">
+          <span style="background:#1f4e8c;color:#fff;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:700">CE</span>
+          <span style="background:#1f4e8c;color:#fff;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:700">ISO 9001</span>
+          <span style="background:#1f4e8c;color:#fff;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:700">IAF</span>
+          <span style="background:#1f4e8c;color:#fff;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:700">TÜV</span>
+        </div>
+        <div style="margin-top:10px;font-size:10px;color:#9ca3af;line-height:1.5">
+          Fevzi Çakmak Mah. Loras Cad. No:5/I-J-K · Karatay/KONYA<br>
+          Tel: +90 332 345 15 99 · <a href="https://www.ucelmetal.net" style="color:#1f4e8c;text-decoration:none;font-weight:600">www.ucelmetal.net</a>
+        </div>
       </div>
     </div>
   </div>
@@ -1829,8 +1840,9 @@ function tSidebar(){document.getElementById('sb').classList.toggle('show');docum
 
 /* ============ RENDERS ============ */
 function uBadges(){
-  document.getElementById('bP').textContent=projects.filter(p=>p.stage!=='tamamlandi').length;
-  document.getElementById('bM').textContent=tasks.filter(t=>t.assignee_id===me.id&&!t.done).length;
+  // v188 null-safe: bM (Görevlerim menüsü) kaldırıldı, artık DOM'da yok olabilir
+  const bP = document.getElementById('bP'); if(bP) bP.textContent = projects.filter(p=>p.stage!=='tamamlandi').length;
+  const bM = document.getElementById('bM'); if(bM) bM.textContent = tasks.filter(t=>t.assignee_id===me.id&&!t.done).length;
 }
 function renderAll(){
   // İlk açılışta tüm sayfaları render et; sonraki çağrılarda sadece görünür sayfa yenilensin
@@ -2670,7 +2682,23 @@ async function markAllRead(){
 function tNotif(e){if(e)e.stopPropagation();document.getElementById('nPanel').classList.toggle('show')}
 document.addEventListener('click',()=>document.getElementById('nPanel').classList.remove('show'));
 
+// v188: Bildirim spam filtresi — aynı anahtar için 60 saniyede sadece 1 bildirim
+const _notifyDedupe = new Map(); // key -> timestamp
 async function notify(text,icon,dept,refType,refId){
+  // Anahtar: metnin ilk 60 karakteri + dept + ref
+  const key = `${(text||'').slice(0,60)}|${dept||''}|${refType||''}|${refId||''}`;
+  const now = Date.now();
+  const last = _notifyDedupe.get(key);
+  if(last && (now - last) < 60000){
+    // 60 saniye içinde aynı bildirim — spam, geç
+    return;
+  }
+  _notifyDedupe.set(key, now);
+  // Bellek koruma: 200'den fazla girdi varsa temizle
+  if(_notifyDedupe.size > 200){
+    const cutoff = now - 300000; // 5 dakika üstü sil
+    for(const [k,t] of _notifyDedupe) if(t < cutoff) _notifyDedupe.delete(k);
+  }
   const row = {text,icon:icon||'🔔',dept:dept||'system',actor_id:me.id};
   if(refType) row.ref_type = refType;
   if(refId) row.ref_id = refId;
@@ -7832,7 +7860,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v187'; // Sadeleşme (Görevlerim/Saha Raporları/Ekip menü kaldır) + Realtime sızıntı fix + procCalc memoize + fix.bat SW bug
+const APP_VERSION = 'v188'; // Bildirim spam filtresi (60sn dedupe) + Proje silme prompt teyit + Login kurumsal alt bar + bM null fix
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
