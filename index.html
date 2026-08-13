@@ -425,7 +425,7 @@ body.proc-fullscreen{overflow:hidden}
       <div class="sidebar-section">Genel</div>
       <div class="sidebar-item" data-page="overview" data-perm="yonetici" onclick="goto('overview')"><span class="ico">📊</span> Genel Bakış</div>
       <div class="sidebar-item" data-page="projects" data-perm="*" onclick="goto('projects')"><span class="ico">🏗️</span> Projeler <span class="sidebar-badge" id="bP">0</span></div>
-      <div class="sidebar-item" data-page="mytasks" data-perm="*" onclick="goto('mytasks')"><span class="ico">✓</span> Görevlerim <span class="sidebar-badge ok" id="bM">0</span></div>
+      <!-- v187: Görevlerim menüden kaldırıldı — proje bazlı iş akışı zaten var -->
       <div class="sidebar-section">Birimler</div>
       <div class="sidebar-item" data-page="d-teklifproje" data-perm="yonetici,teklifproje" onclick="goto('d-teklifproje')"><span class="ico">📐</span> Teklif & Projelendirme</div>
       <div class="sidebar-item" data-page="d-satinalma" data-perm="yonetici,satinalma,muhasebe" onclick="goto('d-satinalma')"><span class="ico">🛒</span> Satın Alma</div>
@@ -436,10 +436,10 @@ body.proc-fullscreen{overflow:hidden}
       <div class="sidebar-item" data-page="d-muhasebe" data-perm="yonetici,muhasebe" onclick="goto('d-muhasebe')"><span class="ico">💰</span> Muhasebe</div>
       <div class="sidebar-section">İletişim</div>
       <div class="sidebar-item" data-page="chat" onclick="goto('chat')"><span class="ico">💬</span> Sohbet <span class="badge" id="chatBadge" style="display:none;background:#0a7;color:#fff;min-width:18px;padding:0 6px;border-radius:9px;font-size:11px"></span></div>
-      <div class="sidebar-item" data-page="site-reports" onclick="goto('site-reports')"><span class="ico">📸</span> Saha Raporları</div>
+      <!-- v187: Saha Raporları menüden kaldırıldı — sohbet + foto zaten aynı işi yapıyor -->
       <div class="sidebar-section">Yönetim</div>
-      <div class="sidebar-item" data-page="team" data-perm="yonetici" onclick="goto('team')"><span class="ico">👥</span> Ekip</div>
-      <div class="sidebar-item" data-page="settings" data-perm="yonetici" onclick="goto('settings')"><span class="ico">⚙️</span> Ayarlar</div>
+      <!-- v187: Ekip menüsü Ayarlar altına birleştirildi -->
+      <div class="sidebar-item" data-page="settings" data-perm="yonetici" onclick="goto('settings')"><span class="ico">⚙️</span> Ayarlar & Ekip</div>
       <div class="sidebar-foot" id="storeInfo">🌐 Canlı: Supabase</div>
     </aside>
 
@@ -1376,6 +1376,12 @@ let tasks = [];
 let notifs = [];
 let editP = null, editT = null;
 let chans = [];
+// v187: Sayfa kapanırken tüm kanalları temizle (realtime sızıntı fix)
+if(typeof window !== 'undefined'){
+  window.addEventListener('beforeunload', () => {
+    try { chans && chans.forEach(c => c && c.unsubscribe && c.unsubscribe()); } catch(e){}
+  });
+}
 
 function showLoader(msg){const l=document.getElementById('loader');document.getElementById('loaderMsg').textContent=msg||'Yükleniyor...';l.classList.add('show')}
 function hideLoader(){document.getElementById('loader').classList.remove('show')}
@@ -1736,6 +1742,11 @@ function updatePresenceUI(){
 
 function subscribeRealtime(){
   try {
+    // v187: Duplicate subscribe önle — mevcut kanalları önce temizle (bellek sızıntı fix)
+    if(chans && chans.length > 0){
+      try { chans.forEach(c => c && c.unsubscribe && c.unsubscribe()); } catch(e){}
+      chans = [];
+    }
     initPresence(); // v179: presence kanalı başlat
     chans.push(sb.channel('projects-ch').on('postgres_changes',{event:'*',schema:'public',table:'projects'},async(p)=>{
       try { await loadProjects(); scheduleVisibleRender(); } catch(e){console.error('rt projects:',e)}
@@ -3116,7 +3127,23 @@ async function saveProjectTalepNot(val){
   if(proj) proj.talep_notes = notes;
 }
 function _procDelvOf(itemId){ return procDeliveries.filter(d=>d.item_id===itemId); }
+// v187: _procCalc memoize — item id + updated_at + delivery count ile cache
+const _procCalcCache = new Map();
+function _procCalcKey(it){
+  const dl = _procDelvOf(it.id);
+  return `${it.id}|${it.updated_at||''}|${it.miktar}|${it.stok_dusum}|${it.birim_fiyat}|${it.kdv_orani}|${it.tevkifat_orani}|${dl.length}|${dl.map(d=>d.miktar+':'+(d.gercek_kg||0)).join(',')}`;
+}
 function _procCalc(item){
+  const cacheKey = _procCalcKey(item);
+  const cached = _procCalcCache.get(cacheKey);
+  if(cached) return cached;
+  const result = _procCalcRaw(item);
+  _procCalcCache.set(cacheKey, result);
+  // Cache boyut sınırı — 500 kalem üstü temizle (bellek koruma)
+  if(_procCalcCache.size > 500) _procCalcCache.clear();
+  return result;
+}
+function _procCalcRaw(item){
   const dl = _procDelvOf(item.id);
   const gelen = dl.reduce((s,d)=>s + parseFloat(d.miktar||0), 0);
   const miktar = parseFloat(item.miktar||0);                  // Sipariş edilecek kısım
@@ -7805,7 +7832,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v186'; // Mobil topbar sıkışıklığı fix - logo/saat/v-badge gizli, isim kısaltıldı
+const APP_VERSION = 'v187'; // Sadeleşme (Görevlerim/Saha Raporları/Ekip menü kaldır) + Realtime sızıntı fix + procCalc memoize + fix.bat SW bug
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
