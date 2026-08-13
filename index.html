@@ -362,10 +362,15 @@ body.proc-fullscreen{overflow:hidden}
   .kpi-val{font-size:22px}
   table{font-size:11px}
   th,td{padding:8px}
-  .auth-strip{padding:6px 12px}
-  .auth-strip .name{font-size:12px}
+  .auth-strip{padding:6px 8px;gap:6px !important}
+  .auth-strip .name{font-size:11px;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .auth-strip .sub{display:none}
-  .auth-strip .logo-mini{height:28px}
+  .auth-strip .logo-mini{display:none} /* Mobilde logo yok — favicon zaten sekmede */
+  .auth-strip .live-dot{display:none} /* Mobilde presence noktası gizli — yer kalmıyor */
+  #topClock{display:none !important} /* Saat mobilde gizli — sistem çubuğu var */
+  #topbarRefreshBtn{padding:5px 8px !important}
+  #topbarRefreshBtn > span:not(:first-child){display:none !important} /* v185 badge + son güncelleme gizli */
+  #issueReportBtn{padding:5px 8px !important}
 }
 </style>
 </head>
@@ -7800,7 +7805,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v185'; // Sevk gecikti uyarısı: sevk fazı %100 ise uyarma (sevkiyat zamanında yapıldı, montaj devam)
+const APP_VERSION = 'v186'; // Mobil topbar sıkışıklığı fix - logo/saat/v-badge gizli, isim kısaltıldı
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
