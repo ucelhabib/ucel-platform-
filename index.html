@@ -2535,47 +2535,95 @@ function renderDept(d){
 }
 
 // v191: Muhasebe modülü — procurement_deliveries üzerinden fatura & ödeme takibi
-function renderMuhasebe(){
+// v192: Fatura no bazında grupla (aynı fatura numarasındaki kalemleri tek satırda göster) + tüm veriyi çek
+let _muhasebeAllItems = null;
+let _muhasebeAllDelvs = null;
+async function _muhasebeFetchAll(){
+  try {
+    const [it, dv] = await Promise.all([
+      sb.from('procurement_items').select('id,project_id,malzeme,kdv_orani,tevkifat_orani'),
+      sb.from('procurement_deliveries').select('*').or('fatura_no.not.is.null,fatura_tutari.gt.0')
+    ]);
+    _muhasebeAllItems = it.data || [];
+    _muhasebeAllDelvs = dv.data || [];
+  } catch(e){ console.warn('muhasebeFetch:', e); }
+}
+async function renderMuhasebe(){
   const box = document.getElementById('muhasebe-panel');
   if(!box) return;
-  const all = (procDeliveries || []).filter(d => d.fatura_no || +d.fatura_tutari > 0);
+  if(!_muhasebeAllDelvs){ box.innerHTML = '<div style="padding:30px;text-align:center;color:var(--m)">📥 Muhasebe verisi yükleniyor...</div>'; await _muhasebeFetchAll(); }
+  const allDelvs = _muhasebeAllDelvs || [];
+  const allItems = _muhasebeAllItems || [];
+  const raw = allDelvs.filter(d => d.fatura_no || +d.fatura_tutari > 0);
   const now = new Date();
   const thisMonth = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
-  let totFatura=0, totOdenen=0, totBekleyen=0, ayKDV=0, ayTevkifat=0;
-  all.forEach(d => {
+  // Fatura no + tarih + tedarikçi bazında grupla
+  const groupMap = new Map();
+  raw.forEach(d => {
+    const key = (d.fatura_no||'').trim() + '|' + (d.tarih||'') + '|' + (d.tedarikci||'').trim();
+    if(!groupMap.has(key)){
+      groupMap.set(key, {
+        fatura_no: d.fatura_no,
+        tarih: d.tarih,
+        tedarikci: d.tedarikci,
+        items: [],
+        deliv_ids: [],
+        toplam_tutar: 0,
+        odenen_tutar: 0,
+        odendi_hepsi: true,
+        odeme_tarihi: null,
+        projeler: new Set()
+      });
+    }
+    const g = groupMap.get(key);
+    g.items.push(d);
+    g.deliv_ids.push(d.id);
     const t = +d.fatura_tutari || 0;
-    totFatura += t;
-    if(d.odendi) totOdenen += t; else totBekleyen += t;
-    // Ay içi KDV ve tevkifat — teslimat kaleminden bakıyoruz
-    if((d.tarih||'').startsWith(thisMonth)){
-      const it = (procItems||[]).find(x => x.id === d.item_id);
-      if(it){
-        const kdvOr = +it.kdv_orani || 0;
-        const tevOr = +it.tevkifat_orani || 0;
-        // Fatura KDV dahil kabul: net = t / (1 + kdv/100), kdv = t - net
-        const net = kdvOr > 0 ? t / (1 + kdvOr/100) : t;
-        const kdv = t - net;
-        ayKDV += kdv;
-        ayTevkifat += kdv * (tevOr/100);
-      }
+    g.toplam_tutar += t;
+    if(d.odendi){ g.odenen_tutar += t; if(!g.odeme_tarihi) g.odeme_tarihi = d.odeme_tarihi; }
+    else { g.odendi_hepsi = false; }
+    const it = allItems.find(x => x.id === d.item_id);
+    if(it){ const p = projects.find(x => x.id === it.project_id); if(p) g.projeler.add(p.no); }
+  });
+  const faturalar = [...groupMap.values()];
+  let totFatura=0, totOdenen=0, totBekleyen=0, ayKDV=0, ayTevkifat=0;
+  faturalar.forEach(g => {
+    totFatura += g.toplam_tutar;
+    totOdenen += g.odenen_tutar;
+    totBekleyen += (g.toplam_tutar - g.odenen_tutar);
+    // Ay içi KDV/tevkifat — grup içindeki her kalemin KDV oranıyla hesapla
+    if((g.tarih||'').startsWith(thisMonth)){
+      g.items.forEach(d => {
+        const t = +d.fatura_tutari || 0;
+        const it = allItems.find(x => x.id === d.item_id);
+        if(it){
+          const kdvOr = +it.kdv_orani || 0;
+          const tevOr = +it.tevkifat_orani || 0;
+          const net = kdvOr > 0 ? t / (1 + kdvOr/100) : t;
+          const kdv = t - net;
+          ayKDV += kdv;
+          ayTevkifat += kdv * (tevOr/100);
+        }
+      });
     }
   });
-  const rows = all.slice().sort((a,b) => (b.tarih||'').localeCompare(a.tarih||'')).slice(0, 100).map(d => {
-    const it = (procItems||[]).find(x => x.id === d.item_id);
-    const p = it ? projects.find(x => x.id === it.project_id) : null;
-    const badge = d.odendi
-      ? `<span style="background:#c8f0d8;color:#0a7;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">✓ Ödendi${d.odeme_tarihi?` · ${d.odeme_tarihi}`:''}</span>`
-      : `<span style="background:#fee;color:#c33;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">Bekliyor</span>`;
-    const btn = d.odendi
-      ? `<button class="btn sec sm" onclick="_muhasebeToggleOdeme('${d.id}', false)" title="Ödemeyi iptal et">↶ Geri Al</button>`
-      : `<button class="btn sm" onclick="_muhasebeToggleOdeme('${d.id}', true)" style="background:#0a7">✓ Ödedim</button>`;
+  const rows = faturalar.sort((a,b) => (b.tarih||'').localeCompare(a.tarih||'')).slice(0, 100).map(g => {
+    const projStr = [...g.projeler].join(', ') || '—';
+    const kalemSayisi = g.items.length;
+    const badge = g.odendi_hepsi
+      ? `<span style="background:#c8f0d8;color:#0a7;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">✓ Ödendi${g.odeme_tarihi?` · ${g.odeme_tarihi}`:''}</span>`
+      : (g.odenen_tutar > 0
+        ? `<span style="background:#fff3cd;color:#c80;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">🟡 Kısmi (${fmtTL(g.odenen_tutar)})</span>`
+        : `<span style="background:#fee;color:#c33;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">Bekliyor</span>`);
+    const btn = g.odendi_hepsi
+      ? `<button class="btn sec sm" onclick="_muhasebeToggleOdemeGrup('${g.deliv_ids.join(',')}', false)" title="Ödemeyi iptal et">↶ Geri Al</button>`
+      : `<button class="btn sm" onclick="_muhasebeToggleOdemeGrup('${g.deliv_ids.join(',')}', true)" style="background:#0a7">✓ Ödedim</button>`;
     return `<tr>
-      <td>${esc(d.tarih||'—')}</td>
-      <td><b>${esc(d.fatura_no||'—')}</b></td>
-      <td>${p?esc(p.no):'—'}</td>
-      <td>${it?esc(it.malzeme.slice(0,40)):'—'}</td>
-      <td>${esc(d.tedarikci||'—')}</td>
-      <td style="text-align:right"><b>${fmtTL(d.fatura_tutari||0)}</b></td>
+      <td>${esc(g.tarih||'—')}</td>
+      <td><b>${esc(g.fatura_no||'—')}</b>${kalemSayisi>1?`<br><small style="color:#888;font-size:10px">${kalemSayisi} kalem</small>`:''}</td>
+      <td>${esc(projStr)}</td>
+      <td>${esc(g.tedarikci||'—')}</td>
+      <td style="text-align:right"><b>${fmtTL(g.toplam_tutar)}</b></td>
       <td class="ctr">${badge}</td>
       <td class="ctr">${btn}</td>
     </tr>`;
@@ -2595,7 +2643,7 @@ function renderMuhasebe(){
       </div>
       ${all.length === 0 ? '<div style="padding:30px;text-align:center;color:var(--m)">Henüz fatura kaydı yok. Satın Alma → Teslimat girildiğinde burada görünür.</div>' : `
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0"><th style="padding:8px;text-align:left">Tarih</th><th style="padding:8px;text-align:left">Fatura No</th><th style="padding:8px;text-align:left">Proje</th><th style="padding:8px;text-align:left">Malzeme</th><th style="padding:8px;text-align:left">Tedarikçi</th><th style="padding:8px;text-align:right">Tutar</th><th style="padding:8px;text-align:center">Durum</th><th style="padding:8px;text-align:center">İşlem</th></tr></thead>
+        <thead><tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0"><th style="padding:8px;text-align:left">Tarih</th><th style="padding:8px;text-align:left">Fatura No</th><th style="padding:8px;text-align:left">Proje</th><th style="padding:8px;text-align:left">Tedarikçi</th><th style="padding:8px;text-align:right">Toplam Tutar</th><th style="padding:8px;text-align:center">Durum</th><th style="padding:8px;text-align:center">İşlem</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>`}
     </div>`;
@@ -2608,6 +2656,21 @@ async function _muhasebeToggleOdeme(delivId, odendi){
   const d = procDeliveries.find(x => x.id === delivId);
   if(d){ d.odendi = upd.odendi; d.odeme_tarihi = upd.odeme_tarihi; }
   toast(odendi ? '✓ Ödendi olarak işaretlendi' : 'Ödeme iptal edildi', 'info');
+  renderMuhasebe();
+}
+// v192: Grup halinde ödeme işaretle (aynı fatura no altındaki tüm kalemler)
+async function _muhasebeToggleOdemeGrup(delivIdsCsv, odendi){
+  const ids = delivIdsCsv.split(',').filter(Boolean);
+  if(ids.length === 0) return;
+  const upd = { odendi: odendi, odeme_tarihi: odendi ? new Date().toISOString().slice(0,10) : null };
+  const { error } = await sb.from('procurement_deliveries').update(upd).in('id', ids);
+  if(error){ toast('Hata: '+errTr(error), 'err'); return; }
+  // Local + cache güncelle
+  ids.forEach(id => {
+    const d1 = procDeliveries.find(x => x.id === id); if(d1){ d1.odendi = upd.odendi; d1.odeme_tarihi = upd.odeme_tarihi; }
+    const d2 = _muhasebeAllDelvs?.find(x => x.id === id); if(d2){ d2.odendi = upd.odendi; d2.odeme_tarihi = upd.odeme_tarihi; }
+  });
+  toast(odendi ? `✓ Fatura ödendi (${ids.length} kalem)` : 'Ödeme iptal edildi', 'info');
   renderMuhasebe();
 }
 function renderTL(arr){
@@ -7956,7 +8019,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v191'; // Muhasebe modülü: fatura tablosu + ödeme durumu + KDV/tevkifat özeti (procurement_deliveries.odendi/odeme_tarihi)
+const APP_VERSION = 'v192'; // Muhasebe: fatura no bazında gruplama + tüm veri prefetch (proje/malzeme "—" fix)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
