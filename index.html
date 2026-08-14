@@ -2525,10 +2525,8 @@ function renderDept(d){
     <div class="kpi ok"><div class="kpi-label">Tamamlanan</div><div class="kpi-val g">${dt.filter(t=>t.done).length}</div></div>
     <div class="kpi"><div class="kpi-label">Aktif Proje</div><div class="kpi-val">${pr.length}</div></div>`;
   const b=document.getElementById('b-'+d);
-  if(b){
-    if(me.role==='yonetici'){b.innerHTML='<span class="ico">👑</span><div><strong>Yönetici görünümü.</strong> Bu birimi yönetebilirsiniz.</div>';b.className='banner'}
-    else{b.innerHTML='<span class="ico">🔒</span><div><strong>Sınırlı erişim.</strong> Bu birimi düzenleyebilirsiniz.</div>';b.className='banner warn'}
-  }
+  // v193: Banner tümüyle gizlendi (Yönetici görünümü + Sınırlı erişim bildirimi gereksiz)
+  if(b){ b.style.display='none'; }
   const el=document.getElementById('d-'+d);if(el)el.innerHTML=renderTL(dt);
   // v191: Muhasebe modülü — fatura + ödeme takibi
   if(d === 'muhasebe'){ try { renderMuhasebe(); } catch(e){ console.warn('muhasebe:', e); } }
@@ -2542,11 +2540,14 @@ async function _muhasebeFetchAll(){
   try {
     const [it, dv] = await Promise.all([
       sb.from('procurement_items').select('id,project_id,malzeme,kdv_orani,tevkifat_orani'),
-      sb.from('procurement_deliveries').select('*').or('fatura_no.not.is.null,fatura_tutari.gt.0')
+      sb.from('procurement_deliveries').select('*')
     ]);
     _muhasebeAllItems = it.data || [];
-    _muhasebeAllDelvs = dv.data || [];
-  } catch(e){ console.warn('muhasebeFetch:', e); }
+    // Client-side filter (fatura no veya tutar var)
+    _muhasebeAllDelvs = (dv.data || []).filter(d => d.fatura_no || +d.fatura_tutari > 0);
+    if(it.error) console.error('items err:', it.error);
+    if(dv.error) console.error('delvs err:', dv.error);
+  } catch(e){ console.error('muhasebeFetch:', e); _muhasebeAllItems = []; _muhasebeAllDelvs = []; }
 }
 async function renderMuhasebe(){
   const box = document.getElementById('muhasebe-panel');
@@ -8019,7 +8020,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v192'; // Muhasebe: fatura no bazında gruplama + tüm veri prefetch (proje/malzeme "—" fix)
+const APP_VERSION = 'v193'; // Muhasebe fetch fix (client-side filter) + birim banner kaldırıldı (yönetici görünümü gereksiz)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
