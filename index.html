@@ -596,7 +596,7 @@ body.proc-fullscreen{overflow:hidden}
         <div id="d-sevk"></div>
       </div>
       <div class="page" id="page-d-montaj"><div class="page-h"><div><div class="page-title">🏗️ Saha Montajı</div><div class="page-sub">Şantiye ve günlük rapor</div></div><div><button class="btn admin-only" onclick="openTask('montaj')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-montaj"></div><div class="kpi-grid" id="dk-montaj"></div><div class="section-h"><h2>Görevler</h2></div><div id="d-montaj"></div></div>
-      <div class="page" id="page-d-muhasebe"><div class="page-h"><div><div class="page-title">💰 Muhasebe</div><div class="page-sub">Fatura ve tahsilat</div></div><div><button class="btn admin-only" onclick="openTask('muhasebe')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-muhasebe"></div><div class="kpi-grid" id="dk-muhasebe"></div><div class="section-h"><h2>Görevler</h2></div><div id="d-muhasebe"></div></div>
+      <div class="page" id="page-d-muhasebe"><div class="page-h"><div><div class="page-title">💰 Muhasebe</div><div class="page-sub">Fatura, ödeme, KDV & tevkifat</div></div><div><button class="btn admin-only" onclick="openTask('muhasebe')">+ Yeni Görev</button></div></div><div class="banner warn" id="b-muhasebe"></div><div class="kpi-grid" id="dk-muhasebe"></div><!-- v191: Muhasebe modülü --><div id="muhasebe-panel" style="margin-top:20px"></div><div class="section-h"><h2>Görevler</h2></div><div id="d-muhasebe"></div></div>
 
       <div class="page" id="page-team">
         <div class="page-h"><div><div class="page-title">👥 Ekip</div><div class="page-sub">Tüm çalışanlar</div></div></div>
@@ -2530,6 +2530,85 @@ function renderDept(d){
     else{b.innerHTML='<span class="ico">🔒</span><div><strong>Sınırlı erişim.</strong> Bu birimi düzenleyebilirsiniz.</div>';b.className='banner warn'}
   }
   const el=document.getElementById('d-'+d);if(el)el.innerHTML=renderTL(dt);
+  // v191: Muhasebe modülü — fatura + ödeme takibi
+  if(d === 'muhasebe'){ try { renderMuhasebe(); } catch(e){ console.warn('muhasebe:', e); } }
+}
+
+// v191: Muhasebe modülü — procurement_deliveries üzerinden fatura & ödeme takibi
+function renderMuhasebe(){
+  const box = document.getElementById('muhasebe-panel');
+  if(!box) return;
+  const all = (procDeliveries || []).filter(d => d.fatura_no || +d.fatura_tutari > 0);
+  const now = new Date();
+  const thisMonth = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  let totFatura=0, totOdenen=0, totBekleyen=0, ayKDV=0, ayTevkifat=0;
+  all.forEach(d => {
+    const t = +d.fatura_tutari || 0;
+    totFatura += t;
+    if(d.odendi) totOdenen += t; else totBekleyen += t;
+    // Ay içi KDV ve tevkifat — teslimat kaleminden bakıyoruz
+    if((d.tarih||'').startsWith(thisMonth)){
+      const it = (procItems||[]).find(x => x.id === d.item_id);
+      if(it){
+        const kdvOr = +it.kdv_orani || 0;
+        const tevOr = +it.tevkifat_orani || 0;
+        // Fatura KDV dahil kabul: net = t / (1 + kdv/100), kdv = t - net
+        const net = kdvOr > 0 ? t / (1 + kdvOr/100) : t;
+        const kdv = t - net;
+        ayKDV += kdv;
+        ayTevkifat += kdv * (tevOr/100);
+      }
+    }
+  });
+  const rows = all.slice().sort((a,b) => (b.tarih||'').localeCompare(a.tarih||'')).slice(0, 100).map(d => {
+    const it = (procItems||[]).find(x => x.id === d.item_id);
+    const p = it ? projects.find(x => x.id === it.project_id) : null;
+    const badge = d.odendi
+      ? `<span style="background:#c8f0d8;color:#0a7;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">✓ Ödendi${d.odeme_tarihi?` · ${d.odeme_tarihi}`:''}</span>`
+      : `<span style="background:#fee;color:#c33;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">Bekliyor</span>`;
+    const btn = d.odendi
+      ? `<button class="btn sec sm" onclick="_muhasebeToggleOdeme('${d.id}', false)" title="Ödemeyi iptal et">↶ Geri Al</button>`
+      : `<button class="btn sm" onclick="_muhasebeToggleOdeme('${d.id}', true)" style="background:#0a7">✓ Ödedim</button>`;
+    return `<tr>
+      <td>${esc(d.tarih||'—')}</td>
+      <td><b>${esc(d.fatura_no||'—')}</b></td>
+      <td>${p?esc(p.no):'—'}</td>
+      <td>${it?esc(it.malzeme.slice(0,40)):'—'}</td>
+      <td>${esc(d.tedarikci||'—')}</td>
+      <td style="text-align:right"><b>${fmtTL(d.fatura_tutari||0)}</b></td>
+      <td class="ctr">${badge}</td>
+      <td class="ctr">${btn}</td>
+    </tr>`;
+  }).join('');
+  box.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px">
+      <div class="kpi"><div class="kpi-label">📄 Toplam Fatura</div><div class="kpi-val">${fmtTL(totFatura)}</div><div class="kpi-sub">${all.length} kayıt</div></div>
+      <div class="kpi ok"><div class="kpi-label">✓ Ödenen</div><div class="kpi-val g">${fmtTL(totOdenen)}</div></div>
+      <div class="kpi err"><div class="kpi-label">⏳ Bekleyen</div><div class="kpi-val r">${fmtTL(totBekleyen)}</div></div>
+      <div class="kpi"><div class="kpi-label">Bu Ay KDV</div><div class="kpi-val">${fmtTL(ayKDV)}</div><div class="kpi-sub">${thisMonth}</div></div>
+      <div class="kpi"><div class="kpi-label">Bu Ay Tevkifat</div><div class="kpi-val">${fmtTL(ayTevkifat)}</div></div>
+    </div>
+    <div style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);overflow:hidden">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center">
+        <strong style="font-size:14px;color:var(--p)">📄 Faturalar (son 100)</strong>
+        <small style="color:var(--m)">Ödedim butonu ile ödeme durumunu değiştir</small>
+      </div>
+      ${all.length === 0 ? '<div style="padding:30px;text-align:center;color:var(--m)">Henüz fatura kaydı yok. Satın Alma → Teslimat girildiğinde burada görünür.</div>' : `
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0"><th style="padding:8px;text-align:left">Tarih</th><th style="padding:8px;text-align:left">Fatura No</th><th style="padding:8px;text-align:left">Proje</th><th style="padding:8px;text-align:left">Malzeme</th><th style="padding:8px;text-align:left">Tedarikçi</th><th style="padding:8px;text-align:right">Tutar</th><th style="padding:8px;text-align:center">Durum</th><th style="padding:8px;text-align:center">İşlem</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`}
+    </div>`;
+}
+async function _muhasebeToggleOdeme(delivId, odendi){
+  const upd = { odendi: odendi, odeme_tarihi: odendi ? new Date().toISOString().slice(0,10) : null };
+  const { error } = await sb.from('procurement_deliveries').update(upd).eq('id', delivId);
+  if(error){ toast('Hata: '+errTr(error), 'err'); return; }
+  // Local güncelle
+  const d = procDeliveries.find(x => x.id === delivId);
+  if(d){ d.odendi = upd.odendi; d.odeme_tarihi = upd.odeme_tarihi; }
+  toast(odendi ? '✓ Ödendi olarak işaretlendi' : 'Ödeme iptal edildi', 'info');
+  renderMuhasebe();
 }
 function renderTL(arr){
   if(arr.length===0)return '<div style="text-align:center;padding:30px;color:var(--m)">Görev yok. Üstteki <strong>+ Yeni Görev</strong> butonunu kullanın.</div>';
@@ -7877,7 +7956,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v190'; // Tedarikçi + Müşteri + Nakliye Firması autocomplete (datalist ile önceki kayıtlar)
+const APP_VERSION = 'v191'; // Muhasebe modülü: fatura tablosu + ödeme durumu + KDV/tevkifat özeti (procurement_deliveries.odendi/odeme_tarihi)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
