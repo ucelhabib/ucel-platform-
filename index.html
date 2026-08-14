@@ -920,7 +920,7 @@ body.proc-fullscreen{overflow:hidden}
           <div class="frow"><label>İrsaliye No</label><input id="pd-irs"></div>
           <div class="frow"><label>Fatura No</label><input id="pd-fat"></div>
         </div>
-        <div class="frow"><label>Tedarikçi</label><input id="pd-ted"></div>
+        <div class="frow"><label>Tedarikçi</label><input id="pd-ted" list="tedarikciListesi" autocomplete="off"><datalist id="tedarikciListesi"></datalist></div>
         <div style="background:#eef7ff;border:1px solid #b3d4f5;border-radius:6px;padding:6px 10px;font-size:11px;color:#1f4e8c;margin:6px 0">
           ℹ Tevkifat: Fatura KDV dahil <b>12.000 TL</b> ve üzeriyse sistem otomatik tevkifat uygular. Altındaysa tevkifat yok.
         </div>
@@ -1126,7 +1126,7 @@ body.proc-fullscreen{overflow:hidden}
         <div class="pm-card-b">
           <div class="fgrid">
             <div class="frow"><label>Proje No</label><input id="pf-no"></div>
-            <div class="frow"><label>Müşteri</label><input id="pf-cust"></div>
+            <div class="frow"><label>Müşteri</label><input id="pf-cust" list="musteriListesi" autocomplete="off"><datalist id="musteriListesi"></datalist></div>
           </div>
           <div class="frow" style="width:100%"><label>Proje Adı</label><input id="pf-title" style="width:100%"></div>
           <div class="fgrid">
@@ -1263,7 +1263,7 @@ body.proc-fullscreen{overflow:hidden}
         <div class="frow"><label>Giriş Saati</label><input id="sh-giris" type="datetime-local"></div>
         <div class="frow"><label>Çıkış Saati</label><input id="sh-cikis" type="datetime-local"></div>
         <div class="frow"><label>Sürücü</label><input id="sh-surucu"></div>
-        <div class="frow"><label>Nakliye Firması</label><input id="sh-tedarikci"></div>
+        <div class="frow"><label>Nakliye Firması</label><input id="sh-tedarikci" list="nakliyeListesi" autocomplete="off"><datalist id="nakliyeListesi"></datalist></div>
         <div class="frow" style="grid-column:1/-1"><label>Sevk İrsaliye No</label><input id="sh-irsno"></div>
         <div class="frow" style="grid-column:1/-1">
           <label>🖼 Yükleme Görselleri / Belgeleri</label>
@@ -3086,6 +3086,20 @@ function closeExcelViewer(){
 /* ============ SATIN ALMA (procurement) ============ */
 let procItems = [];
 let procDeliveries = [];
+// v190: Tedarikçi/Müşteri/Nakliye autocomplete - distinct isimleri datalist'e doldur
+function _fillDatalist(id, values){
+  const dl = document.getElementById(id);
+  if(!dl) return;
+  const uniq = [...new Set((values||[]).filter(Boolean).map(v=>String(v).trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'));
+  dl.innerHTML = uniq.map(v => `<option value="${v.replace(/"/g,'&quot;')}"></option>`).join('');
+}
+function refreshAutocompleteLists(){
+  try {
+    _fillDatalist('tedarikciListesi', (procDeliveries||[]).map(d => d.tedarikci));
+    _fillDatalist('musteriListesi', (projects||[]).map(p => p.customer));
+    _fillDatalist('nakliyeListesi', (shipments||[]).map(s => s.tedarikci));
+  } catch(e){ console.warn('autocomplete:', e); }
+}
 let _procExpanded = new Set();
 let _procSelected = new Set();
 let _pdCurrentItemId = null;
@@ -4734,6 +4748,7 @@ function openProcDeliv(itemId){
   document.getElementById('pdInfo').innerHTML = `<strong>${esc(it.malzeme)}</strong> · İhtiyaç: ${parseFloat(it.miktar).toLocaleString('en-US')} ${esc(it.birim)} · Gelen: <strong>${c.gelen.toLocaleString('en-US')}</strong> · Kalan: <strong style="color:${c.kalan>0?'#c33':'#0a7'}">${c.kalan.toLocaleString('en-US')}</strong>`;
   _pdResetForm();
   _pdRenderList(itemId);
+  refreshAutocompleteLists(); // v190: tedarikçi datalist doldur
   document.getElementById('procDelivModal').classList.add('show');
 }
 function _pdResetForm(){
@@ -6265,6 +6280,7 @@ async function deleteStockFile(id, path){
 /* ============ PROJECT CRUD ============ */
 function openProj(id){
   editP=id||null;
+  try { refreshAutocompleteLists(); } catch(e){} // v190: müşteri datalist
   const isAdmin = me?.role === 'yonetici';
   const canEditProject = isAdmin || me?.role === 'teklifproje';
   // Malzeme ekleme/silme: yonetici + teklifproje + satinalma + muhasebe
@@ -7207,6 +7223,7 @@ function _isoToDtLocal(iso){
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 function openShipmentModal(id){
+  try { refreshAutocompleteLists(); } catch(e){} // v190: nakliye datalist
   // Yeni yükleme (id yok) ve seçili projede sevkiyat %100 ise uyarı
   if(!id){
     const _pid = document.getElementById('shipProj')?.value;
@@ -7860,7 +7877,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v189'; // Topbar logosunun beyaz arka planı kaldırıldı
+const APP_VERSION = 'v190'; // Tedarikçi + Müşteri + Nakliye Firması autocomplete (datalist ile önceki kayıtlar)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
