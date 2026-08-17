@@ -1131,7 +1131,7 @@ body.proc-fullscreen{overflow:hidden}
           <div class="fgrid">
             <div class="frow"><label>Proje Adı</label><input id="pf-title"></div>
             <!-- v194: Oluşturma tarihi (otomatik, read-only) -->
-            <div class="frow"><label>📅 Oluşturma Tarihi</label><input id="pf-created" type="text" readonly style="background:#f5f7fa;color:#666"></div>
+            <div class="frow"><label>Oluşturma Tarihi</label><input id="pf-created" type="text" readonly style="background:#f5f7fa;color:#666"></div>
           </div>
           <div class="fgrid">
             <div class="frow"><label>Lokasyon</label><input id="pf-loc"></div>
@@ -8031,7 +8031,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v194'; // Proje formuna oluşturma tarihi eklendi (read-only, Supabase created_at)
+const APP_VERSION = 'v195'; // Oluşturma tarihi label sadeleştirildi (emoji kaldırıldı)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
