@@ -6916,18 +6916,27 @@ async function delProj(){
   }
   const p = projects.find(x=>x.id===editP);
   const inf = p ? `${p.no} ${p.customer}` : 'proje';
-  // İki aşamalı onay — yanlışlıkla silmeyi önlemek için projenin no'sunu yazdır
+  // v197: Esnek karşılaştırma - boşluk + büyük/küçük harf normalize
+  const _norm = s => (s||'').toString().trim().replace(/\s+/g,' ').toLocaleUpperCase('tr-TR');
   const confirmTxt = prompt(`⚠️ TEHLİKELİ: "${inf}" projesi ve TÜM bağlı verileri (görevler, satın almalar, dosyalar, faz ilerlemeleri) silinecek.\n\nDevam etmek için projenin NO'sunu yaz:`);
   if(confirmTxt === null) return;
-  if(confirmTxt.trim() !== (p?.no||'').trim()){
-    alert('Proje numarası eşleşmedi, silme iptal edildi.');
+  if(_norm(confirmTxt) !== _norm(p?.no)){
+    alert(`Proje numarası eşleşmedi:\n  Yazdığın: "${confirmTxt}"\n  Gerçek: "${p?.no}"\n\nSilme iptal edildi.`);
     return;
   }
-  const {error} = await sb.from('projects').delete().eq('id', editP);
-  if(error){ toast('Hata: '+errTr(error),'err'); return; }
+  // v197: .select() ile etkilenen satır sayısını kontrol et — RLS ya da başka nedenle 0 dönerse hata
+  const { data, error } = await sb.from('projects').delete().eq('id', editP).select();
+  if(error){ toast('❌ Silme hatası: '+errTr(error),'err'); alert('❌ Silme başarısız:\n\n' + (error.message||errTr(error))); return; }
+  if(!data || data.length === 0){
+    alert('⚠️ Proje silinemedi! (yetki hatası veya bağlı veriler engelledi)\n\nSupabase RLS policy DELETE için yönetici izni kontrol edilmeli.');
+    toast('Silme başarısız (0 satır)','err'); return;
+  }
   await notify(`🗑️ Yönetici ${me.full_name} "${inf}" projesini sildi`, '🗑️', 'system');
   await logAudit('project_delete', 'project', editP, inf, {no: p?.no, customer: p?.customer});
+  // Local listeden de sil (realtime gecikirse UI güncellensin)
+  projects = projects.filter(x => x.id !== editP);
   toast('Proje silindi','w'); closeProj();
+  try { renderVisibleOnly(); } catch(e){}
 }
 
 /* ============ TASK CRUD ============ */
@@ -8045,7 +8054,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v196'; // Detaylı Rapor: seçili kategoriye göre filtreli + gruplar kategoriye göre sıralı (karışmasın)
+const APP_VERSION = 'v197'; // Proje silme fix - .select() ile satır kontrolü, esnek no karşılaştırma, local liste temizle
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
