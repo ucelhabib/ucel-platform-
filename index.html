@@ -2635,7 +2635,7 @@ async function renderMuhasebe(){
   }).join('');
   box.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px">
-      <div class="kpi"><div class="kpi-label">📄 Toplam Fatura</div><div class="kpi-val">${fmtTL(totFatura)}</div><div class="kpi-sub">${all.length} kayıt</div></div>
+      <div class="kpi"><div class="kpi-label">📄 Toplam Fatura</div><div class="kpi-val">${fmtTL(totFatura)}</div><div class="kpi-sub">${faturalar.length} kayıt</div></div>
       <div class="kpi ok"><div class="kpi-label">✓ Ödenen</div><div class="kpi-val g">${fmtTL(totOdenen)}</div></div>
       <div class="kpi err"><div class="kpi-label">⏳ Bekleyen</div><div class="kpi-val r">${fmtTL(totBekleyen)}</div></div>
       <div class="kpi"><div class="kpi-label">Bu Ay KDV</div><div class="kpi-val">${fmtTL(ayKDV)}</div><div class="kpi-sub">${thisMonth}</div></div>
@@ -2646,7 +2646,7 @@ async function renderMuhasebe(){
         <strong style="font-size:14px;color:var(--p)">📄 Faturalar (son 100)</strong>
         <small style="color:var(--m)">Ödedim butonu ile ödeme durumunu değiştir</small>
       </div>
-      ${all.length === 0 ? '<div style="padding:30px;text-align:center;color:var(--m)">Henüz fatura kaydı yok. Satın Alma → Teslimat girildiğinde burada görünür.</div>' : `
+      ${faturalar.length === 0 ? '<div style="padding:30px;text-align:center;color:var(--m)">Henüz fatura kaydı yok. Satın Alma → Teslimat girildiğinde burada görünür.</div>' : `
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0"><th style="padding:8px;text-align:left">Tarih</th><th style="padding:8px;text-align:left">Fatura No</th><th style="padding:8px;text-align:left">Proje</th><th style="padding:8px;text-align:left">Tedarikçi</th><th style="padding:8px;text-align:right">Toplam Tutar</th><th style="padding:8px;text-align:center">Durum</th><th style="padding:8px;text-align:center">İşlem</th></tr></thead>
         <tbody>${rows}</tbody>
@@ -8054,7 +8054,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v197'; // Proje silme fix - .select() ile satır kontrolü, esnek no karşılaştırma, local liste temizle
+const APP_VERSION = 'v198'; // Muhasebe kritik bug fix (all is not defined → faturalar.length)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
