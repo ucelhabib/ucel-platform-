@@ -2368,14 +2368,14 @@ function renderOverviewUnit(){
       <div class="kpi"><div class="kpi-label">🔧 Üretim Birimi</div><div class="kpi-val">${tasks.filter(t=>t.dept==='uretim'&&!t.done).length}</div><div class="kpi-sub">Açık iş</div></div>
       <div class="kpi"><div class="kpi-label">📦 Stok</div><div class="kpi-val">${stockItems.length}</div><div class="kpi-sub">Kalem</div></div>
       <div class="kpi ok"><div class="kpi-label">✅ Tamamlanan</div><div class="kpi-val g">${myDone}</div><div class="kpi-sub">Görevler</div></div>`;
-    extraButton = `<button class="btn" style="font-size:15px;padding:12px 22px;margin:6px 0 14px" onclick="goto('mytasks')">📋 Görevlerimi Aç</button>`;
+    extraButton = ''; // v199: Görevlerim menüsü kaldırıldı (v187)
   } else if(me.role === 'montaj'){
     kpis = `
       <div class="kpi ${myOpen.length>0?'err':''}"><div class="kpi-label">🏗️ Saha Görevlerim</div><div class="kpi-val ${myOpen.length>0?'r':''}">${myOpen.length}</div><div class="kpi-sub">${myOverdue.length} geciken</div></div>
       <div class="kpi"><div class="kpi-label">📸 Saha Raporları</div><div class="kpi-val">${(siteReports||[]).length}</div><div class="kpi-sub">Toplam</div></div>
       <div class="kpi ok"><div class="kpi-label">✅ Tamamlanan</div><div class="kpi-val g">${myDone}</div><div class="kpi-sub">İş</div></div>
       <div class="kpi w"><div class="kpi-label">📁 Aktif Projeler</div><div class="kpi-val">${myActiveProjects.length}</div><div class="kpi-sub">Bana ait</div></div>`;
-    extraButton = `<button class="btn" style="font-size:15px;padding:12px 22px;margin:6px 0 14px" onclick="goto('site-reports')">📸 Saha Raporu Ekle</button>`;
+    extraButton = ''; // v199: Saha Raporları sayfası kaldırıldı (v187) — sohbete taşındı
   } else if(me.role === 'muhasebe'){
     const tamamlanan = projects.filter(p => p.stage === 'tamamlandi').length;
     const ttl = projects.reduce((s,p) => s + (+p.amount||0), 0);
@@ -8054,7 +8054,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v198'; // Muhasebe kritik bug fix (all is not defined → faturalar.length)
+const APP_VERSION = 'v199'; // Denetim düzeltmeleri: birim dashboard eski butonlar temizlendi + Supabase RLS 21 policy optimize
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
