@@ -5149,7 +5149,15 @@ function printProcurement(){
       <td class="lft"><b>${esc(it.malzeme)}</b>${it.ebat?` <small>(${esc(it.ebat)})</small>`:''}${_grupBadge}<br><small style="color:${_katBorder};font-weight:700;font-size:8pt">${esc(_katLabel)}</small></td>
       <td><b style="color:#1f4e8c">${_fmt(_ihtiyac)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small></td>
       <td>${_stokDusum>0?`<b style="color:#0a7">${_fmt(_stokDusum)}</b><br><small style="font-size:8pt;color:#888">${esc(it.birim)}</small>`:'<span style="color:#bbb">—</span>'}</td>
-      <td><b>${_fmt(_siparis)} ${esc(it.birim)}</b>${_yuvarlama>0.01?`<br><small style="color:#0a7;font-size:8pt;font-weight:600">+${_fmt(_yuvarlama)} stoğa</small>`:''}</td>
+      <td><b>${_fmt(_siparis)} ${esc(it.birim)}</b>${(() => {
+        // v202: Detaylı Rapor - cıvata/pul/somun/sarf için "+X fire fazlası" (turuncu), diğerleri "+X stoğa" (yeşil)
+        if(_yuvarlama <= 0.01) return '';
+        const _ad = (it.malzeme||'').toLocaleUpperCase('tr-TR');
+        const _isCivataGrubu = ['civata','sarf'].includes(it.proc_kategori||'') || /CIVATA|CİVATA|SOMUN|PUL|RONDELA|VIDA|VİDA/.test(_ad);
+        return _isCivataGrubu
+          ? `<br><small style="color:#b45309;font-size:8pt;font-weight:600">+${_fmt(_yuvarlama)} fire fazlası</small>`
+          : `<br><small style="color:#0a7;font-size:8pt;font-weight:600">+${_fmt(_yuvarlama)} stoğa</small>`;
+      })()}</td>
       <td><b style="color:#b91c1c">${c.projeKg>0?_fmt(c.projeKg)+' kg':'—'}</b>${g.stokDusum>0?`<br><small style="color:#0a7c3a;font-size:8pt;font-weight:600">stok: ${_fmt(c.stokKg||(c.projeKg-c.toplamKg))} kg</small>`:''}</td>
       <td>${fmtTL(it.birim_fiyat)}/${c.fiyatBirimi==='kg'?'kg':esc(it.birim)}</td>
       <td>${fmtTL(c.tutar)}</td>
@@ -8062,7 +8070,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v201'; // Cıvata/pul/somun/sarf için "+X fire fazlası" etiketi (turuncu) — stoğa değil, anlamı net
+const APP_VERSION = 'v202'; // Detaylı Rapor'da da cıvata/pul/somun/sarf için "+X fire fazlası" etiketi (turuncu)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
