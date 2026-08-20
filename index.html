@@ -3490,11 +3490,13 @@ function renderProcList(){
         <div style="text-align:right;color:#1f4e8c;font-weight:700;line-height:1.4">${fmt(ihtiyac)}<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} ihtiyaç</small></div>
         <div style="text-align:right;color:#0a7;font-weight:700;line-height:1.4">${stokDusum>0?fmt(stokDusum):'<span style="color:#bbb;font-weight:400">—</span>'}${stokDusum>0?`<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} stoktan</small>`:''}</div>
         <div style="text-align:right;font-weight:700;line-height:1.4">${fmt(siparis)} ${esc(it.birim)}${(() => {
-          // v200: Cıvata/pul/somun/sarf için "+X" etiketi gizle — fire zaten sipariş miktarına dahil, yanıltıcıydı
+          // v201: Cıvata/pul/somun/sarf için "+X fire fazlası" (turuncu, stoğa değil), diğerleri için "+X stoğa"
+          if(yuvarlama <= 0.01) return '';
           const _ad = (it.malzeme||'').toLocaleUpperCase('tr-TR');
           const _isCivataGrubu = ['civata','sarf'].includes(it.proc_kategori||'') || /CIVATA|CİVATA|SOMUN|PUL|RONDELA|VIDA|VİDA/.test(_ad);
-          if(_isCivataGrubu) return '';
-          return yuvarlama>0.01 ? `<br><small style="color:#0a7;font-size:10px;font-weight:700">+${fmt(yuvarlama)} stoğa</small>` : '';
+          return _isCivataGrubu
+            ? `<br><small style="color:#b45309;font-size:10px;font-weight:700">+${fmt(yuvarlama)} fire fazlası</small>`
+            : `<br><small style="color:#0a7;font-size:10px;font-weight:700">+${fmt(yuvarlama)} stoğa</small>`;
         })()}</div>
         <div style="text-align:right;font-weight:700;color:#b91c1c;line-height:1.4" title="${c.stokDusum>0?'Proje toplam ağırlığı: sipariş + stok':'Toplam ağırlık'}">${c.projeKg>0?fmt(c.projeKg)+' <small style=\"color:#888;font-weight:400;font-size:10px\">kg</small>'+(c.stokDusum>0?`<br><small style=\"color:#0a7c3a;font-weight:500;font-size:9.5px\">sip ${fmt(c.toplamKg)} + stok ${fmt(c.stokKg||(c.projeKg-c.toplamKg))} kg</small>`:''):'<span style=\"color:#bbb;font-weight:400\">—</span>'}</div>
         ${priceCells}
@@ -8060,7 +8062,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v200'; // Cıvata/pul/somun/sarf için "+X stoğa" etiketi kaldırıldı (fire zaten miktara dahil, yanıltıcıydı)
+const APP_VERSION = 'v201'; // Cıvata/pul/somun/sarf için "+X fire fazlası" etiketi (turuncu) — stoğa değil, anlamı net
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
