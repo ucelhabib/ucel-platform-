@@ -2218,6 +2218,34 @@ function _renderDashboardCharts(activeProjects){
   }
   // v183: Sistem uyarıları — eksik/aksayan projeler
   try { renderSysAlerts(); } catch(e){ console.warn('sysAlerts:', e); }
+  try { checkPhaseDeadlines(); } catch(e){ console.warn('deadline:', e); }
+}
+
+// v203: Deadline hatırlatma zinciri — 7/3/1 gün önce sorumluya, geçti+bitmedi durumunda yöneticiye
+async function checkPhaseDeadlines(){
+  if(!projects || !me) return;
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  for(const p of projects){
+    if(p.stage === 'tamamlandi') continue;
+    const dates = p.phase_dates || {};
+    for(const [phase, dateStr] of Object.entries(dates)){
+      if(!dateStr) continue;
+      const target = new Date(dateStr + 'T00:00:00');
+      const diffDays = Math.floor((target - today) / 86400000);
+      const pct = +((p.phases||{})[phase] || 0);
+      if(pct >= 100) continue;
+      const projLabel = `${p.no} · ${p.customer||''}`.trim();
+      if([7, 3, 1].includes(diffDays)){
+        const role = Object.keys(PHASE_ROLE_MAP || {}).find(r => (PHASE_ROLE_MAP[r]||[]).includes(phase));
+        if(role){
+          try { await notify(`⏰ ${projLabel} · ${DN[phase]||phase} son ${diffDays} gün — bitmedi (%${pct})`, '⏰', role, 'project', p.id); } catch(e){}
+        }
+      } else if(diffDays < 0){
+        try { await notify(`🔴 ${projLabel} · ${DN[phase]||phase} tarihi ${-diffDays} gün önce geçti — bitmedi (%${pct})`, '🔴', 'yonetici', 'project', p.id); } catch(e){}
+      }
+    }
+  }
 }
 
 // v183: Yönetici Uyarı Sistemi — proje/görev bazlı eksiklikleri, gecikmeleri, aksaklıkları tespit et
@@ -6674,6 +6702,13 @@ async function updatePhase(projectId, phase, value, inputEl){
         if(nextRole){
           await notify(`👉 "${projLabel}" sırası sende: ${DN[nextPhase]||nextPhase} (önceki faz tamamlandı)`, '👉', nextRole, 'project', projectId);
         }
+        // v203: Otomatik faz geçişi — proje ana aşamasını sonraki faza al (proj.stage), sonraki faz sorumlusunun ekranı canlansın
+        try {
+          if((proj.stages || []).includes(nextPhase) || !proj.stages || proj.stages.length === 0){
+            await sb.from('projects').update({stage: nextPhase, updated_at: new Date().toISOString()}).eq('id', projectId);
+            proj.stage = nextPhase;
+          }
+        } catch(e){ console.warn('otomatik faz geçiş:', e); }
       }
     } else if(v !== prev){
       await notify(`📊 ${me.full_name} "${projLabel}" / ${DN[phase]||phase}: %${prev} → %${v}`, '📊', 'yonetici', 'project', projectId);
@@ -8070,7 +8105,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v202'; // Detaylı Rapor'da da cıvata/pul/somun/sarf için "+X fire fazlası" etiketi (turuncu)
+const APP_VERSION = 'v203'; // Otomatik faz geçişi (%100 → sonraki) + Deadline hatırlatma zinciri (7/3/1 gün önce)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
