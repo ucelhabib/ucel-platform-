@@ -684,13 +684,15 @@ body.proc-fullscreen{overflow:hidden}
 
       <div class="page" id="page-chat">
         <div class="page-h">
-          <div><div class="page-title">💬 Genel Sohbet</div><div class="page-sub">Tüm ekip — birimler arası durum değerlendirmesi</div></div>
+          <div><div class="page-title" id="chatTitle">💬 Sohbet</div><div class="page-sub" id="chatSub">Tüm ekip — birimler arası</div></div>
           <div style="display:flex;gap:6px">
             <button class="btn sec" onclick="testNotifSound()" title="Bildirim sesini test et">🔊 Ses Testi</button>
             <button class="btn sec" onclick="renderChat()">↻ Yenile</button>
           </div>
         </div>
-        <div class="chat-container" style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);display:flex;flex-direction:column;height:calc(100vh - 200px);min-height:400px">
+        <!-- v205: Genel + Özel mesaj sekmeleri -->
+        <div id="chatTabs" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;padding:0 4px"></div>
+        <div class="chat-container" style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);display:flex;flex-direction:column;height:calc(100vh - 240px);min-height:400px">
           <div id="chatList" style="flex:1;overflow-y:auto;padding:16px 18px"></div>
           <div id="chatAttachPreview" style="display:none;padding:6px 14px;border-top:1px solid var(--bd);background:#fff7e0;font-size:12px"></div>
           <div style="padding:10px 14px;border-top:1px solid var(--bd);background:#fafbfd;display:flex;gap:8px;align-items:center">
@@ -3046,13 +3048,69 @@ async function loadChat(){
   renderChat();
   updateChatBadge();
 }
+// v205: Özel mesaj — aktif sohbet: 'general' veya user_id
+let _chatActive = 'general';
+function setChatActive(id){
+  _chatActive = id;
+  markChatSeen();
+  renderChat();
+  setTimeout(()=>document.getElementById('chatInput')?.focus(),50);
+}
+function renderChatTabs(){
+  const el = document.getElementById('chatTabs');
+  if(!el || !me) return;
+  const now = Date.now();
+  // Her kullanıcı için okunmamış özel mesaj sayısı
+  const dmUnread = new Map();
+  (chatMessages || []).forEach(m => {
+    if(m.recipient_id === me.id && m.sender_id !== me.id){
+      const seen = +(localStorage.getItem('chatDmSeen_'+m.sender_id) || 0);
+      if(new Date(m.created_at).getTime() > seen){
+        dmUnread.set(m.sender_id, (dmUnread.get(m.sender_id) || 0) + 1);
+      }
+    }
+  });
+  // Genel unread
+  const gSeen = +(localStorage.getItem('chatGeneralSeen') || 0);
+  const gUnread = (chatMessages || []).filter(m => !m.recipient_id && m.sender_id !== me.id && new Date(m.created_at).getTime() > gSeen).length;
+  const genActive = _chatActive === 'general';
+  let html = `<button onclick="setChatActive('general')" style="background:${genActive?'#1f4e8c':'#eef2f7'};color:${genActive?'#fff':'#374151'};border:0;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px">💬 Genel${gUnread>0?` <span style="background:#dc2626;color:#fff;padding:1px 6px;border-radius:10px;font-size:10px">${gUnread}</span>`:''}</button>`;
+  // Kullanıcı listesi — mevcut profiller
+  const others = Object.values(allProfiles || {}).filter(u => u && u.id !== me.id).sort((a,b)=>String(a.full_name||'').localeCompare(String(b.full_name||''),'tr'));
+  html += others.map(u => {
+    const active = _chatActive === u.id;
+    const un = dmUnread.get(u.id) || 0;
+    return `<button onclick="setChatActive('${u.id}')" style="background:${active?u.color||'#1f4e8c':'#eef2f7'};color:${active?'#fff':'#374151'};border:0;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px" title="${esc(u.full_name||'')}"><span style="width:18px;height:18px;border-radius:50%;background:${u.color};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800">${esc(u.initials||'?')}</span> ${esc((u.full_name||'').split(' ')[0]||'?')}${un>0?` <span style="background:#dc2626;color:#fff;padding:1px 6px;border-radius:10px;font-size:10px">${un}</span>`:''}</button>`;
+  }).join('');
+  el.innerHTML = html;
+  // Başlığı güncelle
+  const t = document.getElementById('chatTitle');
+  const s = document.getElementById('chatSub');
+  if(_chatActive === 'general'){
+    if(t) t.textContent = '💬 Genel Sohbet';
+    if(s) s.textContent = 'Tüm ekip — birimler arası durum değerlendirmesi';
+  } else {
+    const u = allProfiles[_chatActive];
+    if(t) t.textContent = '👤 ' + (u?.full_name || 'Kullanıcı');
+    if(s) s.textContent = 'Özel mesaj — sadece siz ikiniz görürsünüz';
+  }
+}
+function _filterChatByActive(msgs){
+  if(_chatActive === 'general') return msgs.filter(m => !m.recipient_id);
+  return msgs.filter(m => m.recipient_id && (
+    (m.sender_id === me.id && m.recipient_id === _chatActive) ||
+    (m.sender_id === _chatActive && m.recipient_id === me.id)
+  ));
+}
 function renderChat(){
+  renderChatTabs();
   const el = document.getElementById('chatList'); if(!el) return;
-  if(chatMessages.length === 0){
-    el.innerHTML = '<div style="text-align:center;color:var(--m);padding:30px">Henüz mesaj yok. İlk mesajı sen yaz.</div>';
+  const filtered = _filterChatByActive(chatMessages || []);
+  if(filtered.length === 0){
+    el.innerHTML = `<div style="text-align:center;color:var(--m);padding:30px">${_chatActive==='general'?'Henüz mesaj yok. İlk mesajı sen yaz.':'Bu kişiyle henüz mesajlaşmadınız. İlk mesajı sen yaz.'}</div>`;
     return;
   }
-  el.innerHTML = chatMessages.map(m=>{
+  el.innerHTML = filtered.map(m=>{
     const u = allProfiles[m.sender_id] || {full_name:'?',initials:'?',color:'#999',label:''};
     const isMe = m.sender_id === me?.id;
     const t = new Date(m.created_at);
@@ -3129,11 +3187,19 @@ async function sendChat(){
   }
   // CHECK constraint: text en az 1 karakter olmalı — dosya varsa varsayılan text kullan
   if(!txt && file){ txt = `📎 ${attachment_name || 'dosya'}`; }
-  const {error} = await sb.from('messages').insert({sender_id: me.id, text: txt, attachment_url, attachment_name, attachment_type});
+  // v205: Özel mesaj (recipient_id) veya genel
+  const recipient_id = (_chatActive && _chatActive !== 'general') ? _chatActive : null;
+  const {error} = await sb.from('messages').insert({sender_id: me.id, text: txt, attachment_url, attachment_name, attachment_type, recipient_id});
   if(error){toast('Mesaj gönderilemedi: '+errTr(error),'err');input.value = txt;return}
   try {
     const preview = attachment_url ? `📎 ${attachment_name||'dosya'} ${txt?'· '+txt:''}` : txt;
-    await notify(`💬 ${me.full_name}: ${preview.length>80?preview.slice(0,80)+'...':preview}`, '💬', 'system');
+    if(recipient_id){
+      // Özel mesaj — sadece alıcıya bildirim
+      const u = allProfiles[recipient_id];
+      await notify(`💬 ${me.full_name} sana özel mesaj: ${preview.length>60?preview.slice(0,60)+'...':preview}`, '💬', (u?.role || 'system'), 'chat_dm', me.id);
+    } else {
+      await notify(`💬 ${me.full_name}: ${preview.length>80?preview.slice(0,80)+'...':preview}`, '💬', 'system');
+    }
   } catch(e){}
 }
 function updateChatBadge(){
@@ -3146,8 +3212,15 @@ function updateChatBadge(){
   _updateAppBadge();
 }
 function markChatSeen(){
-  chatLastSeenAt = Date.now();
-  localStorage.setItem('chatLastSeen', String(chatLastSeenAt));
+  const now = Date.now();
+  chatLastSeenAt = now;
+  localStorage.setItem('chatLastSeen', String(now));
+  // v205: Aktif sekmeye göre ayrı seen kaydı
+  if(_chatActive === 'general'){
+    localStorage.setItem('chatGeneralSeen', String(now));
+  } else if(_chatActive){
+    localStorage.setItem('chatDmSeen_'+_chatActive, String(now));
+  }
   updateChatBadge();
 }
 
@@ -8130,7 +8203,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v204'; // Dikkat Edilecekler'e yoksay butonu (7 gün TTL, localStorage) + geri getir
+const APP_VERSION = 'v205'; // Özel mesaj (DM) — sohbete sekmeler (Genel + kişi bazlı), okunmadı sayacı
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
