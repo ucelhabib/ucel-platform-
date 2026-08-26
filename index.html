@@ -2291,6 +2291,39 @@ function _renderDashboardCharts(activeProjects){
   // v183: Sistem uyarıları — eksik/aksayan projeler
   try { renderSysAlerts(); } catch(e){ console.warn('sysAlerts:', e); }
   try { checkPhaseDeadlines(); } catch(e){ console.warn('deadline:', e); }
+  try { checkSocialDeadlines(); } catch(e){ console.warn('socialDeadline:', e); }
+}
+
+// v207: Sosyal medya postları için hatırlatma zinciri
+async function checkSocialDeadlines(){
+  if(me?.role !== 'yonetici') return;
+  // Sosyal post verisi henüz yüklenmediyse çekelim (arka planda)
+  if(!socialPosts || socialPosts.length === 0){
+    try {
+      const { data } = await sb.from('social_posts').select('*').in('status', ['draft','approved']).limit(200);
+      if(data) socialPosts = data;
+    } catch(e){ return; }
+  }
+  const now = new Date();
+  for(const p of (socialPosts || [])){
+    if(p.status === 'published' || p.status === 'rejected') continue;
+    const platLabel = (PLATFORM_LABEL[p.platform] || p.platform);
+    if(p.scheduled_for){
+      const target = new Date(p.scheduled_for);
+      const diffHours = Math.floor((target - now) / 3600000);
+      if(diffHours >= 0 && diffHours <= 24 && p.status === 'draft'){
+        try { await notify(`⏰ ${platLabel} postu ${diffHours}s içinde yayınlanmalı — hâlâ TASLAK`, '📱', 'yonetici', 'social_post', p.id); } catch(e){}
+      } else if(diffHours < 0 && p.status !== 'published'){
+        try { await notify(`🔴 ${platLabel} postu planlanan tarih ${-diffHours}s önce geçti — hâlâ ${p.status}`, '📱', 'yonetici', 'social_post', p.id); } catch(e){}
+      }
+    }
+    if(p.status === 'approved'){
+      const daysAgo = Math.floor((now - new Date(p.updated_at)) / 86400000);
+      if(daysAgo >= 3){
+        try { await notify(`📤 ${platLabel} postu ${daysAgo} gündür onaylı, henüz yayınlanmadı`, '📱', 'yonetici', 'social_post', p.id); } catch(e){}
+      }
+    }
+  }
 }
 
 // v203: Deadline hatırlatma zinciri — 7/3/1 gün önce sorumluya, geçti+bitmedi durumunda yöneticiye
@@ -2383,6 +2416,26 @@ function getSystemAlerts(){
       alerts.push({sev:'warn', pid:t.project_id, plabel:pLabel, tip:'gorev_gec', msg:`📋 "${t.title}" görevi ${diffDays} gün geçti (${DN[t.dept]||t.dept})`});
     }
   });
+  // v207: Sosyal medya post uyarıları
+  (socialPosts || []).forEach(p => {
+    if(p.status === 'published' || p.status === 'rejected') return;
+    const plabel = `📱 ${(PLATFORM_LABEL||{})[p.platform] || p.platform}`;
+    if(p.scheduled_for){
+      const target = new Date(p.scheduled_for);
+      const diffH = Math.floor((target - now) / 3600000);
+      if(diffH < 0 && p.status !== 'published'){
+        alerts.push({sev:'crit', pid:p.id, plabel, tip:'social_gec', msg:`🔴 Planlanan yayın tarihi ${-diffH}s önce geçti — ${p.status}`});
+      } else if(diffH >= 0 && diffH <= 24 && p.status === 'draft'){
+        alerts.push({sev:'warn', pid:p.id, plabel, tip:'social_yakin', msg:`⏰ ${diffH}s içinde yayınlanmalı — hâlâ taslak`});
+      }
+    }
+    if(p.status === 'approved'){
+      const daysAgo = Math.floor((now - new Date(p.updated_at)) / 86400000);
+      if(daysAgo >= 3){
+        alerts.push({sev:'warn', pid:p.id, plabel, tip:'social_bekli', msg:`📤 ${daysAgo} gündür onaylı, yayınlanmadı`});
+      }
+    }
+  });
   // Severity + proje no'ya göre sırala
   const sevOrder = {crit:0, warn:1, info:2};
   alerts.sort((a,b) => (sevOrder[a.sev]-sevOrder[b.sev]) || (a.plabel||'').localeCompare(b.plabel||''));
@@ -2429,7 +2482,7 @@ function renderSysAlerts(){
     const border = a.sev === 'crit' ? '#dc2626' : (a.sev === 'warn' ? '#f59e0b' : '#94a3b8');
     return `<div style="padding:10px 14px;border-bottom:1px solid #eef1f5;background:${bg};display:flex;align-items:center;gap:10px">
       <div style="width:4px;height:36px;background:${border};border-radius:2px;flex-shrink:0"></div>
-      <div style="flex:1;min-width:0;cursor:pointer" onclick="openProj('${a.pid}')" title="Projeyi aç">
+      <div style="flex:1;min-width:0;cursor:pointer" onclick="${a.tip && a.tip.startsWith('social_') ? `openSocialPost('${a.pid}')` : `openProj('${a.pid}')`}" title="Aç">
         <div style="font-weight:700;color:#1f2937;font-size:12px;margin-bottom:2px">${esc(a.plabel)}</div>
         <div style="font-size:13px;color:#374151">${a.msg}</div>
       </div>
@@ -8472,7 +8525,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v206'; // Sosyal Medya modülü (Instagram/Facebook/LinkedIn/YouTube/X) — post arşivi + onay akışı, sadece yönetici
+const APP_VERSION = 'v207'; // Sosyal medya post hatırlatma zinciri + Dikkat Edilecekler paneline entegrasyon
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
