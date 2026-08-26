@@ -3524,7 +3524,6 @@ function openSocialAccounts(){
     const a = socialAccounts.find(x => x.platform === pl) || {platform: pl};
     return `<div class="frow"><label>${PLATFORM_LABEL[pl]}</label>
       <input id="sa-url-${pl}" placeholder="Profil URL (https://...)" value="${esc(a.profile_url||'')}">
-      <input id="sa-handle-${pl}" placeholder="Kullanıcı adı (@kurum)" value="${esc(a.handle||'')}" style="margin-top:4px">
     </div>`;
   }).join('');
   document.getElementById('socialAccountsModal').classList.add('show');
@@ -3535,7 +3534,6 @@ async function saveSocialAccounts(){
   const rows = platforms.map(pl => ({
     platform: pl,
     profile_url: document.getElementById('sa-url-'+pl).value.trim() || null,
-    handle: document.getElementById('sa-handle-'+pl).value.trim() || null,
     updated_by: me.id,
     updated_at: new Date().toISOString()
   }));
@@ -8525,7 +8523,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v207'; // Sosyal medya post hatırlatma zinciri + Dikkat Edilecekler paneline entegrasyon
+const APP_VERSION = 'v208'; // Sosyal medya hesap modalında kullanıcı adı alanı kaldırıldı (URL yeterli)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
