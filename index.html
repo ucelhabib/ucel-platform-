@@ -746,7 +746,9 @@ body.proc-fullscreen{overflow:hidden}
         <small id="sp-platform-hint" style="display:block;margin-top:4px;color:var(--m);font-size:11px"></small>
       </div>
       <div class="frow"><label>İçerik (metin / caption)</label>
-        <textarea id="sp-content" placeholder="Post metni, hashtag, mention..." style="min-height:120px"></textarea>
+        <textarea id="sp-content" placeholder="Post metni, hashtag, mention..." style="min-height:120px" oninput="_checkPostPrivacy()"></textarea>
+        <!-- v213: Gizlilik uyarısı — stratejik bilgi tespit edilirse gösterilir -->
+        <div id="sp-privacy-warn" style="display:none;margin-top:6px;padding:8px 10px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;font-size:11px;color:#991b1b"></div>
       </div>
       <div class="frow"><label>📎 Görsel/video ekle (opsiyonel — Instagram/Facebook için önerilir)</label>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -3477,6 +3479,38 @@ function _openPlatformAccount(){
   const a = (socialAccounts||[]).find(x => x.platform === p);
   if(a?.profile_url) window.open(a.profile_url, '_blank');
   else { toast('Bu platform için hesap URL kayıtlı değil — Hesaplar bölümünden ekle', 'info'); openSocialAccounts(); }
+}
+
+// v213: Gizlilik guard — post metninde stratejik bilgi (müşteri/proje no/tonaj) tespit et
+function _checkPostPrivacy(){
+  const el = document.getElementById('sp-content');
+  const warn = document.getElementById('sp-privacy-warn');
+  if(!el || !warn) return;
+  const txt = (el.value || '').toLocaleLowerCase('tr-TR');
+  const hits = [];
+  // Proje numarası pattern: 2024-XXX, 2025-XXX gibi
+  if(/(20\d{2}[-\/]\d{2,3})/i.test(el.value)) hits.push('proje no (örn 2026-045)');
+  // Müşteri adları — mevcut projelerden distinct customer'lar
+  const customers = [...new Set((projects || []).map(p => (p.customer||'').trim()).filter(Boolean))];
+  const foundCustomers = customers.filter(c => c.length > 3 && txt.includes(c.toLocaleLowerCase('tr-TR')));
+  if(foundCustomers.length > 0) hits.push('müşteri adı: ' + foundCustomers.join(', '));
+  // Tonaj rakamları: "5000 kg", "5.233 kg", "5233 ton"
+  if(/\d[\d.,]{2,}\s*(kg|ton|tonaj|tonluk)/i.test(el.value)) hits.push('tonaj bilgisi');
+  // Lokasyon (bilinen şehirler + kelime "konum" vs)
+  const cities = ['konya','ankara','istanbul','izmir','özbekistan','kazakistan','angola','ırak','irak','suudi'];
+  const foundCity = cities.filter(c => txt.includes(c));
+  if(foundCity.length > 0) hits.push('lokasyon: ' + foundCity.join(', '));
+  // Sevkiyat şekli
+  if(/konteyner|tır|damper|çekici|dorse|sevkiyat şekli/i.test(txt)) hits.push('sevkiyat bilgisi');
+  // Fatura tutarı
+  if(/\d[\d.,]{4,}\s*(tl|₺|dolar|\$|eur|€)/i.test(el.value)) hits.push('fiyat/tutar');
+  if(hits.length === 0){
+    warn.style.display = 'none';
+    warn.innerHTML = '';
+  } else {
+    warn.style.display = 'block';
+    warn.innerHTML = `⚠️ <strong>Rakip için stratejik bilgi tespit edildi:</strong> ${hits.join(' · ')}. B2B rekabet için bu bilgileri paylaşmaman önerilir.`;
+  }
 }
 
 // v212: Kolay paylaşım - metin kopyala
@@ -8831,7 +8865,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v212'; // Kolay paylaşım - metin kopyala + medya indir + platform intent (X/LinkedIn/Facebook otomatik metin)
+const APP_VERSION = 'v213'; // Gizlilik guard - post metninde proje no/müşteri/tonaj/lokasyon/sevkiyat/fiyat tespiti + uyarı
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
