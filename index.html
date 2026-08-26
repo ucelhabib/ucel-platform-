@@ -403,6 +403,8 @@ body.proc-fullscreen{overflow:hidden}
           Fevzi Çakmak Mah. Loras Cad. No:5/I-J-K · Karatay/KONYA<br>
           Tel: +90 332 345 15 99 · <a href="https://www.ucelmetal.net" style="color:#1f4e8c;text-decoration:none;font-weight:600">www.ucelmetal.net</a>
         </div>
+        <!-- v211: Login sosyal medya ikonları (URL kayıtlı olanlar) -->
+        <div id="loginSocialIcons" style="display:flex;justify-content:center;gap:10px;margin-top:8px"></div>
       </div>
     </div>
   </div>
@@ -718,6 +720,8 @@ body.proc-fullscreen{overflow:hidden}
             <button class="btn sec" onclick="loadSocial()">↻ Yenile</button>
           </div>
         </div>
+        <!-- v211: Hesap chip'leri (kayıtlı URL'lere hızlı erişim) -->
+        <div id="socialAccountChips" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap"></div>
         <div id="socialTabs" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap"></div>
         <div id="socialList"></div>
       </div>
@@ -755,8 +759,12 @@ body.proc-fullscreen{overflow:hidden}
       <div class="frow"><label>📅 Planlanan yayın tarihi (opsiyonel)</label>
         <input id="sp-scheduled" type="datetime-local">
       </div>
-      <div class="frow" id="sp-published-row" style="display:none"><label>🔗 Yayınlanan URL (paylaşımdan sonra)</label>
-        <input id="sp-published-url" placeholder="https://instagram.com/p/...">
+      <div class="frow" id="sp-published-row" style="display:none">
+        <label>🔗 Yayınlanan URL (paylaşımdan sonra)</label>
+        <div style="display:flex;gap:6px">
+          <input id="sp-published-url" placeholder="https://instagram.com/p/..." style="flex:1">
+          <button type="button" class="btn sec sm" id="sp-open-account" onclick="_openPlatformAccount()" style="white-space:nowrap">📱 Hesabıma git ↗</button>
+        </div>
       </div>
     </div>
     <div class="modal-f">
@@ -3396,7 +3404,20 @@ const PLATFORM_LABEL = {instagram:'📷 Instagram', facebook:'👤 Facebook', li
 const STATUS_LABEL = {draft:'📝 Taslak', approved:'✓ Onaylı', published:'📤 Yayında', rejected:'❌ Red'};
 const STATUS_COLOR = {draft:'#6b7280', approved:'#0a7', published:'#ff7a00', rejected:'#c33'};
 
+function renderSocialAccountChips(){
+  const el = document.getElementById('socialAccountChips'); if(!el) return;
+  const platforms = ['instagram','facebook','linkedin','youtube','x'];
+  el.innerHTML = platforms.map(pl => {
+    const a = (socialAccounts||[]).find(x => x.platform === pl);
+    const url = a?.profile_url;
+    if(!url){
+      return `<button onclick="openSocialAccounts()" style="background:#f3f4f6;color:#9ca3af;border:1px dashed #cbd5e1;padding:6px 12px;border-radius:20px;font-size:11px;cursor:pointer">${PLATFORM_LABEL[pl]} +</button>`;
+    }
+    return `<a href="${esc(url)}" target="_blank" rel="noopener" style="background:#eef4fb;color:#1f4e8c;border:1px solid #cfdbe7;padding:6px 12px;border-radius:20px;font-size:11px;text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px">${PLATFORM_LABEL[pl]} <span style="opacity:.5">↗</span></a>`;
+  }).join('');
+}
 function renderSocial(){
+  renderSocialAccountChips();
   const el = document.getElementById('socialList'); if(!el) return;
   const tabs = document.getElementById('socialTabs');
   if(tabs){
@@ -3443,6 +3464,12 @@ function _updatePlatformHint(){
   const p = document.getElementById('sp-platform')?.value || 'instagram';
   const el = document.getElementById('sp-platform-hint');
   if(el) el.textContent = PLATFORM_HINT[p] || '';
+}
+function _openPlatformAccount(){
+  const p = document.getElementById('sp-platform')?.value;
+  const a = (socialAccounts||[]).find(x => x.platform === p);
+  if(a?.profile_url) window.open(a.profile_url, '_blank');
+  else { toast('Bu platform için hesap URL kayıtlı değil — Hesaplar bölümünden ekle', 'info'); openSocialAccounts(); }
 }
 function openSocialPost(id){
   _spEditingId = id || null;
@@ -8632,6 +8659,19 @@ document.getElementById('tModal').addEventListener('click',e=>{if(e.target.id===
 document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 document.getElementById('lu').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('lp').focus()});
 
+// v211: Login sayfasında sosyal medya ikonları
+(async function _loadLoginSocial(){
+  try {
+    const { data } = await sb.from('social_accounts').select('platform, profile_url');
+    const el = document.getElementById('loginSocialIcons');
+    if(!el || !data) return;
+    const ICON = {instagram:'📷', facebook:'👤', linkedin:'💼', youtube:'▶️', x:'✖️'};
+    el.innerHTML = data.filter(a => a.profile_url).map(a =>
+      `<a href="${a.profile_url}" target="_blank" title="${a.platform}" style="font-size:20px;text-decoration:none;opacity:.7;transition:opacity .2s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">${ICON[a.platform]||'🔗'}</a>`
+    ).join('');
+  } catch(e){}
+})();
+
 // Auto-resume session (localStorage'dan token okur, gerekirse refresh eder)
 window.addEventListener('DOMContentLoaded',async()=>{
   try {
@@ -8722,7 +8762,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v210'; // Client-side görsel optimizasyon (max 1920px, JPEG %85) + platforma göre boyut önerisi
+const APP_VERSION = 'v211'; // Hesap URL'leri artık işlevsel - sayfa chip'leri, post modalında hızlı git, login ikonları
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
