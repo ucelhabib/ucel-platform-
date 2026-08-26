@@ -447,6 +447,8 @@ body.proc-fullscreen{overflow:hidden}
       <div class="sidebar-item" data-page="d-muhasebe" data-perm="yonetici,muhasebe" onclick="goto('d-muhasebe')"><span class="ico">💰</span> Muhasebe</div>
       <div class="sidebar-section">İletişim</div>
       <div class="sidebar-item" data-page="chat" onclick="goto('chat')"><span class="ico">💬</span> Sohbet <span class="badge" id="chatBadge" style="display:none;background:#0a7;color:#fff;min-width:18px;padding:0 6px;border-radius:9px;font-size:11px"></span></div>
+      <!-- v206: Sosyal Medya (sadece yönetici) -->
+      <div class="sidebar-item" data-page="social" data-perm="yonetici" onclick="goto('social')"><span class="ico">📱</span> Sosyal Medya</div>
       <!-- v187: Saha Raporları menüden kaldırıldı — sohbet + foto zaten aynı işi yapıyor -->
       <div class="sidebar-section">Yönetim</div>
       <!-- v187: Ekip menüsü Ayarlar altına birleştirildi -->
@@ -704,7 +706,74 @@ body.proc-fullscreen{overflow:hidden}
           </div>
         </div>
       </div>
+
+      <!-- v206: Sosyal Medya Sayfası -->
+      <div class="page" id="page-social">
+        <div class="page-h">
+          <div><div class="page-title">📱 Sosyal Medya</div><div class="page-sub">Post arşivi + onay akışı — sadece yönetici</div></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn" onclick="openSocialPost()">+ Yeni Post</button>
+            <button class="btn sec" onclick="openSocialAccounts()">🔗 Hesaplar</button>
+            <button class="btn sec" onclick="loadSocial()">↻ Yenile</button>
+          </div>
+        </div>
+        <div id="socialTabs" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap"></div>
+        <div id="socialList"></div>
+      </div>
     </main>
+  </div>
+</div>
+
+<!-- v206: Sosyal Medya post modalı -->
+<div class="modal-bg" id="socialPostModal">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-h"><h3 id="spTitle">➕ Yeni Sosyal Medya Postu</h3><button class="x" onclick="closeSocialPost()">✕</button></div>
+    <div class="modal-b">
+      <div class="frow"><label>Platform</label>
+        <select id="sp-platform">
+          <option value="instagram">📷 Instagram</option>
+          <option value="facebook">👤 Facebook</option>
+          <option value="linkedin">💼 LinkedIn</option>
+          <option value="youtube">▶️ YouTube</option>
+          <option value="x">✖️ X (Twitter)</option>
+        </select>
+      </div>
+      <div class="frow"><label>İçerik (metin / caption)</label>
+        <textarea id="sp-content" placeholder="Post metni, hashtag, mention..." style="min-height:120px"></textarea>
+      </div>
+      <div class="frow"><label>📎 Görsel/video ekle (opsiyonel — Instagram/Facebook için önerilir)</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label class="btn sec sm" style="cursor:pointer">📎 Dosya seç<input type="file" id="sp-file" multiple accept="image/*,video/*" style="display:none" onchange="onSocialFilePick(this)"></label>
+          <div id="sp-file-list" style="font-size:11px;color:var(--m)"></div>
+        </div>
+        <div id="sp-uploaded" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+      <div class="frow"><label>📅 Planlanan yayın tarihi (opsiyonel)</label>
+        <input id="sp-scheduled" type="datetime-local">
+      </div>
+      <div class="frow" id="sp-published-row" style="display:none"><label>🔗 Yayınlanan URL (paylaşımdan sonra)</label>
+        <input id="sp-published-url" placeholder="https://instagram.com/p/...">
+      </div>
+    </div>
+    <div class="modal-f">
+      <button class="btn sec" id="sp-del" onclick="deleteSocialPost()" style="display:none;background:#c33;color:#fff">🗑 Sil</button>
+      <button class="btn sec" onclick="closeSocialPost()">Vazgeç</button>
+      <button class="btn" onclick="saveSocialPost('draft')">💾 Taslak Kaydet</button>
+      <button class="btn" id="sp-approve" onclick="saveSocialPost('approved')" style="background:#0a7">✓ Onayla</button>
+      <button class="btn" id="sp-publish" onclick="markSocialPublished()" style="background:#ff7a00;display:none">📤 Yayınlandı</button>
+    </div>
+  </div>
+</div>
+
+<!-- v206: Sosyal Medya hesap linkleri modalı -->
+<div class="modal-bg" id="socialAccountsModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-h"><h3>🔗 Sosyal Medya Hesap Linkleri</h3><button class="x" onclick="closeSocialAccounts()">✕</button></div>
+    <div class="modal-b" id="socialAccountsBody"></div>
+    <div class="modal-f">
+      <button class="btn sec" onclick="closeSocialAccounts()">Vazgeç</button>
+      <button class="btn" onclick="saveSocialAccounts()">💾 Kaydet</button>
+    </div>
   </div>
 </div>
 
@@ -1836,6 +1905,7 @@ function goto(id){
   if(id==='team')renderTeam();
   if(id==='settings')renderSettings();
   if(id==='chat'){renderChat();markChatSeen();setTimeout(()=>document.getElementById('chatInput')?.focus(),100)}
+  if(id==='social'){ loadSocial(); }
   if(id==='site-reports'){renderSiteReports()}
   if(id==='d-stok'){renderStockFiles();loadStockItems(); if(localStorage.getItem('stkOpen')==='1' && document.getElementById('stkBody')?.style.display!=='block') toggleStockList();}
   if(id.startsWith('d-'))renderDept(id.substring(2));
@@ -3222,6 +3292,205 @@ function markChatSeen(){
     localStorage.setItem('chatDmSeen_'+_chatActive, String(now));
   }
   updateChatBadge();
+}
+
+/* ============ v206: SOSYAL MEDYA MODÜLÜ ============ */
+let socialPosts = [];
+let socialAccounts = [];
+let _socialFilter = 'all'; // all, draft, approved, published, rejected
+let _spEditingId = null;
+let _spPendingMedia = []; // uploaded urls
+
+async function loadSocial(){
+  if(me?.role !== 'yonetici') return;
+  try {
+    const [p, a] = await Promise.all([
+      sb.from('social_posts').select('*').order('created_at', {ascending: false}).limit(500),
+      sb.from('social_accounts').select('*')
+    ]);
+    socialPosts = p.data || [];
+    socialAccounts = a.data || [];
+    renderSocial();
+  } catch(e){ console.error('loadSocial:', e); }
+}
+const PLATFORM_LABEL = {instagram:'📷 Instagram', facebook:'👤 Facebook', linkedin:'💼 LinkedIn', youtube:'▶️ YouTube', x:'✖️ X'};
+const STATUS_LABEL = {draft:'📝 Taslak', approved:'✓ Onaylı', published:'📤 Yayında', rejected:'❌ Red'};
+const STATUS_COLOR = {draft:'#6b7280', approved:'#0a7', published:'#ff7a00', rejected:'#c33'};
+
+function renderSocial(){
+  const el = document.getElementById('socialList'); if(!el) return;
+  const tabs = document.getElementById('socialTabs');
+  if(tabs){
+    const cnt = {all: socialPosts.length, draft:0, approved:0, published:0, rejected:0};
+    socialPosts.forEach(p => { if(cnt[p.status] !== undefined) cnt[p.status]++; });
+    const t = (k, l) => `<button onclick="_socialFilter='${k}';renderSocial()" style="background:${_socialFilter===k?'#1f4e8c':'#eef2f7'};color:${_socialFilter===k?'#fff':'#374151'};border:0;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">${l} <span style="background:rgba(0,0,0,.15);padding:1px 6px;border-radius:8px;font-size:10px">${cnt[k]}</span></button>`;
+    tabs.innerHTML = t('all','Tümü') + t('draft','📝 Taslak') + t('approved','✓ Onaylı') + t('published','📤 Yayında') + t('rejected','❌ Red');
+  }
+  const list = _socialFilter === 'all' ? socialPosts : socialPosts.filter(p => p.status === _socialFilter);
+  if(list.length === 0){
+    el.innerHTML = '<div style="background:#fff;padding:40px;text-align:center;color:var(--m);border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05)">Henüz post yok. <strong>+ Yeni Post</strong> ile başla.</div>';
+    return;
+  }
+  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px">${list.map(p => {
+    const creator = allProfiles[p.created_by];
+    const approver = p.approved_by ? allProfiles[p.approved_by] : null;
+    const dt = new Date(p.created_at).toLocaleString('tr-TR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const media = (p.media_urls||[]).slice(0,3);
+    const mediaHtml = media.length > 0
+      ? `<div style="display:flex;gap:4px;margin-top:8px">${media.map(u => `<img src="${esc(u)}" style="width:60px;height:60px;object-fit:cover;border-radius:6px" onerror="this.style.display='none'">`).join('')}${(p.media_urls||[]).length > 3 ? `<div style="width:60px;height:60px;background:#eef2f7;color:#666;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:12px;font-weight:700">+${p.media_urls.length-3}</div>` : ''}</div>`
+      : '';
+    return `<div style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);padding:14px;cursor:pointer;border-left:4px solid ${STATUS_COLOR[p.status]||'#999'}" onclick="openSocialPost('${p.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <strong style="font-size:13px">${PLATFORM_LABEL[p.platform]||p.platform}</strong>
+        <span style="background:${STATUS_COLOR[p.status]};color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">${STATUS_LABEL[p.status]||p.status}</span>
+      </div>
+      <div style="font-size:12px;color:#374151;line-height:1.4;max-height:60px;overflow:hidden;white-space:pre-wrap">${esc((p.content||'').slice(0,140))}${(p.content||'').length>140?'...':''}</div>
+      ${mediaHtml}
+      <div style="margin-top:10px;padding-top:8px;border-top:1px solid #eef1f5;font-size:10px;color:var(--m)">
+        ${creator ? esc(creator.full_name) : '?'} · ${dt}${p.published_url ? ` · <a href="${esc(p.published_url)}" target="_blank" onclick="event.stopPropagation()" style="color:#1f4e8c">🔗 Aç</a>` : ''}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function openSocialPost(id){
+  _spEditingId = id || null;
+  _spPendingMedia = [];
+  document.getElementById('sp-file-list').innerHTML = '';
+  document.getElementById('sp-uploaded').innerHTML = '';
+  document.getElementById('sp-file').value = '';
+  if(id){
+    const p = socialPosts.find(x => x.id === id);
+    if(!p) return;
+    document.getElementById('spTitle').textContent = '✏️ Postu Düzenle · ' + (STATUS_LABEL[p.status]||'');
+    document.getElementById('sp-platform').value = p.platform;
+    document.getElementById('sp-content').value = p.content || '';
+    document.getElementById('sp-scheduled').value = p.scheduled_for ? new Date(p.scheduled_for).toISOString().slice(0,16) : '';
+    document.getElementById('sp-published-url').value = p.published_url || '';
+    _spPendingMedia = (p.media_urls || []).slice();
+    _renderSocialMediaPreview();
+    document.getElementById('sp-del').style.display = 'inline-flex';
+    document.getElementById('sp-published-row').style.display = (p.status === 'approved' || p.status === 'published') ? 'block' : 'none';
+    document.getElementById('sp-publish').style.display = p.status === 'approved' ? 'inline-flex' : 'none';
+    document.getElementById('sp-approve').style.display = p.status === 'draft' ? 'inline-flex' : 'none';
+  } else {
+    document.getElementById('spTitle').textContent = '➕ Yeni Sosyal Medya Postu';
+    document.getElementById('sp-platform').value = 'instagram';
+    document.getElementById('sp-content').value = '';
+    document.getElementById('sp-scheduled').value = '';
+    document.getElementById('sp-published-url').value = '';
+    document.getElementById('sp-del').style.display = 'none';
+    document.getElementById('sp-published-row').style.display = 'none';
+    document.getElementById('sp-publish').style.display = 'none';
+    document.getElementById('sp-approve').style.display = 'inline-flex';
+  }
+  document.getElementById('socialPostModal').classList.add('show');
+}
+function closeSocialPost(){ document.getElementById('socialPostModal').classList.remove('show'); _spEditingId = null; }
+function _renderSocialMediaPreview(){
+  const el = document.getElementById('sp-uploaded');
+  el.innerHTML = _spPendingMedia.map((u,i) => `<div style="position:relative"><img src="${esc(u)}" style="width:80px;height:80px;object-fit:cover;border-radius:6px" onerror="this.style.display='none'"><button onclick="_removeSocialMedia(${i})" style="position:absolute;top:-6px;right:-6px;background:#c33;color:#fff;border:0;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer">×</button></div>`).join('');
+}
+function _removeSocialMedia(i){ _spPendingMedia.splice(i,1); _renderSocialMediaPreview(); }
+
+async function onSocialFilePick(inp){
+  const files = Array.from(inp.files || []);
+  if(files.length === 0) return;
+  const list = document.getElementById('sp-file-list');
+  list.textContent = `${files.length} dosya yükleniyor...`;
+  for(const f of files){
+    if(f.size > 100 * 1024 * 1024){ toast(`${f.name}: max 100MB`, 'err'); continue; }
+    try {
+      const path = `social/${me.id}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+      const { error } = await sb.storage.from('project-files').upload(path, f, { contentType: f.type });
+      if(error) throw error;
+      const { data } = sb.storage.from('project-files').getPublicUrl(path);
+      if(data?.publicUrl) _spPendingMedia.push(data.publicUrl);
+    } catch(e){ toast(f.name + ': ' + errTr(e), 'err'); }
+  }
+  list.textContent = `${_spPendingMedia.length} dosya hazır`;
+  _renderSocialMediaPreview();
+  inp.value = '';
+}
+
+async function saveSocialPost(status){
+  const platform = document.getElementById('sp-platform').value;
+  const content = document.getElementById('sp-content').value.trim();
+  const scheduled = document.getElementById('sp-scheduled').value || null;
+  if(!content && _spPendingMedia.length === 0){ toast('İçerik veya görsel gerekli', 'err'); return; }
+  const payload = {
+    platform, content, media_urls: _spPendingMedia, status,
+    scheduled_for: scheduled ? new Date(scheduled).toISOString() : null,
+    updated_at: new Date().toISOString()
+  };
+  if(status === 'approved'){ payload.approved_by = me.id; }
+  if(_spEditingId){
+    const { error } = await sb.from('social_posts').update(payload).eq('id', _spEditingId);
+    if(error){ toast('Hata: '+errTr(error), 'err'); return; }
+  } else {
+    payload.created_by = me.id;
+    const { error } = await sb.from('social_posts').insert(payload);
+    if(error){ toast('Hata: '+errTr(error), 'err'); return; }
+  }
+  toast(status === 'approved' ? '✓ Post onaylandı — yayına hazır' : '💾 Taslak kaydedildi', 'ok');
+  closeSocialPost();
+  await loadSocial();
+}
+
+async function markSocialPublished(){
+  const url = document.getElementById('sp-published-url').value.trim();
+  if(!url){ toast('Yayınlanan URL gir', 'err'); document.getElementById('sp-published-url').focus(); return; }
+  if(!_spEditingId) return;
+  const { error } = await sb.from('social_posts').update({
+    status: 'published',
+    published_url: url,
+    published_at: new Date().toISOString(),
+    published_by: me.id,
+    updated_at: new Date().toISOString()
+  }).eq('id', _spEditingId);
+  if(error){ toast('Hata: '+errTr(error), 'err'); return; }
+  toast('📤 Post yayında olarak işaretlendi', 'ok');
+  closeSocialPost();
+  await loadSocial();
+}
+
+async function deleteSocialPost(){
+  if(!_spEditingId) return;
+  if(!confirm('Bu post silinsin mi? Geri alınamaz.')) return;
+  const { error } = await sb.from('social_posts').delete().eq('id', _spEditingId);
+  if(error){ toast('Hata: '+errTr(error), 'err'); return; }
+  toast('Post silindi', 'w');
+  closeSocialPost();
+  await loadSocial();
+}
+
+function openSocialAccounts(){
+  const body = document.getElementById('socialAccountsBody');
+  const platforms = ['instagram','facebook','linkedin','youtube','x'];
+  body.innerHTML = platforms.map(pl => {
+    const a = socialAccounts.find(x => x.platform === pl) || {platform: pl};
+    return `<div class="frow"><label>${PLATFORM_LABEL[pl]}</label>
+      <input id="sa-url-${pl}" placeholder="Profil URL (https://...)" value="${esc(a.profile_url||'')}">
+      <input id="sa-handle-${pl}" placeholder="Kullanıcı adı (@kurum)" value="${esc(a.handle||'')}" style="margin-top:4px">
+    </div>`;
+  }).join('');
+  document.getElementById('socialAccountsModal').classList.add('show');
+}
+function closeSocialAccounts(){ document.getElementById('socialAccountsModal').classList.remove('show'); }
+async function saveSocialAccounts(){
+  const platforms = ['instagram','facebook','linkedin','youtube','x'];
+  const rows = platforms.map(pl => ({
+    platform: pl,
+    profile_url: document.getElementById('sa-url-'+pl).value.trim() || null,
+    handle: document.getElementById('sa-handle-'+pl).value.trim() || null,
+    updated_by: me.id,
+    updated_at: new Date().toISOString()
+  }));
+  const { error } = await sb.from('social_accounts').upsert(rows, { onConflict: 'platform' });
+  if(error){ toast('Hata: '+errTr(error), 'err'); return; }
+  toast('✓ Hesap bilgileri kaydedildi', 'ok');
+  socialAccounts = rows;
+  closeSocialAccounts();
 }
 
 /* ============ STOCK FILES ============ */
@@ -8203,7 +8472,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v205'; // Özel mesaj (DM) — sohbete sekmeler (Genel + kişi bazlı), okunmadı sayacı
+const APP_VERSION = 'v206'; // Sosyal Medya modülü (Instagram/Facebook/LinkedIn/YouTube/X) — post arşivi + onay akışı, sadece yönetici
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
