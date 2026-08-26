@@ -713,6 +713,7 @@ body.proc-fullscreen{overflow:hidden}
           <div><div class="page-title">📱 Sosyal Medya</div><div class="page-sub">Post arşivi + onay akışı — sadece yönetici</div></div>
           <div style="display:flex;gap:6px">
             <button class="btn" onclick="openSocialPost()">+ Yeni Post</button>
+            <button class="btn sec" onclick="openMediaLibrary()">📚 Kütüphane</button>
             <button class="btn sec" onclick="openSocialAccounts()">🔗 Hesaplar</button>
             <button class="btn sec" onclick="loadSocial()">↻ Yenile</button>
           </div>
@@ -742,8 +743,9 @@ body.proc-fullscreen{overflow:hidden}
         <textarea id="sp-content" placeholder="Post metni, hashtag, mention..." style="min-height:120px"></textarea>
       </div>
       <div class="frow"><label>📎 Görsel/video ekle (opsiyonel — Instagram/Facebook için önerilir)</label>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <label class="btn sec sm" style="cursor:pointer">📎 Dosya seç<input type="file" id="sp-file" multiple accept="image/*,video/*" style="display:none" onchange="onSocialFilePick(this)"></label>
+          <button type="button" class="btn sec sm" onclick="openMediaLibrary(true)">📚 Kütüphaneden seç</button>
           <div id="sp-file-list" style="font-size:11px;color:var(--m)"></div>
         </div>
         <div id="sp-uploaded" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"></div>
@@ -761,6 +763,28 @@ body.proc-fullscreen{overflow:hidden}
       <button class="btn" onclick="saveSocialPost('draft')">💾 Taslak Kaydet</button>
       <button class="btn" id="sp-approve" onclick="saveSocialPost('approved')" style="background:#0a7">✓ Onayla</button>
       <button class="btn" id="sp-publish" onclick="markSocialPublished()" style="background:#ff7a00;display:none">📤 Yayınlandı</button>
+    </div>
+  </div>
+</div>
+
+<!-- v209: Medya Kütüphanesi -->
+<div class="modal-bg" id="mediaLibraryModal">
+  <div class="modal" style="max-width:820px;max-height:90vh">
+    <div class="modal-h">
+      <h3>📚 Medya Kütüphanesi <small id="ml-mode-label" style="font-size:11px;color:#666;font-weight:400"></small></h3>
+      <button class="x" onclick="closeMediaLibrary()">✕</button>
+    </div>
+    <div class="modal-b" style="max-height:60vh;overflow-y:auto">
+      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;padding:8px;background:#f8fafc;border-radius:8px">
+        <label class="btn sm" style="cursor:pointer;background:#0a7">📤 Toplu Yükle<input type="file" id="ml-file" multiple accept="image/*,video/*" style="display:none" onchange="onMediaLibraryUpload(this)"></label>
+        <input id="ml-search" placeholder="Etiket veya not ara..." oninput="renderMediaLibrary()" style="flex:1;min-width:200px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;font-size:12px">
+        <span id="ml-upload-status" style="font-size:11px;color:var(--m)"></span>
+      </div>
+      <div id="ml-grid"></div>
+    </div>
+    <div class="modal-f">
+      <button class="btn sec" onclick="closeMediaLibrary()">Kapat</button>
+      <button class="btn" id="ml-add-btn" onclick="addSelectedMediaToPost()" style="display:none;background:#0a7">✓ Postla ekle (<span id="ml-selected-count">0</span>)</button>
     </div>
   </div>
 </div>
@@ -3542,6 +3566,118 @@ async function saveSocialAccounts(){
   toast('✓ Hesap bilgileri kaydedildi', 'ok');
   socialAccounts = rows;
   closeSocialAccounts();
+}
+
+/* ============ v209: MEDYA KÜTÜPHANESİ ============ */
+let mediaLibrary = [];
+let _mlSelected = new Set();
+let _mlPickerMode = false; // true → post modalı için seçici modda
+
+async function loadMediaLibrary(){
+  if(me?.role !== 'yonetici') return;
+  const { data } = await sb.from('media_library').select('*').order('uploaded_at', {ascending: false}).limit(500);
+  mediaLibrary = data || [];
+  renderMediaLibrary();
+}
+
+function openMediaLibrary(pickerMode){
+  _mlPickerMode = !!pickerMode;
+  _mlSelected.clear();
+  const label = document.getElementById('ml-mode-label');
+  const btn = document.getElementById('ml-add-btn');
+  if(_mlPickerMode){
+    if(label) label.textContent = ' — Post için seç';
+    if(btn) btn.style.display = 'inline-flex';
+  } else {
+    if(label) label.textContent = ' — Yükle & yönet';
+    if(btn) btn.style.display = 'none';
+  }
+  document.getElementById('mediaLibraryModal').classList.add('show');
+  loadMediaLibrary();
+}
+function closeMediaLibrary(){ document.getElementById('mediaLibraryModal').classList.remove('show'); _mlPickerMode = false; }
+
+function renderMediaLibrary(){
+  const grid = document.getElementById('ml-grid');
+  if(!grid) return;
+  const search = (document.getElementById('ml-search')?.value || '').toLocaleLowerCase('tr-TR');
+  const items = search
+    ? mediaLibrary.filter(m => (m.name||'').toLocaleLowerCase('tr-TR').includes(search) || (m.note||'').toLocaleLowerCase('tr-TR').includes(search) || (m.tags||[]).some(t=>t.toLocaleLowerCase('tr-TR').includes(search)))
+    : mediaLibrary;
+  if(items.length === 0){
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--m)">Kütüphane boş. <strong>📤 Toplu Yükle</strong> ile resim/video ekle.</div>';
+    return;
+  }
+  grid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px">${items.map(m => {
+    const sel = _mlSelected.has(m.url);
+    const isVideo = (m.type||'').startsWith('video');
+    const preview = isVideo
+      ? `<video src="${esc(m.url)}" style="width:100%;height:130px;object-fit:cover;border-radius:6px;background:#000" preload="metadata"></video>`
+      : `<img src="${esc(m.url)}" style="width:100%;height:130px;object-fit:cover;border-radius:6px;background:#eef2f7" onerror="this.style.display='none'">`;
+    return `<div style="position:relative;border:2px solid ${sel?'#0a7':'transparent'};border-radius:8px;padding:2px" onclick="_mlToggle('${esc(m.url).replace(/'/g,'&apos;')}','${m.id}')">
+      ${preview}
+      <div style="font-size:10px;color:#666;padding:4px 2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(m.name||'')}">${esc((m.name||'').slice(0,20))}</div>
+      ${!_mlPickerMode ? `<button onclick="event.stopPropagation();deleteMedia('${m.id}')" style="position:absolute;top:4px;right:4px;background:rgba(220,38,38,.9);color:#fff;border:0;width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:11px">×</button>` : ''}
+      ${sel ? `<div style="position:absolute;top:4px;left:4px;background:#0a7;color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800">✓</div>` : ''}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function _mlToggle(url, id){
+  if(!_mlPickerMode) return;
+  if(_mlSelected.has(url)) _mlSelected.delete(url); else _mlSelected.add(url);
+  document.getElementById('ml-selected-count').textContent = _mlSelected.size;
+  renderMediaLibrary();
+}
+
+function addSelectedMediaToPost(){
+  if(_mlSelected.size === 0){ toast('Önce medya seç', 'err'); return; }
+  _mlSelected.forEach(u => { if(!_spPendingMedia.includes(u)) _spPendingMedia.push(u); });
+  toast(`✓ ${_mlSelected.size} medya posta eklendi`, 'ok');
+  closeMediaLibrary();
+  _renderSocialMediaPreview();
+}
+
+async function onMediaLibraryUpload(inp){
+  const files = Array.from(inp.files || []);
+  if(files.length === 0) return;
+  const status = document.getElementById('ml-upload-status');
+  let ok = 0, fail = 0;
+  for(let i = 0; i < files.length; i++){
+    const f = files[i];
+    if(status) status.textContent = `${i+1}/${files.length} yükleniyor: ${f.name}`;
+    if(f.size > 100 * 1024 * 1024){ toast(`${f.name}: max 100MB`, 'err'); fail++; continue; }
+    try {
+      const path = `library/${me.id}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+      const { error } = await sb.storage.from('project-files').upload(path, f, { contentType: f.type });
+      if(error) throw error;
+      const { data } = sb.storage.from('project-files').getPublicUrl(path);
+      const url = data?.publicUrl;
+      if(!url) throw new Error('URL alınamadı');
+      const { error: iErr } = await sb.from('media_library').insert({
+        url, name: f.name, type: f.type, size_bytes: f.size, uploaded_by: me.id
+      });
+      if(iErr) throw iErr;
+      ok++;
+    } catch(e){
+      console.warn('media upload:', f.name, e);
+      fail++;
+      toast(`${f.name} yüklenemedi: ${errTr(e)}`, 'err');
+    }
+  }
+  if(status) status.textContent = `${ok} yüklendi${fail>0?`, ${fail} başarısız`:''}`;
+  inp.value = '';
+  await loadMediaLibrary();
+}
+
+async function deleteMedia(id){
+  const m = mediaLibrary.find(x => x.id === id);
+  if(!m) return;
+  if(!confirm(`"${m.name}" silinsin mi? (Kütüphaneden çıkar — mevcut post'lardaki referanslar kalır)`)) return;
+  const { error } = await sb.from('media_library').delete().eq('id', id);
+  if(error){ toast('Silme hatası: '+errTr(error), 'err'); return; }
+  toast('Silindi', 'w');
+  await loadMediaLibrary();
 }
 
 /* ============ STOCK FILES ============ */
@@ -8523,7 +8659,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v208'; // Sosyal medya hesap modalında kullanıcı adı alanı kaldırıldı (URL yeterli)
+const APP_VERSION = 'v209'; // Medya Kütüphanesi (arşiv) — toplu yükleme + post modalından "Kütüphaneden seç"
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
