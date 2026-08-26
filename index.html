@@ -759,12 +759,19 @@ body.proc-fullscreen{overflow:hidden}
       <div class="frow"><label>📅 Planlanan yayın tarihi (opsiyonel)</label>
         <input id="sp-scheduled" type="datetime-local">
       </div>
+      <!-- v212: Kolay paylaşım butonları (metin kopyala + medya indir + platforma git) -->
+      <div class="frow" id="sp-share-row" style="display:none;background:#f0f9ff;border:1px solid #7dd3fc;border-radius:8px;padding:10px;margin-top:6px">
+        <label style="color:#0369a1">🚀 Hızlı Paylaş — sırayla yap</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+          <button type="button" class="btn sm" onclick="copyPostText()" style="background:#0369a1">📋 Metni Kopyala</button>
+          <button type="button" class="btn sm" onclick="downloadPostMedia()" style="background:#0369a1" id="sp-dl-media">📥 Medyayı İndir</button>
+          <button type="button" class="btn sm" onclick="_openPlatformAccount()" style="background:#ff7a00">📱 Hesabıma git ↗</button>
+          <button type="button" class="btn sm" id="sp-intent-btn" onclick="_openIntentShare()" style="background:#7c3aed;display:none">↗ Doğrudan Paylaş</button>
+        </div>
+      </div>
       <div class="frow" id="sp-published-row" style="display:none">
         <label>🔗 Yayınlanan URL (paylaşımdan sonra)</label>
-        <div style="display:flex;gap:6px">
-          <input id="sp-published-url" placeholder="https://instagram.com/p/..." style="flex:1">
-          <button type="button" class="btn sec sm" id="sp-open-account" onclick="_openPlatformAccount()" style="white-space:nowrap">📱 Hesabıma git ↗</button>
-        </div>
+        <input id="sp-published-url" placeholder="https://instagram.com/p/...">
       </div>
     </div>
     <div class="modal-f">
@@ -3471,6 +3478,62 @@ function _openPlatformAccount(){
   if(a?.profile_url) window.open(a.profile_url, '_blank');
   else { toast('Bu platform için hesap URL kayıtlı değil — Hesaplar bölümünden ekle', 'info'); openSocialAccounts(); }
 }
+
+// v212: Kolay paylaşım - metin kopyala
+async function copyPostText(){
+  const content = document.getElementById('sp-content')?.value || '';
+  if(!content.trim()){ toast('İçerik boş', 'err'); return; }
+  try {
+    await navigator.clipboard.writeText(content);
+    toast('📋 Metin panoya kopyalandı — hedef platforma yapıştır', 'ok');
+  } catch(e){
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = content; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast('📋 Kopyalandı', 'ok'); } catch(e2){ toast('Kopyalama başarısız', 'err'); }
+    ta.remove();
+  }
+}
+
+// v212: Medyayı indir (her dosyayı ayrı ayrı - browser default download)
+async function downloadPostMedia(){
+  if(_spPendingMedia.length === 0){ toast('Medya yok', 'err'); return; }
+  toast(`📥 ${_spPendingMedia.length} dosya indirme başladı`, 'info');
+  for(let i = 0; i < _spPendingMedia.length; i++){
+    const url = _spPendingMedia[i];
+    try {
+      const r = await fetch(url);
+      const blob = await r.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = url.split('/').pop().split('?')[0] || `medya_${i+1}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+      await new Promise(r => setTimeout(r, 300)); // Browser rate limit
+    } catch(e){ console.warn('download fail:', url, e); }
+  }
+}
+
+// v212: Platform-özel doğrudan paylaş linkleri (metin otomatik dolar)
+function _openIntentShare(){
+  const p = document.getElementById('sp-platform')?.value;
+  const content = document.getElementById('sp-content')?.value || '';
+  const enc = encodeURIComponent(content);
+  const urls = {
+    x: `https://twitter.com/intent/tweet?text=${enc}`,
+    linkedin: `https://www.linkedin.com/feed/?shareActive=true&text=${enc}`,
+    facebook: `https://www.facebook.com/sharer/sharer.php?quote=${enc}&u=${encodeURIComponent((socialAccounts||[]).find(a=>a.platform==='facebook')?.profile_url || 'https://www.ucelmetal.net')}`
+  };
+  if(urls[p]){
+    window.open(urls[p], '_blank');
+    toast('↗ Platform açıldı — metin otomatik dolu, medyayı ekle ve paylaş', 'info');
+  } else {
+    toast('Bu platform doğrudan paylaşımı desteklemiyor, önce metni kopyala + hesabına git', 'info');
+  }
+}
 function openSocialPost(id){
   _spEditingId = id || null;
   _spPendingMedia = [];
@@ -3492,6 +3555,11 @@ function openSocialPost(id){
     document.getElementById('sp-published-row').style.display = (p.status === 'approved' || p.status === 'published') ? 'block' : 'none';
     document.getElementById('sp-publish').style.display = p.status === 'approved' ? 'inline-flex' : 'none';
     document.getElementById('sp-approve').style.display = p.status === 'draft' ? 'inline-flex' : 'none';
+    // v212: Kolay paylaşım satırı sadece onaylı postta göster
+    document.getElementById('sp-share-row').style.display = p.status === 'approved' ? 'block' : 'none';
+    // Intent butonu sadece X/LinkedIn/Facebook için
+    const intentBtn = document.getElementById('sp-intent-btn');
+    if(intentBtn) intentBtn.style.display = ['x','linkedin','facebook'].includes(p.platform) ? 'inline-flex' : 'none';
   } else {
     document.getElementById('spTitle').textContent = '➕ Yeni Sosyal Medya Postu';
     document.getElementById('sp-platform').value = 'instagram';
@@ -3502,6 +3570,7 @@ function openSocialPost(id){
     document.getElementById('sp-published-row').style.display = 'none';
     document.getElementById('sp-publish').style.display = 'none';
     document.getElementById('sp-approve').style.display = 'inline-flex';
+    document.getElementById('sp-share-row').style.display = 'none';
   }
   document.getElementById('socialPostModal').classList.add('show');
 }
@@ -8762,7 +8831,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v211'; // Hesap URL'leri artık işlevsel - sayfa chip'leri, post modalında hızlı git, login ikonları
+const APP_VERSION = 'v212'; // Kolay paylaşım - metin kopyala + medya indir + platform intent (X/LinkedIn/Facebook otomatik metin)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
