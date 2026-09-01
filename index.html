@@ -2351,25 +2351,49 @@ async function checkSocialDeadlines(){
   for(const p of (socialPosts || [])){
     if(p.status === 'published' || p.status === 'rejected') continue;
     const platLabel = (PLATFORM_LABEL[p.platform] || p.platform);
+    const dedupeKey = `social_${p.id}`;
+    if(_deadlineAlreadySentToday(dedupeKey)) continue;
+    let sent = false;
     if(p.scheduled_for){
       const target = new Date(p.scheduled_for);
       const diffHours = Math.floor((target - now) / 3600000);
       if(diffHours >= 0 && diffHours <= 24 && p.status === 'draft'){
-        try { await notify(`⏰ ${platLabel} postu ${diffHours}s içinde yayınlanmalı — hâlâ TASLAK`, '📱', 'yonetici', 'social_post', p.id); } catch(e){}
+        try { await notify(`⏰ ${platLabel} postu ${diffHours}s içinde yayınlanmalı — hâlâ TASLAK`, '📱', 'yonetici', 'social_post', p.id); sent = true; } catch(e){}
       } else if(diffHours < 0 && p.status !== 'published'){
-        try { await notify(`🔴 ${platLabel} postu planlanan tarih ${-diffHours}s önce geçti — hâlâ ${p.status}`, '📱', 'yonetici', 'social_post', p.id); } catch(e){}
+        try { await notify(`🔴 ${platLabel} postu planlanan tarih ${-diffHours}s önce geçti — hâlâ ${p.status}`, '📱', 'yonetici', 'social_post', p.id); sent = true; } catch(e){}
       }
     }
-    if(p.status === 'approved'){
+    if(!sent && p.status === 'approved'){
       const daysAgo = Math.floor((now - new Date(p.updated_at)) / 86400000);
-      if(daysAgo >= 3){
-        try { await notify(`📤 ${platLabel} postu ${daysAgo} gündür onaylı, henüz yayınlanmadı`, '📱', 'yonetici', 'social_post', p.id); } catch(e){}
+      if([3, 7].includes(daysAgo)){
+        try { await notify(`📤 ${platLabel} postu ${daysAgo} gündür onaylı, henüz yayınlanmadı`, '📱', 'yonetici', 'social_post', p.id); sent = true; } catch(e){}
       }
     }
+    if(sent) _markDeadlineSent(dedupeKey);
   }
 }
 
-// v203: Deadline hatırlatma zinciri — 7/3/1 gün önce sorumluya, geçti+bitmedi durumunda yöneticiye
+// v215: Günde 1 kez bildirim — spam önle
+function _deadlineAlreadySentToday(key){
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    const map = JSON.parse(localStorage.getItem('ucel_deadline_sent') || '{}');
+    return map[key] === today;
+  } catch(e){ return false; }
+}
+function _markDeadlineSent(key){
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    const map = JSON.parse(localStorage.getItem('ucel_deadline_sent') || '{}');
+    map[key] = today;
+    // 30+ gün eski kayıtları temizle
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 30);
+    const cutoffStr = cutoff.toISOString().slice(0,10);
+    Object.keys(map).forEach(k => { if(map[k] < cutoffStr) delete map[k]; });
+    localStorage.setItem('ucel_deadline_sent', JSON.stringify(map));
+  } catch(e){}
+}
+// v203+v215: Deadline hatırlatma — sadece belirli günlerde (7/3/1/0) + günde 1 kez
 async function checkPhaseDeadlines(){
   if(!projects || !me) return;
   const today = new Date();
@@ -2384,14 +2408,19 @@ async function checkPhaseDeadlines(){
       const pct = +((p.phases||{})[phase] || 0);
       if(pct >= 100) continue;
       const projLabel = `${p.no} · ${p.customer||''}`.trim();
-      if([7, 3, 1].includes(diffDays)){
+      const dedupeKey = `phase_${p.id}_${phase}`;
+      if(_deadlineAlreadySentToday(dedupeKey)) continue;
+      // v215: Geçmiş için sadece 1, 7, 30 gün — daha az spam
+      let shouldNotify = false;
+      if([7, 3, 1, 0].includes(diffDays)){
         const role = Object.keys(PHASE_ROLE_MAP || {}).find(r => (PHASE_ROLE_MAP[r]||[]).includes(phase));
         if(role){
-          try { await notify(`⏰ ${projLabel} · ${DN[phase]||phase} son ${diffDays} gün — bitmedi (%${pct})`, '⏰', role, 'project', p.id); } catch(e){}
+          try { await notify(`⏰ ${projLabel} · ${DN[phase]||phase} son ${diffDays} gün — bitmedi (%${pct})`, '⏰', role, 'project', p.id); shouldNotify = true; } catch(e){}
         }
-      } else if(diffDays < 0){
-        try { await notify(`🔴 ${projLabel} · ${DN[phase]||phase} tarihi ${-diffDays} gün önce geçti — bitmedi (%${pct})`, '🔴', 'yonetici', 'project', p.id); } catch(e){}
+      } else if(diffDays < 0 && [-1, -7, -30].includes(diffDays)){
+        try { await notify(`🔴 ${projLabel} · ${DN[phase]||phase} tarihi ${-diffDays} gün önce geçti — bitmedi (%${pct})`, '🔴', 'yonetici', 'project', p.id); shouldNotify = true; } catch(e){}
       }
+      if(shouldNotify) _markDeadlineSent(dedupeKey);
     }
   }
 }
@@ -8872,7 +8901,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v214'; // Sevkiyat proje seçicisinde tamamlanan projeler de gösterilir (arşiv erişimi)
+const APP_VERSION = 'v215'; // Deadline bildirim spam fix — günde 1 kez + sadece belirli günlerde (7/3/1/0 kaldı, -1/-7/-30 geçti)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
