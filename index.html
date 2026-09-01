@@ -7789,8 +7789,15 @@ async function loadShipments(){
 function _populateShipProjects(){
   const sel = document.getElementById('shipProj'); if(!sel) return;
   const cur = sel.value;
-  sel.innerHTML = '<option value="">— Proje seç —</option>' +
-    projects.filter(p => p.stage !== 'tamamlandi').map(p => `<option value="${p.id}">${esc(p.no)} · ${esc(p.customer)}</option>`).join('');
+  // v214: Tamamlanan projeler de listelenir (yükleme geçmişine erişim için)
+  const aktif = projects.filter(p => p.stage !== 'tamamlandi');
+  const bitmis = projects.filter(p => p.stage === 'tamamlandi');
+  let html = '<option value="">— Proje seç —</option>';
+  html += aktif.map(p => `<option value="${p.id}">${esc(p.no)} · ${esc(p.customer||'')}</option>`).join('');
+  if(bitmis.length > 0){
+    html += `<optgroup label="✓ Tamamlanan Projeler (arşiv)">${bitmis.map(p => `<option value="${p.id}">${esc(p.no)} · ${esc(p.customer||'')}</option>`).join('')}</optgroup>`;
+  }
+  sel.innerHTML = html;
   if(cur) sel.value = cur;
 }
 
@@ -8865,7 +8872,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v213'; // Gizlilik guard - post metninde proje no/müşteri/tonaj/lokasyon/sevkiyat/fiyat tespiti + uyarı
+const APP_VERSION = 'v214'; // Sevkiyat proje seçicisinde tamamlanan projeler de gösterilir (arşiv erişimi)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
