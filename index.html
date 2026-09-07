@@ -2678,7 +2678,11 @@ function renderProjects(){
   const tb=document.getElementById('pList');if(!tb)return;
   const td=new Date().toISOString().slice(0,10);
   tb.innerHTML=projects.map(p=>{
-    const lt=p.shipdate&&p.shipdate<td?'style="color:var(--err);font-weight:700"':'';
+    // v216: Tamamlanan projede sevk tarihi yeşil, geciken açık projede kırmızı
+    const isDone = p.stage === 'tamamlandi' || (+(p.progress)||0) >= 100;
+    const lt = isDone
+      ? 'style="color:var(--ok);font-weight:700"'
+      : (p.shipdate && p.shipdate < td ? 'style="color:var(--err);font-weight:700"' : '');
     return `<tr class="click compact" onclick="openProj('${p.id}')">
       <td style="text-align:center">
         <div style="font-size:14px;font-weight:700;color:#1f2937">${esc(p.no)}</div>
@@ -8901,7 +8905,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v215'; // Deadline bildirim spam fix — günde 1 kez + sadece belirli günlerde (7/3/1/0 kaldı, -1/-7/-30 geçti)
+const APP_VERSION = 'v216'; // Tamamlanan projede sevk tarihi yeşil (geciken açık projede kırmızı kalır)
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){

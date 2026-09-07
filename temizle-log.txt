@@ -1,0 +1,8 @@
+=== C:\projeler-servis siliniyor === 
+
+SUCCESS: The file (or folder): "C:\projeler-servis" now owned by user "HABIB-LENOVA\ucelh".
+Successfully processed 1 files; Failed processing 0 files
+Dosya baüka bir iülem tarafçndan kullançldçßçndan bu iülem dosyaya eriüemiyor.
+UYARI: klasor tam silinmedi 
+=== Gecici dosyalar siliniyor === 
+BITTI 
