@@ -7440,17 +7440,45 @@ async function approvePhase(projectId, phase, approve){
   const proj = projects.find(p=>p.id===projectId); if(!proj) return;
   const {data, error} = await sb.rpc('approve_phase_pending',{p_project_id:projectId, p_phase:phase, p_approve:approve});
   if(error){toast('Hata: '+errTr(error),'err');return}
+  const projLabel = `${proj.no} · ${proj.customer}`;
   // Lokal güncelle
   if(approve){
     if(!proj.phases) proj.phases = {};
     proj.phases[phase] = 100;
     if(proj.phases_pending) delete proj.phases_pending[phase];
     proj.progress = Math.round(PHASE_ORDER.reduce((s,k)=>s+parseInt(proj.phases[k]||0),0)/PHASE_ORDER.length);
+    // v220: Onay sonrası progress DB'ye + auto-advance (stage/stages senkron)
+    try {
+      const idx = PHASE_ORDER.indexOf(phase);
+      const nextPhase = PHASE_ORDER[idx+1] || null;
+      const curStages = (proj.stages || []).slice();
+      let newStages = curStages;
+      let newStage = proj.stage;
+      const doAdvance = nextPhase && (curStages.includes(nextPhase) || curStages.length === 0);
+      if(doAdvance){
+        newStages = curStages.filter(s => s !== phase);
+        if(!newStages.includes(nextPhase)) newStages.push(nextPhase);
+        newStage = nextPhase;
+      }
+      const payload = {progress: proj.progress, updated_at: new Date().toISOString()};
+      if(doAdvance){ payload.stage = newStage; payload.stages = newStages; }
+      await sb.from('projects').update(payload).eq('id', projectId);
+      if(doAdvance){
+        proj.stage = newStage;
+        proj.stages = newStages;
+        // Sıradaki faz sorumlusuna bildirim
+        try {
+          const nextRole = Object.keys(PHASE_ROLE_MAP).find(r => r!=='yonetici' && (PHASE_ROLE_MAP[r]||[]).includes(nextPhase));
+          if(nextRole){
+            await notify(`👉 "${projLabel}" sırası sende: ${DN[nextPhase]||nextPhase} (önceki faz onaylandı)`, '👉', nextRole, 'project', projectId);
+          }
+        } catch(e){}
+      }
+    } catch(e){ console.warn('approve auto-advance:', e); }
   } else {
     if(proj.phases_pending) delete proj.phases_pending[phase];
   }
   renderPhases(proj);
-  const projLabel = `${proj.no} · ${proj.customer}`;
   try {
     if(approve) await notify(`✅ Yönetici "${projLabel}" projesinde ${DN[phase]||phase} fazının %100 tamamlandığını onayladı`, '✅', 'system', 'project', projectId);
     else await notify(`❌ Yönetici "${projLabel}" projesinde ${DN[phase]||phase} %100 talebini reddetti`, '❌', 'system', 'project', projectId);
@@ -7972,12 +8000,9 @@ function renderProjectShipmentSummary(projectId){
     return;
   }
   const st = _calcShipmentStats(items);
-  // Hedef tonaj (proje.tonnage) varsa ilerleme %
+  // Hedef tonaj (proje.tonnage) — v220: DB'de tüm kayıtlar ton olarak tutuluyor (heuristic kaldırıldı)
   const proj = projects.find(p => p.id === projectId);
-  // Akıllı yorumlama: form artık TON ister, eski projelerde KG olarak girilmiş olabilir.
-  // 1000'i geçen değerler kg sayılır (1000 ton üstü pratikte yok).
-  const _rawTon = parseFloat(proj?.tonnage) || 0;
-  const hedefKg = _rawTon > 1000 ? _rawTon : _rawTon * 1000;
+  const hedefKg = (parseFloat(proj?.tonnage) || 0) * 1000;
   const yuklenenKg = st.totalKg;
   const ilerleme = hedefKg > 0 ? Math.min(100, Math.round((yuklenenKg/hedefKg)*100)) : 0;
   const son3 = items.slice(-3).reverse();
@@ -8991,7 +9016,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v219'; // Hizalama bug fix, sevkiyat/sipariş/fatura senkronizasyon iyileştirmeleri
+const APP_VERSION = 'v221'; // approvePhase auto-advance: yönetici onayı sonrası aşama otomatik sıradaki faza geçiyor + progress DB senkron
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
