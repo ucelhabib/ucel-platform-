@@ -2433,11 +2433,13 @@ function getSystemAlerts(){
   projects.forEach(p => {
     if(p.stage === 'tamamlandi') return; // biten projeleri atla
     const projLabel = `${p.no} · ${p.customer||'(müşteri yok)'}`;
+    // v217: sevk tarihi kaynağı = phase_dates.sevk (fallback shipdate)
+    const sevkTgt = (p.phase_dates && p.phase_dates.sevk) || p.shipdate;
     // 1) Sevk tarihi eksik → EN KRİTİK
-    if(!p.shipdate){
+    if(!sevkTgt){
       alerts.push({sev:'crit', pid:p.id, plabel:projLabel, tip:'sevk_yok', msg:'📅 Sevk tarihi girilmemiş — ekip aceleci değil'});
     } else {
-      const shipD = new Date(p.shipdate+'T00:00:00');
+      const shipD = new Date(sevkTgt+'T00:00:00');
       const diffDays = Math.floor((shipD - now) / 86400000);
       const sevkPct = +((p.phases||{}).sevk || 0);
       // v185: Sevk %100 ise gecikti/yaklaşıyor uyarısı verme — sevkiyat gerçekleşmiş
@@ -2678,11 +2680,12 @@ function renderProjects(){
   const tb=document.getElementById('pList');if(!tb)return;
   const td=new Date().toISOString().slice(0,10);
   tb.innerHTML=projects.map(p=>{
-    // v216: Tamamlanan projede sevk tarihi yeşil, geciken açık projede kırmızı
+    // v217: Sevk tarihi = sevk fazının hedeflenen tarihi (phase_dates.sevk); shipdate eski kayıtlar için fallback
+    const sevkT = (p.phase_dates && p.phase_dates.sevk) || p.shipdate || '';
     const isDone = p.stage === 'tamamlandi' || (+(p.progress)||0) >= 100;
     const lt = isDone
       ? 'style="color:var(--ok);font-weight:700"'
-      : (p.shipdate && p.shipdate < td ? 'style="color:var(--err);font-weight:700"' : '');
+      : (sevkT && sevkT < td ? 'style="color:var(--err);font-weight:700"' : '');
     return `<tr class="click compact" onclick="openProj('${p.id}')">
       <td style="text-align:center">
         <div style="font-size:14px;font-weight:700;color:#1f2937">${esc(p.no)}</div>
@@ -2695,7 +2698,7 @@ function renderProjects(){
       <td style="text-align:center">${((p.stages&&p.stages.length)?p.stages:[p.stage]).filter(Boolean).map(s=>`<span class="pill ${SP[s]||'pl-gray'}" style="margin:1px">${DI[s]||''} ${DN[s]||s}</span>`).join('')}</td>
       <td style="white-space:nowrap;text-align:center">${p.tonnage ? fmtNum(p.tonnage*1000, 0)+' kg' : '—'}</td>
       <td class="amount-only" style="text-align:center;white-space:nowrap">${p.amount ? fmtTL(p.amount) : '—'}</td>
-      <td ${lt} style="text-align:center;white-space:nowrap">${p.shipdate||'—'}</td>
+      <td ${lt} style="text-align:center;white-space:nowrap">${sevkT||'—'}</td>
       <td><div style="display:flex;flex-direction:column;gap:3px">
         <div style="display:flex;align-items:center;gap:6px"><div class="progress" style="flex:1"><div class="pbar" style="width:${p.progress}%"></div></div><span style="font-size:12px;font-weight:700;color:var(--p);min-width:34px;text-align:right">%${p.progress||0}</span></div>
         <div style="display:flex;gap:2px" title="Faz durumu: Teklif·Satınalma·Üretim·Sevk·Montaj·Muhasebe">${['teklifproje','satinalma','uretim','sevk','montaj','muhasebe'].map(k=>{const v=parseInt((p.phases||{})[k]||0);const c=v===100?'#0a7':v>0?'#1f4e8c':'#dde2e9';return `<span style="flex:1;height:6px;background:${c};border-radius:2px" title="${DI[k]||''} ${DN[k]||k}: %${v}"></span>`}).join('')}</div>
@@ -7301,7 +7304,8 @@ function openProj(id){
     const canEditFolder = (me?.role === 'yonetici' || me?.role === 'teklifproje');
     document.getElementById('pf-folder').readOnly = !canEditFolder;
     document.getElementById('pf-folder').style.background = canEditFolder ? '#fff' : '#f5f7fa';
-    document.getElementById('pf-ship').value=p.shipdate||'';
+    // v217: Sevk tarihi kaynağı phase_dates.sevk (fallback shipdate)
+    document.getElementById('pf-ship').value = (p.phase_dates && p.phase_dates.sevk) || p.shipdate || '';
     renderStageChips(p.stages || (p.stage ? [p.stage] : []));
     document.getElementById('pf-prog').value=p.progress;
     document.getElementById('pf-notes').value=p.notes||'';
@@ -7468,6 +7472,10 @@ async function updatePhase(projectId, phase, value, inputEl){
   if(!proj.phases) proj.phases = {};
   proj.phases[phase] = v;
   proj.progress = Math.round(PHASE_ORDER.reduce((s,k)=>s+parseInt(proj.phases[k]||0),0)/PHASE_ORDER.length);
+  // v218: Progress'i DB'ye de yaz — herkes aynı yüzdeyi görsün (bayat kalmasın)
+  try {
+    await sb.from('projects').update({progress: proj.progress, updated_at: new Date().toISOString()}).eq('id', projectId);
+  } catch(e){ console.warn('progress DB sync:', e); }
   renderPhases(proj);
   toast(`✓ ${DN[phase]||phase}: %${prev} → %${v}`,'ok');
   // Bildirimler
@@ -7482,11 +7490,18 @@ async function updatePhase(projectId, phase, value, inputEl){
         if(nextRole){
           await notify(`👉 "${projLabel}" sırası sende: ${DN[nextPhase]||nextPhase} (önceki faz tamamlandı)`, '👉', nextRole, 'project', projectId);
         }
-        // v203: Otomatik faz geçişi — proje ana aşamasını sonraki faza al (proj.stage), sonraki faz sorumlusunun ekranı canlansın
+        // v203: Otomatik faz geçişi — proje ana aşamasını sonraki faza al
+        // v218: stages dizisini de senkron güncelle (stage/stages tutarsızlığı önlensin)
         try {
-          if((proj.stages || []).includes(nextPhase) || !proj.stages || proj.stages.length === 0){
-            await sb.from('projects').update({stage: nextPhase, updated_at: new Date().toISOString()}).eq('id', projectId);
+          const curStages = (proj.stages || []).slice();
+          const hasNext = curStages.includes(nextPhase);
+          if(hasNext || curStages.length === 0){
+            // Tamamlanan fazı stages'ten çıkar, sonraki fazı ekle (yoksa)
+            const newStages = curStages.filter(s => s !== phase);
+            if(!newStages.includes(nextPhase)) newStages.push(nextPhase);
+            await sb.from('projects').update({stage: nextPhase, stages: newStages, updated_at: new Date().toISOString()}).eq('id', projectId);
             proj.stage = nextPhase;
+            proj.stages = newStages;
           }
         } catch(e){ console.warn('otomatik faz geçiş:', e); }
       }
@@ -7499,10 +7514,17 @@ async function updatePhaseDate(projectId, phase, dateStr){
   if(me?.role !== 'yonetici'){toast('Sadece yönetici tarih atayabilir','err');return}
   const {error} = await sb.rpc('update_phase_date', {p_project_id: projectId, p_phase: phase, p_date: dateStr || null});
   if(error){toast('Hata: '+errTr(error),'err');return}
+  // v217: Sevk fazı hedef tarihi shipdate ile senkron
+  if(phase === 'sevk'){
+    try {
+      await sb.from('projects').update({shipdate: dateStr || null}).eq('id', projectId);
+    } catch(e){ console.warn('shipdate sync:', e); }
+  }
   const proj = projects.find(p=>p.id===projectId);
   if(proj){
     if(!proj.phase_dates) proj.phase_dates = {};
     proj.phase_dates[phase] = dateStr || null;
+    if(phase === 'sevk') proj.shipdate = dateStr || null;
     renderPhases(proj);
   }
   toast('Hedef tarih kaydedildi','ok');
@@ -7591,6 +7613,10 @@ document.addEventListener('keydown', e=>{
 });
 async function saveProj(){
   const stagesSelected = (window._pfStages || []).slice();
+  const shipVal = document.getElementById('pf-ship').value || null;
+  // v217: Sevk tarihi = phase_dates.sevk (tek kaynak). shipdate senkron kalıyor (eski kayıtlarla uyum).
+  const _oldP = editP ? (projects.find(x=>x.id===editP) || {}) : {};
+  const _oldPhaseDates = _oldP.phase_dates || {};
   const d={
     no:document.getElementById('pf-no').value.trim(),
     customer:document.getElementById('pf-cust').value.trim(),
@@ -7599,8 +7625,9 @@ async function saveProj(){
     amount: parseTR(document.getElementById('pf-amt').value) || 0,
     // Kullanıcı kg girer, DB ton olarak tutar (geri uyumlu)
     tonnage: (parseTR(document.getElementById('pf-ton').value) || 0) / 1000,
-    shipdate:document.getElementById('pf-ship').value||null,
-    progress:+document.getElementById('pf-prog').value||0,
+    shipdate: shipVal,
+    phase_dates: {..._oldPhaseDates, sevk: shipVal},
+    // v218: progress artık form üzerinden yazılmıyor — updatePhase her faz değişiminde DB'ye otomatik yazıyor
     notes:document.getElementById('pf-notes').value
   };
   // Sorumlu (owner_id) kavramı kaldırıldı — aşama bazlı çalışıyoruz
@@ -8079,11 +8106,29 @@ async function completeShipping(){
   );
   if(!onay) return;
   try {
-    // Sevkiyat fazını %100 yap
+    // v218: Sevkiyat fazını %100 yap + pending temizle + progress hesapla + auto-advance
     const phases = {...(proj.phases || {}), sevk: 100};
-    const {error} = await sb.from('projects').update({phases, updated_at: new Date().toISOString()}).eq('id', pid);
+    const phases_pending = {...(proj.phases_pending || {})};
+    delete phases_pending.sevk; // pending "⏳ onay bekliyor" balonu kalmasın
+    const newProgress = Math.round(PHASE_ORDER.reduce((s,k)=>s+parseInt(phases[k]||0),0)/PHASE_ORDER.length);
+    // Auto-advance: sevk sonrası montaj (varsa)
+    const nextPhase = PHASE_ORDER[PHASE_ORDER.indexOf('sevk')+1] || null;
+    const curStages = (proj.stages || []).slice();
+    let newStages = curStages;
+    let newStage = proj.stage;
+    if(nextPhase && (curStages.includes(nextPhase) || curStages.length === 0)){
+      newStages = curStages.filter(s => s !== 'sevk');
+      if(!newStages.includes(nextPhase)) newStages.push(nextPhase);
+      newStage = nextPhase;
+    }
+    const payload = {phases, phases_pending, progress: newProgress, stage: newStage, stages: newStages, updated_at: new Date().toISOString()};
+    const {error} = await sb.from('projects').update(payload).eq('id', pid);
     if(error) throw error;
     proj.phases = phases;
+    proj.phases_pending = phases_pending;
+    proj.progress = newProgress;
+    proj.stage = newStage;
+    proj.stages = newStages;
     // Audit log
     try { await logAudit('shipping_complete', 'project', pid, `${proj.no} · ${proj.customer}`, {araclar: st.count, tonaj: st.totalKg, gun: st.dayCount}); } catch(e){}
     // Bildirim
@@ -8905,7 +8950,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v216'; // Tamamlanan projede sevk tarihi yeşil (geciken açık projede kırmızı kalır)
+const APP_VERSION = 'v218'; // Faz sistemi tutarlılık: progress DB'ye yazılıyor, completeShipping progress+stages+pending senkron, auto-advance stages'i günceller
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
