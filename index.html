@@ -2681,11 +2681,12 @@ function renderProjects(){
   const td=new Date().toISOString().slice(0,10);
   tb.innerHTML=projects.map(p=>{
     // v217: Sevk tarihi = sevk fazının hedeflenen tarihi (phase_dates.sevk); shipdate eski kayıtlar için fallback
+    // v219: iki style attribute hatası düzeltildi — lt sadece CSS parçası döndürüyor, text-align:center td'de kalıyor
     const sevkT = (p.phase_dates && p.phase_dates.sevk) || p.shipdate || '';
     const isDone = p.stage === 'tamamlandi' || (+(p.progress)||0) >= 100;
     const lt = isDone
-      ? 'style="color:var(--ok);font-weight:700"'
-      : (sevkT && sevkT < td ? 'style="color:var(--err);font-weight:700"' : '');
+      ? 'color:var(--ok);font-weight:700;'
+      : (sevkT && sevkT < td ? 'color:var(--err);font-weight:700;' : '');
     return `<tr class="click compact" onclick="openProj('${p.id}')">
       <td style="text-align:center">
         <div style="font-size:14px;font-weight:700;color:#1f2937">${esc(p.no)}</div>
@@ -2698,7 +2699,7 @@ function renderProjects(){
       <td style="text-align:center">${((p.stages&&p.stages.length)?p.stages:[p.stage]).filter(Boolean).map(s=>`<span class="pill ${SP[s]||'pl-gray'}" style="margin:1px">${DI[s]||''} ${DN[s]||s}</span>`).join('')}</td>
       <td style="white-space:nowrap;text-align:center">${p.tonnage ? fmtNum(p.tonnage*1000, 0)+' kg' : '—'}</td>
       <td class="amount-only" style="text-align:center;white-space:nowrap">${p.amount ? fmtTL(p.amount) : '—'}</td>
-      <td ${lt} style="text-align:center;white-space:nowrap">${sevkT||'—'}</td>
+      <td style="${lt}text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums">${sevkT||'—'}</td>
       <td><div style="display:flex;flex-direction:column;gap:3px">
         <div style="display:flex;align-items:center;gap:6px"><div class="progress" style="flex:1"><div class="pbar" style="width:${p.progress}%"></div></div><span style="font-size:12px;font-weight:700;color:var(--p);min-width:34px;text-align:right">%${p.progress||0}</span></div>
         <div style="display:flex;gap:2px" title="Faz durumu: Teklif·Satınalma·Üretim·Sevk·Montaj·Muhasebe">${['teklifproje','satinalma','uretim','sevk','montaj','muhasebe'].map(k=>{const v=parseInt((p.phases||{})[k]||0);const c=v===100?'#0a7':v>0?'#1f4e8c':'#dde2e9';return `<span style="flex:1;height:6px;background:${c};border-radius:2px" title="${DI[k]||''} ${DN[k]||k}: %${v}"></span>`}).join('')}</div>
@@ -2822,7 +2823,10 @@ async function renderMuhasebe(){
   // Fatura no + tarih + tedarikçi bazında grupla
   const groupMap = new Map();
   raw.forEach(d => {
-    const key = (d.fatura_no||'').trim() + '|' + (d.tarih||'') + '|' + (d.tedarikci||'').trim();
+    // v219: fatura_no + tedarikci normalize (trim + uppercase + boşlukları sil) — "12345" ile "12345 ", "AB123" ile "ab123" aynı gruba düşsün
+    const _fnKey = (d.fatura_no||'').trim().toLocaleUpperCase('tr-TR').replace(/\s+/g,'');
+    const _tdKey = (d.tedarikci||'').trim().toLocaleUpperCase('tr-TR');
+    const key = _fnKey + '|' + (d.tarih||'') + '|' + _tdKey;
     if(!groupMap.has(key)){
       groupMap.set(key, {
         fatura_no: d.fatura_no,
@@ -4296,7 +4300,20 @@ function renderProcList(){
         <div style="text-align:center;color:#888;font-size:12px">${expanded?'▼':'▶'}<br><small style="font-weight:700">${i+1}</small></div>
         <div style="font-weight:600;font-size:13px;line-height:1.4">
           ${(()=>{ const k=it.proc_kategori||'ana_yapi'; const c=PROC_KAT_COLOR[k]||'#64748b'; return `<span style="display:inline-block;background:${c};color:#fff;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:700;vertical-align:middle;margin-right:4px">${esc(PROC_KAT_LABEL[k]||k)}</span>`; })()}
-          ${esc(it.malzeme)}${it.ebat?` <span style="font-size:11px;color:#888">(${esc(it.ebat)})</span>`:''}
+          ${esc(it.malzeme)}${it.ebat?` <span style="font-size:11px;color:#888">(${esc(it.ebat)})</span>`:''}${(() => {
+            // v219: Sipariş/teslim tutarsızlık uyarıları
+            let _w = '';
+            const _origIht = parseFloat(it.original_ihtiyac);
+            const _sip = parseFloat(it.miktar) || 0;
+            if(!isNaN(_origIht) && _origIht > 0 && _sip < _origIht - 0.01){
+              _w += ` <span title="Sipariş ihtiyaçtan az düşürüldü — kontrol et" style="color:#ea580c;font-size:12px;cursor:help">⚠️</span>`;
+            }
+            const _dlSum = _procDelvOf(it.id).reduce((s,d)=>s+(parseFloat(d.miktar)||0),0);
+            if(_sip > 0 && _dlSum > _sip * 1.1){
+              _w += ` <span title="Teslim edilen sipariştan fazla — kontrol et" style="color:#dc2626;font-size:12px;cursor:help">⛔</span>`;
+            }
+            return _w;
+          })()}
         </div>
         <div style="text-align:right;color:#1f4e8c;font-weight:700;line-height:1.4">${fmt(ihtiyac)}<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} ihtiyaç</small></div>
         <div style="text-align:right;color:#0a7;font-weight:700;line-height:1.4">${stokDusum>0?fmt(stokDusum):'<span style="color:#bbb;font-weight:400">—</span>'}${stokDusum>0?`<br><small style="color:#888;font-weight:400;font-size:10px">${esc(it.birim)} stoktan</small>`:''}</div>
@@ -8411,7 +8428,29 @@ async function saveShipment(){
   }
   closeShipmentModal();
   await loadShipments();
+  try { await _syncSevkPhaseFromShipments(pid); } catch(e){ console.warn('sevk faz sync:', e); }
   renderShipments();
+}
+
+// v219: Sevk fazı yüzdesini yükleme toplamına göre yeniden hesapla ve DB'ye yaz
+async function _syncSevkPhaseFromShipments(pid){
+  const proj = projects.find(p=>p.id===pid);
+  if(!proj) return;
+  const hedefKg = (parseFloat(proj.tonnage)||0) * 1000;
+  if(hedefKg <= 0){ console.warn('_syncSevkPhaseFromShipments: hedef tonaj yok, atlandı', proj.no); return; }
+  const totalKg = shipments.filter(s=>s.project_id===pid).reduce((sum,s)=>sum+(parseFloat(s.tonaj)||0), 0);
+  const yeniYuzde = Math.min(100, Math.round(100 * totalKg / hedefKg));
+  const phases = Object.assign({}, proj.phases||{});
+  const eskiSevk = parseInt(phases.sevk||0);
+  if(yeniYuzde <= eskiSevk) return; // Yükseltmiyoruz; kullanıcı manuel geri almış olabilir
+  phases.sevk = yeniYuzde;
+  const newProgress = Math.round(PHASE_ORDER.reduce((s,k)=>s+parseInt(phases[k]||0),0)/PHASE_ORDER.length);
+  const { error } = await sb.from('projects')
+    .update({ phases, progress: newProgress, updated_at: new Date().toISOString() })
+    .eq('id', pid);
+  if(error){ console.warn('sevk faz update err:', error); return; }
+  proj.phases = phases;
+  proj.progress = newProgress;
 }
 
 // Süreyi dakikadan "X sa Y dk" formatına çevir
@@ -8611,8 +8650,10 @@ async function deleteShipment(){
   if(error){ toast('Silme hatası: '+errTr(error),'err'); return; }
   try { await logAudit('shipment_delete','shipment',editShipId,`${s?.cekici_plaka||''} · ${s?.tarih||''}`,{tonaj:s?.tonaj}); } catch(e){}
   toast('Silindi','info');
+  const _pid = s?.project_id;
   closeShipmentModal();
   await loadShipments();
+  if(_pid){ try { await _syncSevkPhaseFromShipments(_pid); } catch(e){ console.warn('sevk faz sync:', e); } }
   renderShipments();
 }
 async function saveTask(){
@@ -8950,7 +8991,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v218'; // Faz sistemi tutarlılık: progress DB'ye yazılıyor, completeShipping progress+stages+pending senkron, auto-advance stages'i günceller
+const APP_VERSION = 'v219'; // Hizalama bug fix, sevkiyat/sipariş/fatura senkronizasyon iyileştirmeleri
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
