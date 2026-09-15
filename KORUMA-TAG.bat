@@ -2,12 +2,12 @@
 cd /d "%~dp0"
 
 echo ============================================
-echo   KORUMA TAG - v221-stable
+echo   KORUMA TAG - v222-stable
 echo ============================================
 echo.
 
-echo === v221-stable tag (guncel HEAD = v221) ===
-git tag -a v221-stable HEAD -m "Stabil v221: approvePhase auto-advance - yonetici onayi sonrasi asama otomatik sonraki faza geciyor"
+echo === v222-stable tag (guncel HEAD = v222) ===
+git tag -a v222-stable HEAD -m "Stabil v222: Sosyal medya modulu kaldirildi (666 satir), sadelestirme"
 
 echo === Tag'i uzak repoya push et ===
 git push origin --tags
