@@ -2906,13 +2906,46 @@ function renderTeam(){
       </div></div>`;
   }).join('');
 }
+// v223: Ekipte Geciken — yoksay (7 gün TTL) + panelden görev silme
+function _getEkipDismissed(){
+  try {
+    const map = JSON.parse(localStorage.getItem('ucel_ekip_dismiss') || '{}');
+    const now = Date.now();
+    let changed = false;
+    Object.keys(map).forEach(k => { if(now - map[k] > 7*86400000){ delete map[k]; changed = true; } });
+    if(changed) localStorage.setItem('ucel_ekip_dismiss', JSON.stringify(map));
+    return map;
+  } catch(e){ return {}; }
+}
+function dismissEkipTasks(idsCsv){
+  try {
+    const map = _getEkipDismissed();
+    const now = Date.now();
+    (idsCsv || '').split(',').filter(Boolean).forEach(id => { map[id] = now; });
+    localStorage.setItem('ucel_ekip_dismiss', JSON.stringify(map));
+  } catch(e){}
+  renderNotifs();
+  toast('7 gün yoksayıldı','info');
+}
+async function delTaskFromPanel(id){
+  if(me?.role !== 'yonetici'){ toast('Görev silme yetkisi sadece yöneticide','err'); return; }
+  const t = tasks.find(x => x.id === id);
+  if(!confirm(`Bu görev KALICI silinsin mi?\n\n${t ? t.title : ''}`)) return;
+  const {error} = await sb.from('tasks').delete().eq('id', id);
+  if(error){ toast('Hata: '+errTr(error),'err'); return; }
+  const idx = tasks.findIndex(x => x.id === id);
+  if(idx >= 0) tasks.splice(idx, 1);
+  try { await logAudit('task_delete','task',id,t?t.title:'görev',{dept:t?.dept, kaynak:'panel'}); } catch(e){}
+  toast('Görev silindi','w');
+  renderNotifs();
+}
 function renderNotifs(){
   const l=document.getElementById('nList');
   const td = new Date().toISOString().slice(0,10);
   // AKSIYON LISTESI: bana atanmış açık görevler
   const myOpenTasks = tasks.filter(t => t.assignee_id === me.id && !t.done);
   const adminPending = (me.role === 'yonetici')
-    ? tasks.filter(t => !t.done && t.due && t.due < td && t.assignee_id !== me.id).slice(0,5)
+    ? tasks.filter(t => !t.done && t.due && t.due < td && t.assignee_id !== me.id)
     : [];
 
   let actionsHtml = '';
@@ -2937,21 +2970,39 @@ function renderNotifs(){
       </div>`;
     }).join('');
   }
-  if(adminPending.length > 0){
-    actionsHtml += `<div style="padding:8px 12px;background:#fde7e7;border-bottom:1px solid #f0b4b4;font-size:11px;font-weight:700;color:#7a0000">⚠️ EKİPTE GECİKEN (${adminPending.length})</div>`;
-    actionsHtml += adminPending.map(t => {
-      const proj = projects.find(p => p.id === t.project_id);
-      const owner = allProfiles[t.assignee_id];
-      return `<div class="notif-item" style="background:#fff5f5;border-left:3px solid #c33" onclick="event.stopPropagation();openNotifRef('task','${t.id}')">
-        <div style="display:flex;gap:6px;align-items:flex-start">
-          <span>⚠️</span>
-          <div style="flex:1">
-            <div style="font-weight:600">${esc(t.title)}</div>
-            <div class="when">${proj?esc(proj.no):''} • ${owner?esc(owner.full_name):'-'} • ${t.due}</div>
+  // v223: Yoksayılan ekip gecikmeleri (7 gün TTL)
+  const ekipDismissed = _getEkipDismissed();
+  const adminPendingVisible = adminPending.filter(t => !ekipDismissed[t.id]);
+  if(adminPendingVisible.length > 0){
+    // v223: Kişi bazlı gruplama — görev başına kart yerine kişi başına tek kompakt satır
+    const byPerson = {};
+    adminPendingVisible.forEach(t => {
+      const key = t.assignee_id || '-';
+      (byPerson[key] = byPerson[key] || []).push(t);
+    });
+    actionsHtml += `<div style="padding:8px 12px;background:#fde7e7;border-bottom:1px solid #f0b4b4;font-size:11px;font-weight:700;color:#7a0000">⚠️ EKİPTE GECİKEN (${adminPendingVisible.length})</div>`;
+    actionsHtml += Object.entries(byPerson)
+      .sort((a,b) => b[1].length - a[1].length)
+      .map(([uid, ts]) => {
+        const owner = allProfiles[uid];
+        const taskIds = ts.map(t=>t.id).join(',');
+        const chips = ts.map(t => {
+          const proj = projects.find(p => p.id === t.project_id);
+          const gun = Math.floor((new Date(td) - new Date(t.due)) / 86400000);
+          const lbl = `${proj ? esc(proj.no) : '?'} ${esc(DN[t.dept] || '')}`.trim();
+          return `<span style="display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid #e3b4b4;border-radius:10px;padding:2px 8px;font-size:10.5px;margin:2px 3px 0 0">
+            <a href="#" onclick="event.stopPropagation();openNotifRef('task','${t.id}');return false;" style="color:#a33;text-decoration:none" title="${esc(t.title)}">${lbl} <b>${gun}g</b></a>
+            <a href="#" onclick="event.stopPropagation();delTaskFromPanel('${t.id}');return false;" title="Görevi kalıcı sil" style="color:#c66;text-decoration:none;font-size:10px">🗑</a>
+          </span>`;
+        }).join('');
+        return `<div class="notif-item" style="background:#fff5f5;border-left:3px solid #c33;cursor:default" onclick="event.stopPropagation()">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div style="font-weight:700;font-size:12px">⚠️ ${owner ? esc(owner.full_name) : '—'} <span style="font-weight:500;color:#a33">(${ts.length} geciken)</span></div>
+            <a href="#" onclick="event.stopPropagation();dismissEkipTasks('${taskIds}');return false;" title="7 gün yoksay" style="color:#999;text-decoration:none;font-size:13px;padding:0 4px">✕</a>
           </div>
-        </div>
-      </div>`;
-    }).join('');
+          <div style="margin-top:3px">${chips}</div>
+        </div>`;
+      }).join('');
   }
 
   let notifHtml = '';
