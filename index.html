@@ -490,6 +490,8 @@ body.proc-fullscreen{overflow:hidden}
           <div><div class="page-title">Projeler</div><div class="page-sub"><span id="pCount">0</span> aktif proje</div></div>
           <div class="toolbar"><button class="btn sec sm" onclick="window.print()">🖨</button><button class="btn" onclick="openProj()">+ Yeni Proje</button></div>
         </div>
+        <!-- v223: Aktif / Tamamlanan sekmeleri -->
+        <div id="projTabs" style="display:flex;gap:8px;margin-bottom:12px"></div>
         <div class="table-wrap"><table>
           <thead><tr>
             <th style="text-align:center">Proje No / Lokasyon</th>
@@ -1213,6 +1215,8 @@ body.proc-fullscreen{overflow:hidden}
     <div class="modal-f">
       <button class="btn err" id="pfDel" style="margin-right:auto;display:none" onclick="delProj()">🗑 Sil</button>
       <button class="btn sec" id="pfFiles" style="display:none" onclick="if(editP)openFiles(editP)">📎 Dosyalar</button>
+      <!-- v223: kaydedilmemiş faz tarihi uyarısı -->
+      <span id="pfPendingHint" style="display:none;font-size:11px;color:#b45309;font-weight:700;margin-right:4px"></span>
       <button class="btn sec" onclick="closeProj()">Vazgeç</button>
       <button class="btn ok" id="pfSave" onclick="saveProj()">💾 Kaydet</button>
     </div>
@@ -2108,13 +2112,15 @@ function renderOverviewAdmin(){
   document.querySelectorAll('#page-overview .section-h').forEach(s=>s.style.display='');
   const ph0 = document.querySelector('#page-overview .page-h .role-extra-actions');
   if(ph0) ph0.innerHTML = '';
+  // v223: KPI kutuları tıklanabilir — ilgili sayfaya/panele götürür
+  const _kpiAttr = (action) => `onclick="${action}" style="cursor:pointer" onmouseover="this.style.boxShadow='0 4px 14px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow=''" title="Aç"`;
   kpiEl.innerHTML=`
-    <div class="kpi"><div class="kpi-label">Açık Proje</div><div class="kpi-val">${op.length}</div><div class="kpi-sub">Tüm birimler</div></div>
-    <div class="kpi ok"><div class="kpi-label">Toplam Tonaj</div><div class="kpi-val g" style="font-size:18px">${fmtNum(tn*1000, 0)} kg</div><div class="kpi-sub">Aktif</div></div>
-    <div class="kpi err"><div class="kpi-label">Geciken</div><div class="kpi-val r">${ov.length}</div><div class="kpi-sub">Acil aksiyon</div></div>
-    <div class="kpi"><div class="kpi-label">Açık Görev</div><div class="kpi-val">${ot.length}</div><div class="kpi-sub">Tüm ekip</div></div>
-    <div class="kpi ok amount-only"><div class="kpi-label">Aktif Ciro</div><div class="kpi-val g" style="font-size:18px">${fmtTL0(ttl)}</div><div class="kpi-sub">Sözleşme</div></div>
-    <div class="kpi w"><div class="kpi-label">Teklif/Çizim</div><div class="kpi-val">${projects.filter(p=>p.stage==='teklifproje').length}</div><div class="kpi-sub">Hazırlık</div></div>`;
+    <div class="kpi" ${_kpiAttr("goto('projects')")}><div class="kpi-label">Açık Proje</div><div class="kpi-val">${op.length}</div><div class="kpi-sub">Tüm birimler</div></div>
+    <div class="kpi ok" ${_kpiAttr("goto('projects')")}><div class="kpi-label">Toplam Tonaj</div><div class="kpi-val g" style="font-size:18px">${fmtNum(tn*1000, 0)} kg</div><div class="kpi-sub">Aktif</div></div>
+    <div class="kpi err" ${_kpiAttr("kpiGotoAlerts()")}><div class="kpi-label">Geciken</div><div class="kpi-val r">${ov.length}</div><div class="kpi-sub">Acil aksiyon</div></div>
+    <div class="kpi" ${_kpiAttr("goto('mytasks')")}><div class="kpi-label">Açık Görev</div><div class="kpi-val">${ot.length}</div><div class="kpi-sub">Tüm ekip</div></div>
+    <div class="kpi ok amount-only" ${_kpiAttr("goto('d-muhasebe')")}><div class="kpi-label">Aktif Ciro</div><div class="kpi-val g" style="font-size:18px">${fmtTL0(ttl)}</div><div class="kpi-sub">Sözleşme</div></div>
+    <div class="kpi w" ${_kpiAttr("goto('projects')")}><div class="kpi-label">Teklif/Çizim</div><div class="kpi-val">${projects.filter(p=>p.stage==='teklifproje').length}</div><div class="kpi-sub">Hazırlık</div></div>`;
   // Birim Bazlı Özet ve Ekip Yükü tabloları kaldırıldı (v159)
   _renderDashboardCharts(op);
 }
@@ -2362,6 +2368,45 @@ function undoSysAlertsDismiss(){
   _sysAlertsSaveDismiss({});
   try { renderSysAlerts(); } catch(e){}
 }
+// v223: Panel açık/kapalı tercihi (varsayılan: kapalı)
+function _sysAlertsOpen(){ try { return localStorage.getItem('ucel_alerts_open') === '1'; } catch(e){ return false; } }
+function toggleSysAlerts(force){
+  const next = (force === undefined || force === null) ? !_sysAlertsOpen() : !!force;
+  try { localStorage.setItem('ucel_alerts_open', next ? '1' : '0'); } catch(e){}
+  try { renderSysAlerts(); } catch(e){}
+}
+// v223: Bir projenin TÜM alert'lerini topluca yoksay (tip'ler virgülle gelir, her biri ayrı kaydedilir)
+function dismissProjAlerts(pid, tips){
+  const map = _sysAlertsDismissed();
+  String(tips||'').split(',').filter(Boolean).forEach(tip => { map[pid + '|' + tip] = Date.now(); });
+  _sysAlertsSaveDismiss(map);
+  try { renderSysAlerts(); } catch(e){}
+}
+// v223: Alert mesajını kısalt (gün sayısını mevcut mesajdan çek)
+function _shortAlertMsg(a){
+  const num = ((a.msg||'').match(/(\d+)\s*gün/)||[])[1];
+  switch(a.tip){
+    case 'sevk_gecti':  return `🔴 Sevk ${num||'?'} gün geçti`;
+    case 'sevk_yakin':  return `⏰ Sevke ${num||'?'} gün kaldı`;
+    case 'sevk_yok':    return '📅 Sevk tarihi yok';
+    case 'bedel_yok':   return '💰 Bedel yok';
+    case 'tonaj_yok':   return '⚖️ Tonaj yok';
+    case 'asama_yok':   return '🎯 Aşama seçilmemiş';
+    case 'musteri_yok': return '👤 Müşteri yok';
+    case 'klasor_yok':  return '📁 Klasör linki yok';
+    case 'faz_durgun':  return `🐌 ${num||'?'} gündür hareketsiz`;
+    case 'gorev_gec':   return `📋 Görev ${num||'?'} gün geçti`;
+    default: return a.msg;
+  }
+}
+// v223: KPI "Geciken" tıklaması — Dikkat Edilecekler panelini açıp oraya kaydır
+function kpiGotoAlerts(){
+  try { localStorage.setItem('ucel_alerts_open','1'); } catch(e){}
+  try { renderSysAlerts(); } catch(e){}
+  const box = document.getElementById('sysAlertsBox');
+  if(box) box.scrollIntoView({behavior:'smooth', block:'start'});
+}
+// v223: Proje bazında gruplanmış, katlanabilir Dikkat Edilecekler paneli
 function renderSysAlerts(){
   const box = document.getElementById('sysAlertsBox');
   if(!box || me?.role !== 'yonetici'){ if(box) box.style.display='none'; return; }
@@ -2381,30 +2426,57 @@ function renderSysAlerts(){
     box.innerHTML = `<div style="background:linear-gradient(135deg,#dcfce7 0%,#bbf7d0 100%);padding:12px 18px;border-left:4px solid #16a34a;font-size:13px;font-weight:600;color:#15803d;display:flex;align-items:center">✅ Sistem temiz — dikkat gereken bir eksik/aksama yok.${undoBtn}</div>`;
     return;
   }
-  const rows = alerts.slice(0, 20).map(a => {
-    const bg = a.sev === 'crit' ? '#fef2f2' : (a.sev === 'warn' ? '#fffbeb' : '#f8fafc');
-    const border = a.sev === 'crit' ? '#dc2626' : (a.sev === 'warn' ? '#f59e0b' : '#94a3b8');
-    return `<div style="padding:10px 14px;border-bottom:1px solid #eef1f5;background:${bg};display:flex;align-items:center;gap:10px">
-      <div style="width:4px;height:36px;background:${border};border-radius:2px;flex-shrink:0"></div>
-      <div style="flex:1;min-width:0;cursor:pointer" onclick="openProj('${a.pid}')" title="Aç">
-        <div style="font-weight:700;color:#1f2937;font-size:12px;margin-bottom:2px">${esc(a.plabel)}</div>
-        <div style="font-size:13px;color:#374151">${a.msg}</div>
-      </div>
-      <button onclick="event.stopPropagation();dismissSysAlert('${a.pid}','${a.tip}')" title="7 gün yoksay" style="background:transparent;border:1px solid #d1d5db;color:#6b7280;width:26px;height:26px;border-radius:6px;font-size:14px;cursor:pointer;flex-shrink:0;line-height:1">×</button>
-    </div>`;
-  }).join('');
-  const moreLine = alerts.length > 20 ? `<div style="padding:8px 14px;text-align:center;background:#f8fafc;color:#64748b;font-size:11px;font-weight:600">+ ${alerts.length - 20} uyarı daha (ilk 20 gösteriliyor)</div>` : '';
-  const undoBtn = dismissedCount > 0 ? `<button onclick="undoSysAlertsDismiss()" style="background:transparent;border:1px solid #78350f;color:#78350f;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-left:auto">↶ ${dismissedCount} yoksayılanı göster</button>` : '';
-  box.style.display = 'block';
-  box.innerHTML = `
-    <div style="padding:12px 18px;background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);border-bottom:2px solid #f59e0b;display:flex;align-items:center;gap:10px">
+  // Proje bazında grupla
+  const sevOrder = {crit:0, warn:1, info:2};
+  const groups = {};
+  alerts.forEach(a => {
+    const key = a.pid || ('x_' + a.plabel);
+    if(!groups[key]){
+      groups[key] = {pid: a.pid, plabel: a.plabel, items: [], worst: 2, maxDays: 0};
+    }
+    const g = groups[key];
+    g.items.push(a);
+    const s = sevOrder[a.sev] !== undefined ? sevOrder[a.sev] : 2;
+    if(s < g.worst) g.worst = s;
+    // En kötü gecikme günü (sıralama için — crit kartlar arasında en çok gecikmiş üstte)
+    const d = +(((a.msg||'').match(/(\d+)\s*gün/)||[])[1] || 0);
+    if(s === 0 && d > g.maxDays) g.maxDays = d;
+  });
+  const cards = Object.values(groups).sort((a,b) => (a.worst - b.worst) || (b.maxDays - a.maxDays) || (a.plabel||'').localeCompare(b.plabel||''));
+  const critCount = alerts.filter(a => a.sev === 'crit').length;
+  const warnCount = alerts.length - critCount;
+  const isOpen = _sysAlertsOpen();
+  const undoBtn = dismissedCount > 0 ? `<button onclick="event.stopPropagation();undoSysAlertsDismiss()" style="background:transparent;border:1px solid #78350f;color:#78350f;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-left:auto;flex-shrink:0">↶ ${dismissedCount} yoksayılan uyarıyı geri getir</button>` : '';
+  const header = `
+    <div onclick="toggleSysAlerts()" style="padding:12px 18px;background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);${isOpen?'border-bottom:2px solid #f59e0b;':''}display:flex;align-items:center;gap:10px;cursor:pointer" title="${isOpen?'Gizle':'Göster'}">
       <span style="font-size:20px">🚨</span>
-      <strong style="font-size:14px;color:#78350f">Dikkat Edilecekler (${alerts.length})</strong>
+      <strong style="font-size:14px;color:#78350f">Dikkat: ${critCount} kritik · ${warnCount} uyarı</strong>
+      <span style="font-size:12px;font-weight:700;color:#92400e;background:#fff7e0;border:1px solid #f59e0b;border-radius:6px;padding:2px 10px">${isOpen?'Gizle ▴':'Göster ▾'}</span>
       ${undoBtn}
-    </div>
-    ${rows}
-    ${moreLine}
-  `;
+    </div>`;
+  let body = '';
+  if(isOpen){
+    body = cards.map(g => {
+      const isCrit = g.worst === 0;
+      const bg = isCrit ? '#fdecea' : '#fffbeb';
+      const stripe = isCrit ? '#c0392b' : '#f59e0b';
+      const tips = [...new Set(g.items.map(i => i.tip))].join(',');
+      const clickAttr = g.pid ? `onclick="openProj('${g.pid}')" title="Projeyi aç"` : '';
+      return `<div style="padding:10px 14px;border-bottom:1px solid #eef1f5;background:${bg};display:flex;align-items:center;gap:10px">
+        <div style="width:5px;align-self:stretch;background:${stripe};border-radius:3px;flex-shrink:0"></div>
+        <div style="flex:1;min-width:0;cursor:${g.pid?'pointer':'default'}" ${clickAttr}>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+            <span style="font-weight:700;color:#1f2937;font-size:12.5px">${esc(g.plabel)}</span>
+            <span style="font-size:10.5px;font-weight:700;color:${isCrit?'#c0392b':'#92400e'};background:#fff;border:1px solid ${stripe};border-radius:10px;padding:1px 8px">${g.items.length} konu</span>
+          </div>
+          <div style="font-size:12px;color:#374151;line-height:1.5">${g.items.map(_shortAlertMsg).map(esc).join(' · ')}</div>
+        </div>
+        <button onclick="event.stopPropagation();dismissProjAlerts('${g.pid||''}','${tips}')" title="Bu projenin tüm uyarılarını 7 gün yoksay" style="background:transparent;border:1px solid #d1d5db;color:#6b7280;width:26px;height:26px;border-radius:6px;font-size:14px;cursor:pointer;flex-shrink:0;line-height:1">×</button>
+      </div>`;
+    }).join('');
+  }
+  box.style.display = 'block';
+  box.innerHTML = header + body;
 }
 
 function renderOverviewUnit(){
@@ -2506,10 +2578,34 @@ function renderOverviewUnit(){
   const ekipBaslik = document.querySelectorAll('#page-overview .section-h');
   if(ekipBaslik[1]) ekipBaslik[1].style.display = 'none';
 }
+// v223: Projeler sayfası sekmesi — 'aktif' | 'tamamlanan'
+let _projTab = 'aktif';
+function setProjTab(t){
+  _projTab = (t === 'tamamlanan') ? 'tamamlanan' : 'aktif';
+  renderProjects();
+}
 function renderProjects(){
   const tb=document.getElementById('pList');if(!tb)return;
   const td=new Date().toISOString().slice(0,10);
-  tb.innerHTML=projects.map(p=>{
+  // v223: Aktif / Tamamlanan ayrımı
+  const _isDoneP = p => p.stage === 'tamamlandi' || (p.stages||[]).includes('tamamlandi');
+  const aktifList = projects.filter(p => !_isDoneP(p));
+  const doneList = projects.filter(_isDoneP);
+  const tabsEl = document.getElementById('projTabs');
+  if(tabsEl){
+    const tabBtn = (key, label, n) => {
+      const act = _projTab === key;
+      return `<button onclick="setProjTab('${key}')" style="padding:7px 16px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid ${act?'#1f4e8c':'#cdd2dc'};background:${act?'#1f4e8c':'#fff'};color:${act?'#fff':'#555'}">${label} (${n})</button>`;
+    };
+    tabsEl.innerHTML = tabBtn('aktif','Aktif',aktifList.length) + tabBtn('tamamlanan','✓ Tamamlanan',doneList.length);
+  }
+  const list = _projTab === 'tamamlanan' ? doneList : aktifList;
+  if(list.length === 0){
+    tb.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:26px;color:#888">${_projTab==='tamamlanan'?'Tamamlanan proje yok.':'Aktif proje yok.'}</td></tr>`;
+    document.getElementById('pCount').textContent = aktifList.length;
+    return;
+  }
+  tb.innerHTML=list.map(p=>{
     // v217: Sevk tarihi = sevk fazının hedeflenen tarihi (phase_dates.sevk); shipdate eski kayıtlar için fallback
     // v219: iki style attribute hatası düzeltildi — lt sadece CSS parçası döndürüyor, text-align:center td'de kalıyor
     const sevkT = (p.phase_dates && p.phase_dates.sevk) || p.shipdate || '';
@@ -2537,7 +2633,7 @@ function renderProjects(){
       <td style="text-align:center;white-space:nowrap"><button class="icon-btn" onclick="event.stopPropagation();openFiles('${p.id}')" title="Dosyalar">📎</button>${p.folder_path?`<button class="icon-btn" onclick="event.stopPropagation();openFolderByProjectId('${p.id}')" title="Ortak klasörü aç">📁</button>`:''}<button class="icon-btn" onclick="event.stopPropagation();openProj('${p.id}')">✏️</button></td>
     </tr>`;
   }).join('');
-  document.getElementById('pCount').textContent=projects.length;
+  document.getElementById('pCount').textContent=aktifList.length; // v223: sayaç "aktif proje" etiketiyle tutarlı
 }
 function renderMyTasks(){
   const mt = tasks.filter(t => t.assignee_id === me.id);
@@ -6632,6 +6728,8 @@ async function deleteStockFile(id, path){
 /* ============ PROJECT CRUD ============ */
 function openProj(id){
   editP=id||null;
+  window._pendingPhaseDates = {}; // v223: modal her açılışta bekleyen tarih değişiklikleri sıfırlanır
+  try { _updatePendingPhaseHint(); } catch(e){}
   try { refreshAutocompleteLists(); } catch(e){} // v190: müşteri datalist
   const isAdmin = me?.role === 'yonetici';
   const canEditProject = isAdmin || me?.role === 'teklifproje';
@@ -6734,7 +6832,10 @@ function renderPhases(project){
     const isPending = !!pending[ph];
     const pendBy = isPending ? (allProfiles[pending[ph].by]?.full_name || '?') : '';
     const editable = canEditPhase(ph);
-    const deadline = dates[ph] || '';
+    // v223: kaydedilmemiş (bekleyen) tarih değişikliği varsa onu göster
+    const _pendAll = window._pendingPhaseDates || {};
+    const hasPend = Object.prototype.hasOwnProperty.call(_pendAll, ph);
+    const deadline = hasPend ? (_pendAll[ph] || '') : (dates[ph] || '');
     const overdue = deadline && deadline < today && val < 100;
     let approvalBtn = '';
     if(isPending){
@@ -6763,7 +6864,7 @@ function renderPhases(project){
             : `<span style="width:50px;text-align:right;font-size:12px;color:#666">%${val}</span>`
         }
         ${adminEdit
-          ? `<input type="date" value="${deadline||''}" title="Hedef tarih (yalnızca yönetici düzenler)" style="font-size:11px;padding:2px 4px;border:1px solid #cdd2dc;border-radius:6px" onchange="updatePhaseDate('${project.id}','${ph}',this.value)">`
+          ? `<input type="date" value="${deadline||''}" title="${hasPend?'Kaydedilmemiş değişiklik — Kaydet ile uygulanır':'Hedef tarih (yalnızca yönetici düzenler)'}" style="font-size:11px;padding:2px 4px;border:${hasPend?'2px solid #f59e0b':'1px solid #cdd2dc'};border-radius:6px${hasPend?';background:#fffbeb':''}" onchange="phaseDateChanged('${project.id}','${ph}',this)">`
           : `<span title="Hedef tarih — yalnızca yönetici değiştirebilir" style="font-size:11px;color:${overdue?'#c00':deadline?'#1f4e8c':'#aaa'};background:#f5f7fa;border:1px solid #e3e7ee;border-radius:6px;padding:2px 8px;min-width:90px;text-align:center;display:inline-block;font-weight:${overdue?'700':'500'}">🎯 ${deadline || '—'}</span>`
         }
       </div>
@@ -6902,7 +7003,32 @@ async function updatePhase(projectId, phase, value, inputEl){
     }
   } catch(e){console.warn('notify err',e)}
 }
-async function updatePhaseDate(projectId, phase, dateStr){
+// v223: Faz tarihleri artık anında kaydedilmez — bellekte biriktirilir, Kaydet ile topluca işlenir
+function phaseDateChanged(projectId, phase, inp){
+  if(me?.role !== 'yonetici'){toast('Sadece yönetici tarih atayabilir','err');return}
+  window._pendingPhaseDates = window._pendingPhaseDates || {};
+  window._pendingPhaseDates[phase] = inp.value || '';
+  // Kaydedilmemiş işareti (sarı kenar)
+  inp.style.border = '2px solid #f59e0b';
+  inp.style.background = '#fffbeb';
+  inp.title = 'Kaydedilmemiş değişiklik — Kaydet ile uygulanır';
+  // Sevk tarihi inputunu senkron tut (saveProj pf-ship'ten okuyor)
+  if(phase === 'sevk'){
+    const sh = document.getElementById('pf-ship');
+    if(sh) sh.value = inp.value || '';
+  }
+  _updatePendingPhaseHint();
+}
+// v223: Kaydet butonu yanındaki "kaydedilmemiş değişiklik" uyarısı
+function _updatePendingPhaseHint(){
+  const el = document.getElementById('pfPendingHint');
+  if(!el) return;
+  const n = Object.keys(window._pendingPhaseDates || {}).length;
+  el.style.display = n ? 'inline-block' : 'none';
+  if(n) el.textContent = `● ${n} kaydedilmemiş tarih değişikliği`;
+}
+// v223: silent=true → toplu kayıt modunda faz başına toast basma (toplu toast saveProj'da)
+async function updatePhaseDate(projectId, phase, dateStr, silent){
   if(me?.role !== 'yonetici'){toast('Sadece yönetici tarih atayabilir','err');return}
   const {error} = await sb.rpc('update_phase_date', {p_project_id: projectId, p_phase: phase, p_date: dateStr || null});
   if(error){toast('Hata: '+errTr(error),'err');return}
@@ -6919,7 +7045,7 @@ async function updatePhaseDate(projectId, phase, dateStr){
     if(phase === 'sevk') proj.shipdate = dateStr || null;
     renderPhases(proj);
   }
-  toast('Hedef tarih kaydedildi','ok');
+  if(!silent) toast('Hedef tarih kaydedildi','ok'); // v223: toplu modda tek toast saveProj'da
   // Otomatik görev: o fazın birim sorumlusuna atama
   try { await _ensurePhaseTask(projectId, phase, dateStr); } catch(e){ console.warn('phase task:', e); }
 }
@@ -6970,7 +7096,15 @@ function _fmtTRDate(d){
   if(!d) return '—';
   try { return new Date(d).toLocaleDateString('tr-TR'); } catch(e){ return d; }
 }
-function closeProj(){pmExitFs();document.getElementById('pModal').classList.remove('show');editP=null}
+function closeProj(){
+  // v223: kaydedilmemiş faz tarihi değişikliği varsa çıkış uyarısı
+  if(window._pendingPhaseDates && Object.keys(window._pendingPhaseDates).length > 0){
+    if(!confirm('Kaydedilmemiş tarih değişiklikleri var. Kaydetmeden çıkılsın mı?')) return;
+    window._pendingPhaseDates = {};
+    _updatePendingPhaseHint();
+  }
+  pmExitFs();document.getElementById('pModal').classList.remove('show');editP=null
+}
 // 4-Kart tam ekran toggle
 function pmToggleFs(which){
   const grid=document.getElementById('pmCardGrid'); if(!grid) return;
@@ -7004,6 +7138,16 @@ document.addEventListener('keydown', e=>{
   }
 });
 async function saveProj(){
+  // v223: Bekleyen faz hedef tarihlerini topluca kaydet (RPC + shipdate senkron + görev/bildirim)
+  if(editP && window._pendingPhaseDates && Object.keys(window._pendingPhaseDates).length > 0){
+    const _pendEntries = Object.entries(window._pendingPhaseDates);
+    for(const [_ph, _val] of _pendEntries){
+      try { await updatePhaseDate(editP, _ph, _val, true); } catch(e){ console.warn('faz tarih toplu kayıt:', e); }
+    }
+    window._pendingPhaseDates = {};
+    _updatePendingPhaseHint();
+    toast(`${_pendEntries.length} hedef tarih kaydedildi`,'ok');
+  }
   const stagesSelected = (window._pfStages || []).slice();
   const shipVal = document.getElementById('pf-ship').value || null;
   // v217: Sevk tarihi = phase_dates.sevk (tek kaynak). shipdate senkron kalıyor (eski kayıtlarla uyum).
@@ -8350,7 +8494,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v222'; // Sosyal medya modülü kaldırıldı (kullanılmıyordu, sadeleştirme)
+const APP_VERSION = 'v223'; // Dikkat paneli gruplandı+katlanır, faz tarihleri toplu kaydet, KPI tıklanabilir, proje sekmeleri
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
