@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Tekla → ÜÇEL Platformu Veri Aktarım Talimatı</title>
+<style>
+  body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#1a2332;max-width:800px;margin:0 auto;padding:30px;line-height:1.55}
+  h1{color:#1f4e8c;font-size:20px;border-bottom:3px solid #ee7e2c;padding-bottom:8px}
+  h2{color:#1f4e8c;font-size:15px;margin-top:26px}
+  table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13px}
+  th{background:#1f4e8c;color:#fff;padding:7px 10px;text-align:left}
+  td{border:1px solid #d5dce5;padding:6px 10px}
+  tr:nth-child(even){background:#f4f7fa}
+  .örnek{background:#eef6ee;border:1px solid #b5d8b5;border-radius:8px;padding:10px 14px;font-size:12.5px;font-family:Consolas,monospace;white-space:pre}
+  .not{background:#fff8e6;border:1px solid #f1d97e;border-radius:8px;padding:10px 14px;font-size:13px;margin:12px 0}
+  .adim{background:#f0f4f9;border-left:4px solid #1f4e8c;padding:8px 14px;margin:8px 0;font-size:13.5px}
+  @media print{body{padding:0}}
+</style>
+</head>
+<body>
+
+<h1>🏗️ TEKLA → ÜÇEL PLATFORMU — VERİ AKTARIM TALİMATI</h1>
+<p style="font-size:13px;color:#666">Amaç: Tekla Structures'tan alınan malzeme ve cıvata listelerinin ÜÇEL yönetim platformuna <b>elle giriş yapmadan</b> otomatik aktarılması. Mühendisten istenen: her proje için aşağıdaki 2 raporu belirtilen formatta dışa aktarmak.</p>
+
+<h2>📄 RAPOR 1 — Malzeme Listesi (Material / Part List)</h2>
+<p style="font-size:13px">Tekla'da: <b>Drawings &amp; Reports → Reports → Material List</b> (veya firma şablonunuz). Rapor şablonu aşağıdaki kolonları, bu sırayla içermeli:</p>
+<table>
+  <tr><th>#</th><th>Kolon</th><th>Açıklama</th><th>Örnek</th></tr>
+  <tr><td>1</td><td>PROFIL</td><td>Profil / plaka tanımı</td><td>HEA200, PL10*200, L50*5</td></tr>
+  <tr><td>2</td><td>KALITE</td><td>Malzeme kalitesi</td><td>S235JR, S275JR</td></tr>
+  <tr><td>3</td><td>ADET</td><td>Toplam parça adedi</td><td>24</td></tr>
+  <tr><td>4</td><td>BOY_MM</td><td>Parça boyu (mm)</td><td>6000</td></tr>
+  <tr><td>5</td><td>TOPLAM_KG</td><td>Bu kalemin toplam ağırlığı (kg)</td><td>1245.60</td></tr>
+</table>
+<div class="örnek">PROFIL;KALITE;ADET;BOY_MM;TOPLAM_KG
+HEA200;S235JR;24;6000;6098.40
+PL10*200;S275JR;48;350;263.76
+L50*5;S235JR;120;2500;1138.50</div>
+
+<h2>🔩 RAPOR 2 — Cıvata Listesi (Bolt List)</h2>
+<p style="font-size:13px">Tekla'da: <b>Drawings &amp; Reports → Reports → Bolt List</b>. Kolonlar:</p>
+<table>
+  <tr><th>#</th><th>Kolon</th><th>Açıklama</th><th>Örnek</th></tr>
+  <tr><td>1</td><td>CAP</td><td>Cıvata çapı</td><td>M12, M16, M20</td></tr>
+  <tr><td>2</td><td>BOY_MM</td><td>Cıvata boyu (mm)</td><td>40</td></tr>
+  <tr><td>3</td><td>SINIF</td><td>Mukavemet sınıfı</td><td>8.8, 10.9</td></tr>
+  <tr><td>4</td><td>ADET</td><td>Cıvata adedi</td><td>384</td></tr>
+  <tr><td>5</td><td>PUL_ADET</td><td>Pul adedi</td><td>768</td></tr>
+  <tr><td>6</td><td>SOMUN_ADET</td><td>Somun adedi</td><td>384</td></tr>
+</table>
+<div class="örnek">CAP;BOY_MM;SINIF;ADET;PUL_ADET;SOMUN_ADET
+M12;40;8.8;384;768;384
+M16;50;8.8;156;312;156
+M20;60;10.9;48;96;48</div>
+
+<h2>💾 Dosya Formatı ve Adlandırma</h2>
+<div class="adim">1. Format: <b>CSV (noktalı virgül ; ayraçlı)</b> veya Excel (.xlsx) — ikisi de kabul.</div>
+<div class="adim">2. Dosya adı: <b>{ProjeNo}_malzeme.csv</b> ve <b>{ProjeNo}_civata.csv</b> &nbsp;→&nbsp; örn: <b>2026-045_malzeme.csv</b></div>
+<div class="adim">3. İlk satır kolon başlıkları olmalı (yukarıdaki gibi). Türkçe karakter kullanılmamalı (kolon adlarında).</div>
+<div class="adim">4. Ondalık ayracı NOKTA (1245.60) — Tekla varsayılanı zaten böyle.</div>
+<div class="adim">5. Hazır dosyalar ortak klasöre: <b>\\192.168.1.68\ortak\...\{proje klasörü}\TEKLA_EXPORT\</b></div>
+
+<div class="not"><b>⚠️ Önemli:</b> Rapor şablonunda kolon sırası ve adları yukarıdakiyle birebir aynı olmalı — platform bu başlıklara göre okuyacak. Tekla'nın standart şablonu farklıysa <b>Report Template Editor</b> ile bir kez özelleştirilir, sonra her projede aynı şablon kullanılır. Fire payı EKLEMEYİN — platform fire hesabını kendi yapıyor, Tekla'dan net ihtiyaç gelsin.</div>
+
+<h2>🔁 İş Akışı (özet)</h2>
+<p style="font-size:13.5px">Mühendis modeli bitirir → 2 raporu yukarıdaki formatta dışa aktarır → ortak klasöre koyar → ÜÇEL platformunda proje açılıp "Tekla'dan içe aktar" ile dosya seçilir → malzeme ve cıvata ihtiyaçları otomatik yüklenir. Elle giriş, yazım hatası, unutulan kalem ortadan kalkar.</p>
+
+<p style="font-size:11px;color:#999;margin-top:30px">ÜÇEL Yapısal Çelik — Veri Aktarım Standardı v1 · Ekim 2026</p>
+
+</body>
+</html>

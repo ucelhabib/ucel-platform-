@@ -8545,7 +8545,31 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v223'; // Dikkat paneli gruplandı+katlanır, faz tarihleri toplu kaydet, KPI tıklanabilir, proje sekmeleri
+const APP_VERSION = 'v224'; // iOS Safari sohbet klavye fix — visualViewport ile input hep görünür (Süleyman raporu)
+
+// v224: iOS Safari'de klavye açılınca sohbet yazma alanı klavyenin altında kalıyordu.
+// visualViewport gerçek görünür yüksekliği verir; chat container'ı ona göre daraltıyoruz.
+(function(){
+  if(!window.visualViewport) return;
+  let _t = null;
+  function adjustChat(){
+    const cc = document.querySelector('.chat-container');
+    if(!cc || cc.offsetParent === null) return; // sohbet sayfası açık değilse dokunma
+    const rect = cc.getBoundingClientRect();
+    const avail = window.visualViewport.height - rect.top - 8;
+    if(avail > 180){
+      cc.style.height = avail + 'px';
+      cc.style.minHeight = '0';
+    }
+    const cl = document.getElementById('chatList');
+    if(cl) cl.scrollTop = cl.scrollHeight;
+  }
+  function debounced(){ clearTimeout(_t); _t = setTimeout(adjustChat, 120); }
+  window.visualViewport.addEventListener('resize', debounced);
+  window.visualViewport.addEventListener('scroll', debounced);
+  document.addEventListener('focusin', e => { if(e.target && e.target.id === 'chatInput') setTimeout(adjustChat, 350); });
+  document.addEventListener('focusout', e => { if(e.target && e.target.id === 'chatInput') setTimeout(adjustChat, 350); });
+})();
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
 (function _mountVersionBadge(){
