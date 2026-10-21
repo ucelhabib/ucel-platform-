@@ -1398,6 +1398,11 @@ let tasks = [];
 let notifs = [];
 let editP = null, editT = null;
 let chans = [];
+// v226: Tamamlanmışlık tek tanım — her yer bunu kullansın
+function isProjectDone(p){
+  if(!p) return false;
+  return p.stage === 'tamamlandi' || (p.stages||[]).includes('tamamlandi');
+}
 // v187: Sayfa kapanırken tüm kanalları temizle (realtime sızıntı fix)
 if(typeof window !== 'undefined'){
   window.addEventListener('beforeunload', () => {
@@ -2098,8 +2103,8 @@ function renderOverview(){
   return renderOverviewUnit();
 }
 function renderOverviewAdmin(){
-  const op=projects.filter(p=>p.stage!=='tamamlandi');
-  const ot=tasks.filter(t=>!t.done);
+  const op=projects.filter(p=>!isProjectDone(p)); // v226
+  const ot=tasks.filter(t=>!t.done && !isProjectDone(projects.find(p=>p.id===t.project_id))); // v226: tamamlanmış proje görevleri sayılmaz
   const td=new Date().toISOString().slice(0,10);
   const ov=ot.filter(t=>t.due&&t.due<td);
   const ttl=op.reduce((s,p)=>s+(+p.amount||0),0);
@@ -2256,7 +2261,7 @@ async function checkPhaseDeadlines(){
   const today = new Date();
   today.setHours(0,0,0,0);
   for(const p of projects){
-    if(p.stage === 'tamamlandi') continue;
+    if(isProjectDone(p)) continue; // v226
     const dates = p.phase_dates || {};
     for(const [phase, dateStr] of Object.entries(dates)){
       if(!dateStr) continue;
@@ -2270,7 +2275,7 @@ async function checkPhaseDeadlines(){
       // v215: Geçmiş için sadece 1, 7, 30 gün — daha az spam
       let shouldNotify = false;
       if([7, 3, 1, 0].includes(diffDays)){
-        const role = Object.keys(PHASE_ROLE_MAP || {}).find(r => (PHASE_ROLE_MAP[r]||[]).includes(phase));
+        const role = Object.keys(PHASE_ROLE_MAP || {}).find(r => r !== 'yonetici' && (PHASE_ROLE_MAP[r]||[]).includes(phase)); // v226: hatırlatma doğru birime
         if(role){
           try { await notify(`⏰ ${projLabel} · ${DN[phase]||phase} son ${diffDays} gün — bitmedi (%${pct})`, '⏰', role, 'project', p.id); shouldNotify = true; } catch(e){}
         }
@@ -2286,9 +2291,10 @@ async function checkPhaseDeadlines(){
 function getSystemAlerts(){
   const alerts = [];
   const now = new Date();
-  const today = now.toISOString().slice(0,10);
+  const today = now.toISOString().slice(0,10); // v226: today normalize'dan ÖNCE alınır (UTC kayması olmasın)
+  now.setHours(0,0,0,0); // v226: gün hesabı normalize — diffDays tam gün olarak çıkar
   projects.forEach(p => {
-    if(p.stage === 'tamamlandi') return; // biten projeleri atla
+    if(isProjectDone(p)) return; // biten projeleri atla // v226
     const projLabel = `${p.no} · ${p.customer||'(müşteri yok)'}`;
     // v217: sevk tarihi kaynağı = phase_dates.sevk (fallback shipdate)
     const sevkTgt = (p.phase_dates && p.phase_dates.sevk) || p.shipdate;
@@ -2342,6 +2348,7 @@ function getSystemAlerts(){
   openTasks.forEach(t => {
     if(t.due < today){
       const p = projects.find(x => x.id === t.project_id);
+      if(isProjectDone(p)) return; // v226: tamamlanmış projenin görevlerini sayma
       const pLabel = p ? `${p.no}` : '(proje yok)';
       const diffDays = Math.floor((now - new Date(t.due+'T00:00:00')) / 86400000);
       alerts.push({sev:'warn', pid:t.project_id, plabel:pLabel, tip:'gorev_gec', msg:`📋 "${t.title}" görevi ${diffDays} gün geçti (${DN[t.dept]||t.dept})`});
@@ -2496,13 +2503,13 @@ function renderOverviewUnit(){
     (p.stages && p.stages.includes(me.role)) ||
     p.stage === me.role
   );
-  const myActiveProjects = myProjects.filter(p => p.stage !== 'tamamlandi');
+  const myActiveProjects = myProjects.filter(p => !isProjectDone(p)); // v226
 
   // KPI'lar role özel
   let kpis = '';
   let extraButton = '';
   if(me.role === 'teklifproje'){
-    const openProj = projects.filter(p => p.stage !== 'tamamlandi').length;
+    const openProj = projects.filter(p => !isProjectDone(p)).length; // v226
     kpis = `
       <div class="kpi"><div class="kpi-label">📁 Açık Projeler</div><div class="kpi-val">${openProj}</div><div class="kpi-sub">Tüm aktif</div></div>
       <div class="kpi w"><div class="kpi-label">📐 Teklif Aşamasında</div><div class="kpi-val">${projects.filter(p => p.stages && p.stages.includes('teklifproje')).length}</div><div class="kpi-sub">Hazırlık</div></div>
@@ -2510,7 +2517,7 @@ function renderOverviewUnit(){
       <div class="kpi ok"><div class="kpi-label">✅ Tamamlananlar</div><div class="kpi-val g">${myDone}</div><div class="kpi-sub">Tüm zamanlar</div></div>`;
     extraButton = `<button class="btn" style="font-size:16px;padding:14px 26px;margin:6px 0 14px" onclick="openProj()">➕ Yeni Proje Aç</button>`;
   } else if(me.role === 'satinalma'){
-    const open = projects.filter(p => p.stage !== 'tamamlandi').length;
+    const open = projects.filter(p => !isProjectDone(p)).length; // v226
     kpis = `
       <div class="kpi"><div class="kpi-label">🛒 Aktif Projeler</div><div class="kpi-val">${open}</div><div class="kpi-sub">Satın alma</div></div>
       <div class="kpi ${myOpen.length>0?'':'ok'}"><div class="kpi-label">📋 Açık Görevlerim</div><div class="kpi-val">${myOpen.length}</div><div class="kpi-sub">${myOverdue.length} geciken</div></div>
@@ -2532,12 +2539,12 @@ function renderOverviewUnit(){
       <div class="kpi w"><div class="kpi-label">📁 Aktif Projeler</div><div class="kpi-val">${myActiveProjects.length}</div><div class="kpi-sub">Bana ait</div></div>`;
     extraButton = ''; // v199: Saha Raporları sayfası kaldırıldı (v187) — sohbete taşındı
   } else if(me.role === 'muhasebe'){
-    const tamamlanan = projects.filter(p => p.stage === 'tamamlandi').length;
+    const tamamlanan = projects.filter(p => isProjectDone(p)).length; // v226
     const ttl = projects.reduce((s,p) => s + (+p.amount||0), 0);
     kpis = `
       <div class="kpi ok amount-only"><div class="kpi-label">💰 Toplam Ciro</div><div class="kpi-val g" style="font-size:18px">${fmtTL0(ttl)}</div><div class="kpi-sub">Tüm projeler</div></div>
       <div class="kpi"><div class="kpi-label">✅ Tamamlanan</div><div class="kpi-val">${tamamlanan}</div><div class="kpi-sub">Proje</div></div>
-      <div class="kpi w"><div class="kpi-label">📁 Devam Eden</div><div class="kpi-val">${projects.filter(p=>p.stage!=='tamamlandi').length}</div><div class="kpi-sub">Aktif</div></div>
+      <div class="kpi w"><div class="kpi-label">📁 Devam Eden</div><div class="kpi-val">${projects.filter(p=>!isProjectDone(p)).length}</div><div class="kpi-sub">Aktif</div></div>
       <div class="kpi ${myOpen.length>0?'':'ok'}"><div class="kpi-label">📋 Görevlerim</div><div class="kpi-val">${myOpen.length}</div><div class="kpi-sub">${myOverdue.length} geciken</div></div>`;
     extraButton = `<button class="btn" style="font-size:15px;padding:12px 22px;margin:6px 0 14px" onclick="goto('projects')">📁 Projeleri Aç</button>`;
   } else {
@@ -2589,7 +2596,7 @@ function renderProjects(){
   const tb=document.getElementById('pList');if(!tb)return;
   const td=new Date().toISOString().slice(0,10);
   // v223: Aktif / Tamamlanan ayrımı
-  const _isDoneP = p => p.stage === 'tamamlandi' || (p.stages||[]).includes('tamamlandi');
+  const _isDoneP = p => isProjectDone(p); // v226: tek tanım
   const aktifList = projects.filter(p => !_isDoneP(p));
   const doneList = projects.filter(_isDoneP);
   const tabsEl = document.getElementById('projTabs');
@@ -2610,13 +2617,15 @@ function renderProjects(){
     // v217: Sevk tarihi = sevk fazının hedeflenen tarihi (phase_dates.sevk); shipdate eski kayıtlar için fallback
     // v219: iki style attribute hatası düzeltildi — lt sadece CSS parçası döndürüyor, text-align:center td'de kalıyor
     const sevkT = (p.phase_dates && p.phase_dates.sevk) || p.shipdate || '';
-    const isDone = p.stage === 'tamamlandi' || (+(p.progress)||0) >= 100;
-    const lt = isDone
+    const isDone = isProjectDone(p) || (+(p.progress)||0) >= 100; // v226
+    // v225b: Sevk fazı %100 ise sevkiyat GERÇEKLEŞMİŞ — tarih geçmiş olsa bile gecikme yok (v185 mantığı)
+    const sevkDone = (+((p.phases||{}).sevk) || 0) >= 100;
+    const lt = (isDone || sevkDone)
       ? 'color:var(--ok);font-weight:700;'
       : (sevkT && sevkT < td ? 'color:var(--err);font-weight:700;' : '');
     // v225: Eylem gereken projelerde uyarı ikonu (onay bekliyor / sevk gecikti)
     const hasPending = p.phases_pending && Object.keys(p.phases_pending).length > 0;
-    const isLate = !isDone && sevkT && sevkT < td;
+    const isLate = !isDone && !sevkDone && sevkT && sevkT < td;
     const actIcon = hasPending
       ? `<span title="⏳ %100 onayı bekliyor — faz detayına bak" style="font-size:16px;cursor:help">⏳</span>`
       : (isLate ? `<span title="⚠️ Sevk tarihi geçti — eylem gerekli" style="font-size:16px;cursor:help">⚠️</span>` : '');
@@ -2635,7 +2644,7 @@ function renderProjects(){
       <td class="amount-only" style="text-align:center;white-space:nowrap">${p.amount ? fmtTL(p.amount) : '—'}</td>
       <td style="${lt}text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums">${sevkT||'—'}</td>
       <td><div style="display:flex;flex-direction:column;gap:3px">
-        <div style="display:flex;align-items:center;gap:6px"><div class="progress" style="flex:1"><div class="pbar" style="width:${p.progress}%"></div></div><span style="font-size:12px;font-weight:700;color:var(--p);min-width:34px;text-align:right">%${p.progress||0}</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><div class="progress" style="flex:1"><div class="pbar" style="width:${+(p.progress)||0}%"></div></div><span style="font-size:12px;font-weight:700;color:var(--p);min-width:34px;text-align:right">%${p.progress||0}</span></div>
         <div style="display:flex;gap:2px" title="Faz durumu: Teklif·Satınalma·Üretim·Sevk·Montaj·Muhasebe">${['teklifproje','satinalma','uretim','sevk','montaj','muhasebe'].map(k=>{const v=parseInt((p.phases||{})[k]||0);const c=v===100?'#0a7':v>0?'#1f4e8c':'#dde2e9';return `<span style="flex:1;height:6px;background:${c};border-radius:2px" title="${DI[k]||''} ${DN[k]||k}: %${v}"></span>`}).join('')}</div>
       </div></td>
       <td style="text-align:center;white-space:nowrap"><button class="icon-btn" onclick="event.stopPropagation();openFiles('${p.id}')" title="Dosyalar">📎</button>${p.folder_path?`<button class="icon-btn" onclick="event.stopPropagation();openFolderByProjectId('${p.id}')" title="Ortak klasörü aç">📁</button>`:''}<button class="icon-btn" onclick="event.stopPropagation();openProj('${p.id}')">✏️</button></td>
@@ -2712,7 +2721,7 @@ function renderDept(d){
   const dt=tasks.filter(t=>t.dept===d);
   const open=dt.filter(t=>!t.done);
   const td=new Date().toISOString().slice(0,10);
-  const ov=open.filter(t=>t.due&&t.due<td);
+  const ov=open.filter(t=>t.due&&t.due<td&&!isProjectDone(projects.find(p=>p.id===t.project_id))); // v226
   const pr=projects.filter(p=>p.stage===d);
   const dk=document.getElementById('dk-'+d);
   if(dk)dk.innerHTML=`
@@ -2900,7 +2909,7 @@ function renderTL(arr){
 function renderTeam(){
   const td=new Date().toISOString().slice(0,10);
   document.getElementById('teamGrid').innerHTML=Object.values(allProfiles).map(u=>{
-    const ts=tasks.filter(t=>t.assignee_id===u.id&&!t.done);
+    const ts=tasks.filter(t=>t.assignee_id===u.id&&!t.done&&!isProjectDone(projects.find(p=>p.id===t.project_id))); // v226
     const od=ts.filter(t=>t.due&&t.due<td);
     return `<div style="background:#fff;padding:18px;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05)">
       <div style="display:flex;gap:14px;align-items:center">
@@ -2953,7 +2962,7 @@ function renderNotifs(){
   // AKSIYON LISTESI: bana atanmış açık görevler
   const myOpenTasks = tasks.filter(t => t.assignee_id === me.id && !t.done);
   const adminPending = (me.role === 'yonetici')
-    ? tasks.filter(t => !t.done && t.due && t.due < td && t.assignee_id !== me.id)
+    ? tasks.filter(t => !t.done && t.due && t.due < td && t.assignee_id !== me.id && !isProjectDone(projects.find(p=>p.id===t.project_id))) // v226
     : [];
 
   let actionsHtml = '';
@@ -6952,6 +6961,7 @@ async function approvePhase(projectId, phase, approve){
   if(approve){
     if(!proj.phases) proj.phases = {};
     proj.phases[phase] = 100;
+    try { await _closePhaseTask(projectId, phase); } catch(e){} // v226: onaylanan faz görevini kapat
     if(proj.phases_pending) delete proj.phases_pending[phase];
     proj.progress = Math.round(PHASE_ORDER.reduce((s,k)=>s+parseInt(proj.phases[k]||0),0)/PHASE_ORDER.length);
     // v220: Onay sonrası progress DB'ye + auto-advance (stage/stages senkron)
@@ -7028,6 +7038,7 @@ async function updatePhase(projectId, phase, value, inputEl){
   try {
     await sb.from('projects').update({progress: proj.progress, updated_at: new Date().toISOString()}).eq('id', projectId);
   } catch(e){ console.warn('progress DB sync:', e); }
+  if(v === 100){ await _closePhaseTask(projectId, phase); } // v226: faz bitti — otomatik görevi kapat
   renderPhases(proj);
   toast(`✓ ${DN[phase]||phase}: %${prev} → %${v}`,'ok');
   // Bildirimler
@@ -7109,10 +7120,23 @@ async function updatePhaseDate(projectId, phase, dateStr, silent){
   try { await _ensurePhaseTask(projectId, phase, dateStr); } catch(e){ console.warn('phase task:', e); }
 }
 
+// v226: Faz tamamlanınca o faza ait otomatik görevi kapat (hayalet "geciken" kalmasın)
+async function _closePhaseTask(projectId, phase){
+  try {
+    const open = tasks.filter(t => t.project_id === projectId && t.dept === phase && !t.done && t.auto_phase);
+    for(const t of open){
+      await sb.from('tasks').update({done: true}).eq('id', t.id);
+      t.done = true;
+    }
+  } catch(e){ console.warn('phase task close:', e); }
+}
+
 // Faz hedef tarihi girilince ilgili birime görev oluştur/güncelle
 // Aynı faz için tekrar tarih girilirse mevcut görevi günceller (duplicate olmaz)
 async function _ensurePhaseTask(projectId, phase, dateStr){
   const proj = projects.find(p=>p.id===projectId); if(!proj) return;
+  if(isProjectDone(proj)) return; // v226: tamamlanmış projeye görev açma
+  if((+((proj.phases||{})[phase]) || 0) >= 100) return; // v226: bitmiş faza görev açma
   // O birimin sorumlu kişisini bul (rol/perms üzerinden — proje sorumlusu kavramı kaldırıldı)
   const candidates = Object.values(allProfiles).filter(u => u.role === phase || (u.perms||[]).includes(phase));
   let assignee = candidates.find(u => u.role === phase) || candidates[0] || null;
@@ -7129,6 +7153,7 @@ async function _ensurePhaseTask(projectId, phase, dateStr){
     .eq('project_id', projectId)
     .eq('dept', phase)
     .eq('auto_phase', true)
+    .eq('done', false) // v226: biten görevi güncelleme — gerekirse yeni görev aç
     .limit(1);
   if(e1) { console.warn('phase task select:', e1); }
   if(existing && existing.length){
@@ -7445,8 +7470,8 @@ function _populateShipProjects(){
   const sel = document.getElementById('shipProj'); if(!sel) return;
   const cur = sel.value;
   // v214: Tamamlanan projeler de listelenir (yükleme geçmişine erişim için)
-  const aktif = projects.filter(p => p.stage !== 'tamamlandi');
-  const bitmis = projects.filter(p => p.stage === 'tamamlandi');
+  const aktif = projects.filter(p => !isProjectDone(p)); // v226
+  const bitmis = projects.filter(p => isProjectDone(p)); // v226
   let html = '<option value="">— Proje seç —</option>';
   html += aktif.map(p => `<option value="${p.id}">${esc(p.no)} · ${esc(p.customer||'')}</option>`).join('');
   if(bitmis.length > 0){
@@ -7721,6 +7746,7 @@ async function completeShipping(){
     proj.progress = newProgress;
     proj.stage = newStage;
     proj.stages = newStages;
+    await _closePhaseTask(pid, 'sevk'); // v226: sevk fazı görevini kapat
     // Audit log
     try { await logAudit('shipping_complete', 'project', pid, `${proj.no} · ${proj.customer}`, {araclar: st.count, tonaj: st.totalKg, gun: st.dayCount}); } catch(e){}
     // Bildirim
@@ -8553,7 +8579,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v225'; // Proje no sola hizalı + eylem gereken satırlarda ⏳/⚠️ uyarı kolonu
+const APP_VERSION = 'v226'; // v226: Kök neden düzeltmesi: faz bitince görev otomatik kapanır, tamamlanmış projeye uyarı üretilmez, hatırlatma doğru birime, isProjectDone tek tanım
 
 // v224: iOS Safari'de klavye açılınca sohbet yazma alanı klavyenin altında kalıyordu.
 // visualViewport gerçek görünür yüksekliği verir; chat container'ı ona göre daraltıyoruz.
