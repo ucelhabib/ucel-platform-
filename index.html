@@ -4050,16 +4050,17 @@ async function _mergeOrInsertProcItems(rows){
   const projectId = rows[0].project_id;
   // Bu projedeki mevcut kalemleri çek (bir kez)
   const { data: existing, error: readErr } = await sb.from('procurement_items')
-    .select('id, malzeme, birim, miktar, stok_dusum, original_ihtiyac, not_text')
+    .select('id, malzeme, birim, ebat, miktar, stok_dusum, original_ihtiyac, not_text')
     .eq('project_id', projectId);
   if(readErr) return { error: readErr };
   const _norm = (s)=>(s||'').toString().trim().toLocaleUpperCase('tr-TR').replace(/\s+/g,' ');
+  // v227: EBAT merge anahtarına dahil — aynı kalınlık farklı ebat (1500×5010 vs 1500×3510) ayrı kalem kalmalı
   const idx = new Map();
-  (existing||[]).forEach(e => idx.set(`${_norm(e.malzeme)}|${_norm(e.birim)}`, e));
+  (existing||[]).forEach(e => idx.set(`${_norm(e.malzeme)}|${_norm(e.ebat)}|${_norm(e.birim)}`, e));
   const toInsert = [];
   let eklenen = 0, birlestirilen = 0;
   for(const r of rows){
-    const key = `${_norm(r.malzeme)}|${_norm(r.birim)}`;
+    const key = `${_norm(r.malzeme)}|${_norm(r.ebat)}|${_norm(r.birim)}`;
     const match = idx.get(key);
     if(match){
       // Mevcut kalemin miktarına ekle
@@ -8579,7 +8580,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v226'; // v226: Kök neden düzeltmesi: faz bitince görev otomatik kapanır, tamamlanmış projeye uyarı üretilmez, hatırlatma doğru birime, isProjectDone tek tanım
+const APP_VERSION = 'v227'; // SAÇ merge fix: EBAT birleştirme anahtarına eklendi — farklı ebatlar ayrı kalem (v226: faz-görev kapanışı + isProjectDone dahil)
 
 // v224: iOS Safari'de klavye açılınca sohbet yazma alanı klavyenin altında kalıyordu.
 // visualViewport gerçek görünür yüksekliği verir; chat container'ı ona göre daraltıyoruz.
