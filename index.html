@@ -494,8 +494,9 @@ body.proc-fullscreen{overflow:hidden}
         <div id="projTabs" style="display:flex;gap:8px;margin-bottom:12px"></div>
         <div class="table-wrap"><table>
           <thead><tr>
-            <th style="text-align:center">Proje No / Lokasyon</th>
+            <th style="text-align:left">Proje No / Lokasyon</th>
             <th>Müşteri / Proje</th>
+            <th style="width:34px"></th>
             <th style="text-align:center">Aşama</th>
             <th style="text-align:center">Tonaj (kg)</th>
             <th class="amount-only" style="text-align:center">Proje Bedeli</th>
@@ -2601,7 +2602,7 @@ function renderProjects(){
   }
   const list = _projTab === 'tamamlanan' ? doneList : aktifList;
   if(list.length === 0){
-    tb.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:26px;color:#888">${_projTab==='tamamlanan'?'Tamamlanan proje yok.':'Aktif proje yok.'}</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:26px;color:#888">${_projTab==='tamamlanan'?'Tamamlanan proje yok.':'Aktif proje yok.'}</td></tr>`;
     document.getElementById('pCount').textContent = aktifList.length;
     return;
   }
@@ -2613,8 +2614,14 @@ function renderProjects(){
     const lt = isDone
       ? 'color:var(--ok);font-weight:700;'
       : (sevkT && sevkT < td ? 'color:var(--err);font-weight:700;' : '');
+    // v225: Eylem gereken projelerde uyarı ikonu (onay bekliyor / sevk gecikti)
+    const hasPending = p.phases_pending && Object.keys(p.phases_pending).length > 0;
+    const isLate = !isDone && sevkT && sevkT < td;
+    const actIcon = hasPending
+      ? `<span title="⏳ %100 onayı bekliyor — faz detayına bak" style="font-size:16px;cursor:help">⏳</span>`
+      : (isLate ? `<span title="⚠️ Sevk tarihi geçti — eylem gerekli" style="font-size:16px;cursor:help">⚠️</span>` : '');
     return `<tr class="click compact" onclick="openProj('${p.id}')">
-      <td style="text-align:center">
+      <td style="text-align:left">
         <div style="font-size:14px;font-weight:700;color:#1f2937">${esc(p.no)}</div>
         ${p.location?`<div style="font-size:11px;color:#0a7c3a;font-weight:500;margin-top:2px">📍 ${esc(p.location)}</div>`:''}
       </td>
@@ -2622,6 +2629,7 @@ function renderProjects(){
         <div style="font-size:13.5px;font-weight:700;color:#1f2937;line-height:1.3">${esc(p.customer)}</div>
         ${p.title?`<div style="font-size:12px;color:#6b7280;font-weight:500;line-height:1.3;margin-top:2px">${esc(p.title)}</div>`:''}
       </td>
+      <td style="text-align:center;width:34px">${actIcon}</td>
       <td style="text-align:center">${((p.stages&&p.stages.length)?p.stages:[p.stage]).filter(Boolean).map(s=>`<span class="pill ${SP[s]||'pl-gray'}" style="margin:1px">${DI[s]||''} ${DN[s]||s}</span>`).join('')}</td>
       <td style="white-space:nowrap;text-align:center">${p.tonnage ? fmtNum(p.tonnage*1000, 0)+' kg' : '—'}</td>
       <td class="amount-only" style="text-align:center;white-space:nowrap">${p.amount ? fmtTL(p.amount) : '—'}</td>
@@ -8545,7 +8553,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v224'; // iOS Safari sohbet klavye fix — visualViewport ile input hep görünür (Süleyman raporu)
+const APP_VERSION = 'v225'; // Proje no sola hizalı + eylem gereken satırlarda ⏳/⚠️ uyarı kolonu
 
 // v224: iOS Safari'de klavye açılınca sohbet yazma alanı klavyenin altında kalıyordu.
 // visualViewport gerçek görünür yüksekliği verir; chat container'ı ona göre daraltıyoruz.
