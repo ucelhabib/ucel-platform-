@@ -333,7 +333,7 @@ body.proc-fullscreen{overflow:hidden}
 @keyframes tin{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
 
 .notif-panel{position:fixed;top:60px;right:14px;width:340px;max-height:440px;background:#fff;
-  border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.25);z-index:300;display:none;overflow:hidden}
+  border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.25);z-index:650;display:none;overflow:hidden} /* v231: 300→650 — mobil sabit sohbet (#page-chat z-index:400) ve alt nav (600) üstünde kalsın */
 .notif-panel.show{display:block}
 .notif-h{padding:12px 16px;border-bottom:1px solid var(--bd);font-weight:700;font-size:13px;color:var(--p);
   display:flex;justify-content:space-between;align-items:center}
