@@ -247,8 +247,14 @@ tr.compact td .pill{font-size:10px;padding:2px 7px}
 @media (max-width:720px){
   #mobileNav{display:flex !important}
   .main{padding-bottom:70px}
-  /* v182: Sohbet mobil - alt tab bar + iPhone safe-area için input alanı görünsün */
-  .chat-container{height:calc(100dvh - 260px) !important;min-height:300px !important;margin-bottom:env(safe-area-inset-bottom,0)}
+  /* v231: Sohbet mobilde EKRANA SABİT düzen (WhatsApp mantığı) — yükseklik hesabı yok, scroll/async/zamanlama etkisi yok */
+  body.chat-fs #page-chat{position:fixed;left:0;right:0;top:var(--topbarH,56px);bottom:64px;display:flex;flex-direction:column;padding:6px 10px 4px;overflow:hidden;background:var(--bg);z-index:400}
+  body.chat-fs #page-chat .page-h{flex-shrink:0;margin-bottom:6px}
+  body.chat-fs #chatTabs{flex-shrink:0}
+  body.chat-fs .chat-container{flex:1 1 auto !important;min-height:0 !important;height:auto !important;margin-bottom:0}
+  body.chat-fs .main{padding-bottom:0}
+  /* chat-fs yokken eski davranış (masaüstünde zaten devrede değil) */
+  body:not(.chat-fs) .chat-container{height:calc(100dvh - 260px) !important;min-height:300px !important;margin-bottom:env(safe-area-inset-bottom,0)}
   /* Mobilde saat kutusunu kompaktla — sadece saat görünsün */
   #topClock{white-space:nowrap}
   #topClock .clock-day-date{display:block;font-size:10.5px;opacity:0.85}
@@ -1845,7 +1851,16 @@ function goto(id){
   if(id==='mytasks')renderMyTasks();
   if(id==='team')renderTeam();
   if(id==='settings')renderSettings();
-  if(id==='chat'){renderChat();markChatSeen();setTimeout(()=>document.getElementById('chatInput')?.focus(),100);setTimeout(()=>{try{window._adjustChat&&window._adjustChat()}catch(e){}},200)} // v229: girişte yükseklik ayarı
+  // v231: Mobilde sohbet tam-ekran sabit düzen — class toggle + topbar yüksekliği
+  try {
+    const isChatMobile = (id === 'chat') && window.innerWidth <= 720;
+    if(isChatMobile){
+      const tb = document.querySelector('.auth-strip');
+      if(tb) document.documentElement.style.setProperty('--topbarH', tb.offsetHeight + 'px');
+    }
+    document.body.classList.toggle('chat-fs', isChatMobile);
+  } catch(e){}
+  if(id==='chat'){renderChat();markChatSeen();setTimeout(()=>document.getElementById('chatInput')?.focus(),100);setTimeout(()=>{try{window._adjustChat&&window._adjustChat()}catch(e){}},200)}
   if(id==='site-reports'){renderSiteReports()}
   if(id==='d-stok'){renderStockFiles();loadStockItems(); if(localStorage.getItem('stkOpen')==='1' && document.getElementById('stkBody')?.style.display!=='block') toggleStockList();}
   if(id.startsWith('d-'))renderDept(id.substring(2));
@@ -8582,7 +8597,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v230'; // Mobil sohbet fix 3: içerik async yüklenince de yeniden hesap (renderChat sonrası + ResizeObserver)
+const APP_VERSION = 'v231'; // Mobil sohbet KÖKLÜ çözüm: ekrana sabit düzen (WhatsApp mantığı) — yükseklik hesabı tamamen kaldırıldı
 
 // v224: iOS Safari'de klavye açılınca sohbet yazma alanı klavyenin altında kalıyordu.
 // visualViewport gerçek görünür yüksekliği verir; chat container'ı ona göre daraltıyoruz.
@@ -8590,21 +8605,11 @@ const APP_VERSION = 'v230'; // Mobil sohbet fix 3: içerik async yüklenince de 
   if(!window.visualViewport) return;
   let _t = null;
   function adjustChat(){
-    const cc = document.querySelector('.chat-container');
-    if(!cc || cc.offsetParent === null) return; // sohbet sayfası açık değilse dokunma
-    const rect = cc.getBoundingClientRect();
-    // v228: Klavye KAPALIYKEN alt mobil menü (70px) görünür — onu düş, yoksa input menünün altında kalıyor
-    const kbOpen = window.visualViewport.height < (window.innerHeight - 80);
-    const nav = document.getElementById('mobileNav');
-    const navVisible = nav && getComputedStyle(nav).display !== 'none';
-    const navH = (!kbOpen && navVisible) ? (nav.getBoundingClientRect().height || 70) : 0;
-    const avail = window.visualViewport.height - rect.top - navH - 8;
-    // v230: Aynı değeri tekrar yazma — ResizeObserver döngüsünü önler
-    const cur = parseFloat(cc.style.height) || 0;
-    if(avail > 180 && Math.abs(cur - avail) > 2){
-      cc.style.height = avail + 'px';
-      cc.style.minHeight = '0';
-    }
+    // v231: Yükseklik HESABI YOK — sabit düzen CSS'te. Burada tek iş: klavye açılınca alt sınırı klavyenin üstüne çek.
+    const pg = document.getElementById('page-chat');
+    if(!pg || !document.body.classList.contains('chat-fs')) return;
+    const kb = Math.max(0, window.innerHeight - window.visualViewport.height - (window.visualViewport.offsetTop || 0));
+    pg.style.bottom = (kb > 80 ? kb : 64) + 'px'; // klavye açık: klavye üstü · kapalı: alt menü üstü (64px)
     const cl = document.getElementById('chatList');
     if(cl) cl.scrollTop = cl.scrollHeight;
   }
