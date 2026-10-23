@@ -1845,7 +1845,7 @@ function goto(id){
   if(id==='mytasks')renderMyTasks();
   if(id==='team')renderTeam();
   if(id==='settings')renderSettings();
-  if(id==='chat'){renderChat();markChatSeen();setTimeout(()=>document.getElementById('chatInput')?.focus(),100)}
+  if(id==='chat'){renderChat();markChatSeen();setTimeout(()=>document.getElementById('chatInput')?.focus(),100);setTimeout(()=>{try{window._adjustChat&&window._adjustChat()}catch(e){}},200)} // v229: girişte yükseklik ayarı
   if(id==='site-reports'){renderSiteReports()}
   if(id==='d-stok'){renderStockFiles();loadStockItems(); if(localStorage.getItem('stkOpen')==='1' && document.getElementById('stkBody')?.style.display!=='block') toggleStockList();}
   if(id.startsWith('d-'))renderDept(id.substring(2));
@@ -8580,7 +8580,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v228'; // Mobil sohbet fix: yazma alanı alt menünün üstünde kalır (klavye açık/kapalı iki durumda da)
+const APP_VERSION = 'v229'; // Mobil sohbet fix 2: yükseklik ayarı sayfaya GİRİŞTE de çalışıyor (v228 sadece klavye olayında çalışıyordu)
 
 // v224: iOS Safari'de klavye açılınca sohbet yazma alanı klavyenin altında kalıyordu.
 // visualViewport gerçek görünür yüksekliği verir; chat container'ı ona göre daraltıyoruz.
@@ -8609,6 +8609,8 @@ const APP_VERSION = 'v228'; // Mobil sohbet fix: yazma alanı alt menünün üst
   window.visualViewport.addEventListener('scroll', debounced);
   document.addEventListener('focusin', e => { if(e.target && e.target.id === 'chatInput') setTimeout(adjustChat, 350); });
   document.addEventListener('focusout', e => { if(e.target && e.target.id === 'chatInput') setTimeout(adjustChat, 350); });
+  // v229: Sohbet sayfasına GİRİŞTE de çalışsın (önceden sadece klavye olaylarında çalışıyordu — ilk açılış bozuktu)
+  window._adjustChat = adjustChat;
 })();
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
