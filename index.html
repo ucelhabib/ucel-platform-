@@ -3334,6 +3334,8 @@ function renderChat(){
     </div>`;
   }).join('');
   el.scrollTop = el.scrollHeight;
+  // v230: İçerik (sekmeler+mesajlar) yüklendikten SONRA yükseklik ayarı — async yükleme hesabı bozuyordu
+  setTimeout(()=>{try{window._adjustChat&&window._adjustChat()}catch(e){}},60);
 }
 
 let _chatPendingFile = null;
@@ -8580,7 +8582,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v229'; // Mobil sohbet fix 2: yükseklik ayarı sayfaya GİRİŞTE de çalışıyor (v228 sadece klavye olayında çalışıyordu)
+const APP_VERSION = 'v230'; // Mobil sohbet fix 3: içerik async yüklenince de yeniden hesap (renderChat sonrası + ResizeObserver)
 
 // v224: iOS Safari'de klavye açılınca sohbet yazma alanı klavyenin altında kalıyordu.
 // visualViewport gerçek görünür yüksekliği verir; chat container'ı ona göre daraltıyoruz.
@@ -8597,7 +8599,9 @@ const APP_VERSION = 'v229'; // Mobil sohbet fix 2: yükseklik ayarı sayfaya Gİ
     const navVisible = nav && getComputedStyle(nav).display !== 'none';
     const navH = (!kbOpen && navVisible) ? (nav.getBoundingClientRect().height || 70) : 0;
     const avail = window.visualViewport.height - rect.top - navH - 8;
-    if(avail > 180){
+    // v230: Aynı değeri tekrar yazma — ResizeObserver döngüsünü önler
+    const cur = parseFloat(cc.style.height) || 0;
+    if(avail > 180 && Math.abs(cur - avail) > 2){
       cc.style.height = avail + 'px';
       cc.style.minHeight = '0';
     }
@@ -8611,6 +8615,16 @@ const APP_VERSION = 'v229'; // Mobil sohbet fix 2: yükseklik ayarı sayfaya Gİ
   document.addEventListener('focusout', e => { if(e.target && e.target.id === 'chatInput') setTimeout(adjustChat, 350); });
   // v229: Sohbet sayfasına GİRİŞTE de çalışsın (önceden sadece klavye olaylarında çalışıyordu — ilk açılış bozuktu)
   window._adjustChat = adjustChat;
+  // v230: Sekmeler/başlık async yüklenince içerik kayıyor — üst bölge boyut değişince otomatik yeniden hesapla
+  try {
+    if(window.ResizeObserver){
+      const ro = new ResizeObserver(debounced);
+      const tabs = document.getElementById('chatTabs');
+      if(tabs) ro.observe(tabs);
+      const pg = document.getElementById('page-chat');
+      if(pg) ro.observe(pg);
+    }
+  } catch(e){}
 })();
 
 // Sürüm rozeti — Üst bardaki "Şimdi Güncelle" (🔄) butonunun yanında, küçük pill
