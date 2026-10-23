@@ -8580,7 +8580,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v227'; // SAÇ merge fix: EBAT birleştirme anahtarına eklendi — farklı ebatlar ayrı kalem (v226: faz-görev kapanışı + isProjectDone dahil)
+const APP_VERSION = 'v228'; // Mobil sohbet fix: yazma alanı alt menünün üstünde kalır (klavye açık/kapalı iki durumda da)
 
 // v224: iOS Safari'de klavye açılınca sohbet yazma alanı klavyenin altında kalıyordu.
 // visualViewport gerçek görünür yüksekliği verir; chat container'ı ona göre daraltıyoruz.
@@ -8591,7 +8591,12 @@ const APP_VERSION = 'v227'; // SAÇ merge fix: EBAT birleştirme anahtarına ekl
     const cc = document.querySelector('.chat-container');
     if(!cc || cc.offsetParent === null) return; // sohbet sayfası açık değilse dokunma
     const rect = cc.getBoundingClientRect();
-    const avail = window.visualViewport.height - rect.top - 8;
+    // v228: Klavye KAPALIYKEN alt mobil menü (70px) görünür — onu düş, yoksa input menünün altında kalıyor
+    const kbOpen = window.visualViewport.height < (window.innerHeight - 80);
+    const nav = document.getElementById('mobileNav');
+    const navVisible = nav && getComputedStyle(nav).display !== 'none';
+    const navH = (!kbOpen && navVisible) ? (nav.getBoundingClientRect().height || 70) : 0;
+    const avail = window.visualViewport.height - rect.top - navH - 8;
     if(avail > 180){
       cc.style.height = avail + 'px';
       cc.style.minHeight = '0';
