@@ -3710,9 +3710,17 @@ function _procCalcRaw(item){
   };
   // Manuel girilmiş "gerçek gelen kg" toplamı (teslimatlarda)
   const gelenKgManuel = dl.reduce((s,d) => s + (parseFloat(d.gercek_kg)||0), 0);
+  // v232: gercek_kg girilen teslimatların kapsadığı miktar — kapsanmayan (henüz gelmemiş
+  // veya merge ile sonradan eklenen) kısım teorik hesaplanır. Önceden gercek_kg varsa
+  // TÜM siparişin ağırlığı sadece gelen gerçek kg olarak gösteriliyordu (7/45 teslimde
+  // 45 adedin ağırlığı 7 adedin kg'ı görünüyordu).
+  const gercekKgKapsam = dl.reduce((s,d) => s + ((parseFloat(d.gercek_kg)||0) > 0 ? (parseFloat(d.miktar)||0) : 0), 0);
   const teorikToplamKg = _kgFor(miktar);      // Sistem hesabı — teorik ağırlık
-  // GERÇEK KG BAZLI HESAP: manuel gerçek_kg girilmişse onu kullan (fatura ile eşleşsin)
-  const toplamKg = gelenKgManuel > 0 ? gelenKgManuel : teorikToplamKg;
+  // GERÇEK KG BAZLI HESAP: teslim alınan kısım manuel gerçek_kg (fatura ile eşleşsin),
+  // kalan kısım teorik. Tamamı teslimse sonuç = gelenKgManuel (eski davranış korunur).
+  const toplamKg = gelenKgManuel > 0
+    ? (gelenKgManuel + _kgFor(Math.max(0, miktar - gercekKgKapsam)))
+    : teorikToplamKg;
   const stokKg   = _kgFor(stokDusum);          // Stoktan karşılanan (teorik)
   const projeKg  = toplamKg + stokKg;          // Proje toplam kg (sipariş gerçek + stok teorik)
   // Tutar hesabı — SİPARİŞ (tedarikçiye ödenecek — gerçek kg × fiyat):
@@ -5628,13 +5636,22 @@ function exportProcTalepFormu(){
   // Türkçe locale ile büyük harfe çevirerek karşılaştır (BEYAZ vs beyaz tek sayılır)
   const _normTR = (s) => (s||'').toString().trim().replace(/\s+/g,' ').toLocaleUpperCase('tr-TR');
   const groupMap = new Map();
+  let _dusumVar = false; // v232: en az bir kalemde teslim alınan miktar düşüldü mü
   filtered.forEach(it => {
     const key = `${_normTR(it.malzeme)}|${_normTR(it.ebat)}|${_normTR(it.birim)}`;
     const cleanRaw = _cleanSupplierNote(it.not_text);
+    // v232: Tedarikçiye KALAN miktar gider — daha önce teslim alınan düşülür
+    // (45 sipariş, 7 gelen → PDF'te 38; yoksa 7 adet mükerrer gelir)
+    const _c = _procCalc(it);
+    const _sip = parseFloat(it.miktar||0);
+    const _kalan = Math.max(0, _sip - (parseFloat(_c.gelen)||0));
+    if(_kalan <= 0) return; // tamamı teslim alınmış — talep formuna girmez
+    if(_kalan < _sip) _dusumVar = true;
+    const _kalanKg = _sip > 0 ? (_c.toplamKg || 0) * (_kalan / _sip) : 0; // kalan miktara orantılı kg
     if(groupMap.has(key)){
       const g = groupMap.get(key);
-      g.miktar += parseFloat(it.miktar||0);
-      g.kg     += (_procCalc(it).toplamKg || 0);
+      g.miktar += _kalan;
+      g.kg     += _kalanKg;
       if(cleanRaw){
         const normNote = _normTR(cleanRaw);
         if(!g.notesNorm.has(normNote)){
@@ -5653,14 +5670,15 @@ function exportProcTalepFormu(){
         malzeme: it.malzeme,
         ebat: it.ebat,
         birim: it.birim,
-        miktar: parseFloat(it.miktar||0),
-        kg: (_procCalc(it).toplamKg || 0),
+        miktar: _kalan,
+        kg: _kalanKg,
         notesNorm: notesSet,
         notes: notesArr
       });
     }
   });
   const grouped = Array.from(groupMap.values());
+  if(grouped.length === 0){ toast('Tedarikçiye gönderilecek açık kalem yok (hepsi tamamlanmış veya stoktan karşılanmış)','info'); return; }
   // Sıralama:
   //   1) Cıvata-Somun kategorisinde: Cıvata > Somun > Pul > Rondela
   //   Her tipte: çap (M sayısı), sonra boy
@@ -5759,6 +5777,7 @@ function exportProcTalepFormu(){
       </div>
       <div class="talep-proje">PROJE NO: ${esc(proj?.no||'')}${katLabel ? ` · ${esc(katLabel.replace(' — ',''))}` : ''}</div>
       <div class="talep-desc">Aşağıda belirtilen malzeme listesi için fiyat teklifinizi ve termin sürenizi bekliyoruz.</div>
+      ${_dusumVar ? `<div style="font-size:9.5pt;color:#b45309;font-weight:600;padding:0 0 10px">※ Daha önce teslim alınan miktarlar düşülmüştür.</div>` : ''}
       <table class="frm">
         <thead><tr>
           <th style="width:44px">NO</th>
@@ -8597,7 +8616,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v231'; // Mobil sohbet KÖKLÜ çözüm: ekrana sabit düzen (WhatsApp mantığı) — yükseklik hesabı tamamen kaldırıldı
+const APP_VERSION = 'v232'; // Satın alma: merge'de ağırlık toplanıyor + Talep PDF'te teslim alınan düşülüyor
 
 // v224: iOS Safari'de klavye açılınca sohbet yazma alanı klavyenin altında kalıyordu.
 // visualViewport gerçek görünür yüksekliği verir; chat container'ı ona göre daraltıyoruz.
