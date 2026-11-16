@@ -5127,22 +5127,118 @@ async function _autoAssignProcurementTasks(projectId, kalemSayisi){
   if(typeof toast === 'function') toast(`✅ Otomatik görev: ${rows.length} birime atandı`, 'ok');
 }
 
+// v233: Sipariş iptalinde stok iadesi — kalem eklenirken düşülen stok_dusum miktarını stoğa geri yükler.
+// Düşümle aynı eşleştirme: catalog_id → stockItems; yoksa ürün adı tam eşleşme.
+// SAÇ: stok_dusum ADET cinsinden saklanır, stok m² cinsindendir → adet × (en×boy/1e6) m² iade edilir.
+function _procStokIadeHedef(it){
+  const sd = parseFloat(it.stok_dusum||0);
+  if(!(sd > 0)) return null;
+  let cat = it.catalog_id ? stockItems.find(x => x.id === it.catalog_id) : null;
+  if(!cat && it.malzeme){
+    const nm = String(it.malzeme).toUpperCase().replace(/\s+/g,'').trim();
+    cat = stockItems.find(x => String(x.urun||'').toUpperCase().replace(/\s+/g,'').trim() === nm) || null;
+  }
+  const isSac = /^(SAÇ|SAC)/i.test(it.malzeme||'') || /^(SAÇ|SAC)/i.test(cat?.kategori||'');
+  let miktar = sd, birimTxt = it.birim || '';
+  if(isSac){
+    const eb = /(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)/.exec(it.ebat||'');
+    const en = eb ? parseFloat(eb[1]) : 0, boy = eb ? parseFloat(eb[2]) : 0;
+    if(en > 0 && boy > 0 && cat && (cat.birim === 'm²' || cat.birim === 'm')){
+      miktar = sd * (en * boy) / 1e6;
+      birimTxt = `${cat.birim} (${fmtNum(sd,0)} adet)`;
+    } else if(!(cat && cat.birim === 'adet')){
+      return { cat: null, miktar: sd, birimTxt, sacEbatYok: true };
+    }
+  } else if(cat && cat.birim){
+    birimTxt = cat.birim;
+  }
+  return { cat, miktar, birimTxt };
+}
+// Stoğa iade: boş/uygun slota ekler (ölçülü birimde parça olarak, sayılabilirde adet/boy1 artırılır)
+async function _restoreToStock(cat, miktar, projectId, note){
+  const upd = { boy1: cat.boy1||0, adet1: cat.adet1||0, boy2: cat.boy2||0, adet2: cat.adet2||0, boy3: cat.boy3||0, adet3: cat.adet3||0 };
+  const b = cat.birim || 'm';
+  let mv;
+  if(b === 'm' || b === 'm²'){
+    const mm = Math.round(miktar * 1000);
+    let slot = [1,2,3].find(s => upd['boy'+s] === mm && upd['adet'+s] > 0);
+    if(slot){
+      mv = {slot, before: upd['adet'+slot], after: upd['adet'+slot]+1, qty: 1, length: mm};
+      upd['adet'+slot] += 1;
+    } else {
+      slot = [1,2,3].find(s => !(upd['adet'+s] > 0));
+      if(slot){
+        mv = {slot, before: 0, after: 1, qty: 1, length: mm};
+        upd['boy'+slot] = mm; upd['adet'+slot] = 1;
+      } else {
+        // Üç slot da dolu — toplam metrajı tek parçada birleştir (_addToStock ile aynı yaklaşım)
+        const tot = upd.boy1*upd.adet1 + upd.boy2*upd.adet2 + upd.boy3*upd.adet3 + mm;
+        mv = {slot: 1, before: upd.adet1, after: 1, qty: 1, length: mm};
+        upd.boy1 = tot; upd.adet1 = 1; upd.boy2 = 0; upd.adet2 = 0; upd.boy3 = 0; upd.adet3 = 0;
+      }
+    }
+  } else if((cat.boy1||0) > 1){
+    mv = {slot: 1, before: upd.boy1, after: upd.boy1 + miktar, qty: miktar};
+    upd.boy1 += miktar;
+  } else {
+    const slot = [1,2,3].find(s => upd['adet'+s] > 0) || 1;
+    mv = {slot, before: upd['adet'+slot], after: upd['adet'+slot] + miktar, qty: miktar};
+    upd['adet'+slot] += miktar;
+  }
+  const {error: ue} = await sb.from('stock_items').update({ ...upd, updated_at: new Date().toISOString(), updated_by: me.id }).eq('id', cat.id);
+  if(ue) throw ue;
+  try {
+    await sb.from('stock_movements').insert({
+      item_id: cat.id, action: 'adjust', slot: mv.slot, qty_change: mv.qty,
+      length_mm: mv.length || null, before_adet: mv.before, after_adet: mv.after,
+      note: note || 'Sipariş iptali — stok iadesi', project_id: projectId, user_id: me.id
+    });
+  } catch(e){ console.warn('movement log fail:', e); }
+}
+
 async function deleteProcItem(itemId){
   const it = procItems.find(x=>x.id===itemId);
   if(!it){ toast('Kalem bulunamadı','err'); return; }
-  if(!confirm('Bu kalemi (ve tüm teslimatlarını) silmek istediğine emin misin?')) return;
+  const _iade = _procStokIadeHedef(it);
+  let _msg = 'Bu kalemi (ve tüm teslimatlarını) silmek istediğine emin misin?';
+  if(_iade){
+    _msg += `\n\n📦 ${fmtNum(_iade.miktar, 2)} ${_iade.birimTxt} stoğa iade edilecek.`;
+    if(!_iade.cat) _msg += '\n(⚠ Stok kaydı bulunamadı — iade yapılamayabilir)';
+  }
+  if(!confirm(_msg)) return;
   // Silmeden önce yedek al
   const backup = { ...it };
   // Bağlı teslimatları da yedekle
   const { data: dels } = await sb.from('procurement_deliveries').select('*').eq('item_id', itemId);
   const {error} = await sb.from('procurement_items').delete().eq('id', itemId);
   if(error){toast('Silme hatası: '+errTr(error),'err');return}
+  // v233: stok iadesi (silme engellenmez; başarısızsa uyarı)
+  let _iadeOk = false;
+  if(_iade){
+    try {
+      if(!_iade.cat) throw new Error('stok kaydı bulunamadı');
+      try { await loadStockItems(); } catch(e){}
+      const _freshCat = stockItems.find(x => x.id === _iade.cat.id) || _iade.cat;
+      const _proj = projects.find(p=>p.id===it.project_id);
+      await _restoreToStock(_freshCat, _iade.miktar, it.project_id, `Sipariş iptali — stok iadesi (${_proj?.no||''} ${it.malzeme||''})`.trim());
+      await loadStockItems();
+      _iadeOk = true;
+    } catch(e){
+      console.warn('Stok iadesi başarısız:', it.malzeme, e);
+      toast('Stok iadesi yapılamadı — stok kaydını elle kontrol et','err');
+    }
+    try { await logAudit('proc_item_delete','procurement_item',itemId,it.malzeme,{stok_dusum:it.stok_dusum, iade_miktar:_iade.miktar, iade_birim:_iade.birimTxt, iade_basarili:_iadeOk}); } catch(e){}
+  }
   await loadProcurement(_procProjectId);
   // 5 sn geri al butonu ile toast
   toastUndo(`Silindi: ${backup.malzeme}`, 'Geri Al', async () => {
     delete backup.updated_at;
     const {error:reErr} = await sb.from('procurement_items').insert(backup);
     if(reErr){ toast('Geri alma hatası: '+errTr(reErr),'err'); return; }
+    // v233: iade yapıldıysa geri alınca stoktan tekrar düş
+    if(_iadeOk && _iade?.cat){
+      try { await loadStockItems(); const _c = stockItems.find(x=>x.id===_iade.cat.id); if(_c) await _deductFromStock(_c, _iade.miktar, backup.project_id); await loadStockItems(); } catch(e){ console.warn('geri al stok düşüm fail:', e); toast('Stok tekrar düşülemedi — elle kontrol et','err'); }
+    }
     if(dels && dels.length){
       for(const d of dels){ delete d.created_at; }
       await sb.from('procurement_deliveries').insert(dels);
@@ -6879,7 +6975,8 @@ function openProj(id){
     document.getElementById('pfDel').style.display=me.role==='yonetici'?'inline-flex':'none';
     document.getElementById('pfFiles').style.display='inline-flex';
     document.getElementById('phasesBox').style.display='block';
-    document.getElementById('procureBox').style.display='block';
+    // v234: procureBox 'block' değil 'flex' — block yazılınca flex düzen bozulup listenin altı kesiliyordu (HEA 300 vakası)
+    document.getElementById('procureBox').style.display='flex';
     renderPhases(p);
     renderProjectShipmentSummary(id);
     // Procurement
@@ -8616,7 +8713,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v232'; // Satın alma: merge'de ağırlık toplanıyor + Talep PDF'te teslim alınan düşülüyor
+const APP_VERSION = 'v234'; // Satın alma listesi kesilme fix (procureBox display:flex) + v233 stok iadesi
 
 // v224: iOS Safari'de klavye açılınca sohbet yazma alanı klavyenin altında kalıyordu.
 // visualViewport gerçek görünür yüksekliği verir; chat container'ı ona göre daraltıyoruz.
