@@ -3622,14 +3622,31 @@ async function onProcProjectChange(){
 async function loadProcurement(projectId){
   if(!projectId){ procItems = []; procDeliveries = []; renderProcList(); return; }
   const [r1, r2] = await Promise.all([
-    sb.from('procurement_items').select('*').eq('project_id', projectId).order('sira'),
+    sb.from('procurement_items').select('*').eq('project_id', projectId),
     sb.from('procurement_deliveries').select('*').order('tarih', {ascending:false})
   ]);
   procItems = r1.data || [];
+  // v235: KALICI SIRALAMA — sira alanına bağımlılık kaldırıldı (partiler arası çakışıyordu).
+  // Kural: kategori sırası (PROC_KAT dizilimi) → malzeme adı (doğal sayısal: HEA 160 < HEA 200 < HEA 300) → ebat.
+  // Her projede ve her yeni eklemede liste kendiliğinden bu düzende gelir.
+  _sortProcItems(procItems);
   procDeliveries = r2.data || [];
   // Talep formu notu — projeden gelir, AKTİF KATEGORİYE göre yüklenir
   _refreshProcTalepNot();
   renderProcList();
+}
+// v235: deterministik satın alma sıralaması
+function _sortProcItems(arr){
+  const katIdx = Object.fromEntries(PROC_KAT.map((x,i)=>[x.k, i]));
+  arr.sort((a,b)=>{
+    const ka = katIdx[a.proc_kategori || 'ana_yapi'] ?? 99;
+    const kb = katIdx[b.proc_kategori || 'ana_yapi'] ?? 99;
+    if(ka !== kb) return ka - kb;
+    const ma = (a.malzeme||'').trim(), mb = (b.malzeme||'').trim();
+    const c = ma.localeCompare(mb, 'tr', {numeric:true, sensitivity:'base'});
+    if(c !== 0) return c;
+    return (a.ebat||'').localeCompare(b.ebat||'', 'tr', {numeric:true, sensitivity:'base'});
+  });
 }
 function _refreshProcTalepNot(){
   const tEl = document.getElementById('procProjectNot');
@@ -8713,7 +8730,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v234'; // Satın alma listesi kesilme fix (procureBox display:flex) + v233 stok iadesi
+const APP_VERSION = 'v235'; // Kalıcı satın alma sıralaması (kategori → malzeme doğal sıra → ebat) + liste kesilme fix + stok iadesi
 
 // v224: iOS Safari'de klavye açılınca sohbet yazma alanı klavyenin altında kalıyordu.
 // visualViewport gerçek görünür yüksekliği verir; chat container'ı ona göre daraltıyoruz.
