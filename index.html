@@ -3855,11 +3855,13 @@ function renderProcList(){
           ${(()=>{ const k=it.proc_kategori||'ana_yapi'; const c=PROC_KAT_COLOR[k]||'#64748b'; return `<span style="display:inline-block;background:${c};color:#fff;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:700;vertical-align:middle;margin-right:4px">${esc(PROC_KAT_LABEL[k]||k)}</span>`; })()}
           ${esc(it.malzeme)}${it.ebat?` <span style="font-size:11px;color:#888">(${esc(it.ebat)})</span>`:''}${(() => {
             // v219: Sipariş/teslim tutarsızlık uyarıları
+            // v236: Stoktan karşılanan kısım hesaba katılır — sipariş+stok ihtiyacı karşılıyorsa UYARI YOK (yanlış alarm düzeltmesi)
             let _w = '';
             const _origIht = parseFloat(it.original_ihtiyac);
             const _sip = parseFloat(it.miktar) || 0;
-            if(!isNaN(_origIht) && _origIht > 0 && _sip < _origIht - 0.01){
-              _w += ` <span title="Sipariş ihtiyaçtan az düşürüldü — kontrol et" style="color:#ea580c;font-size:12px;cursor:help">⚠️</span>`;
+            const _stokD = parseFloat(it.stok_dusum) || 0;
+            if(!isNaN(_origIht) && _origIht > 0 && (_sip + _stokD) < _origIht - 0.01){
+              _w += ` <span title="Sipariş + stok, ihtiyacın altında — kontrol et" style="color:#ea580c;font-size:12px;cursor:help">⚠️</span>`;
             }
             const _dlSum = _procDelvOf(it.id).reduce((s,d)=>s+(parseFloat(d.miktar)||0),0);
             if(_sip > 0 && _dlSum > _sip * 1.1){
@@ -8730,7 +8732,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v235'; // Kalıcı satın alma sıralaması (kategori → malzeme doğal sıra → ebat) + liste kesilme fix + stok iadesi
+const APP_VERSION = 'v236'; // ⚠️ yanlış alarm fix: stoktan karşılanan kısım ihtiyaç karşılaştırmasına dahil + v235 kalıcı sıralama
 
 // v224: iOS Safari'de klavye açılınca sohbet yazma alanı klavyenin altında kalıyordu.
 // visualViewport gerçek görünür yüksekliği verir; chat container'ı ona göre daraltıyoruz.

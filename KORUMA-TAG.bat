@@ -6,8 +6,8 @@ echo   KORUMA TAG - v223-stable
 echo ============================================
 echo.
 
-echo === v235-stable tag (guncel HEAD = v235) ===
-git tag -a v235-stable HEAD -m "Stabil v235: kalici satin alma siralamasi + liste kesilme fix + stok iadesi"
+echo === v236-stable tag (guncel HEAD = v236) ===
+git tag -a v236-stable HEAD -m "Stabil v236: stok dahil ihtiyac uyarisi fix + kalici siralama + liste kesilme fix + stok iadesi"
 
 echo === Tag'i uzak repoya push et ===
 git push origin --tags
