@@ -302,7 +302,7 @@ body.proc-fullscreen{overflow:hidden}
 #userEditModal.show{z-index:9400}
 #procNewModal.show,#procCatalogModal.show,#procDelivModal.show,#bolusetModal.show{z-index:9500}
 #stockMoveModal.show,#stockNewModal.show,#excelModal.show{z-index:9500}
-#procEditModal.show{z-index:9600}
+#procEditModal.show,#procRevizeModal.show{z-index:9600}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 .modal{background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:90vh;
   display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
@@ -1003,6 +1003,42 @@ body.proc-fullscreen{overflow:hidden}
   </div>
 </div>
 
+<!-- v237: Satın alma ± miktar revizyonu (stok koordineli) -->
+<div class="modal-bg" id="procRevizeModal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-h"><h3 id="pr-title">± Miktar Revizyonu</h3><button class="x" onclick="closeProcRevize()">✕</button></div>
+    <div class="modal-b">
+      <div id="pr-info" style="background:#eef6ff;border:1px solid #b9d7f5;padding:10px;border-radius:8px;margin-bottom:12px;font-size:13px"></div>
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <button type="button" id="pr-yon-artir" onclick="_prSetYon('artir')" style="flex:1;padding:12px;font-size:15px;font-weight:700;border-radius:10px;cursor:pointer;border:2px solid #ccc;background:#fff">➕ Artır</button>
+        <button type="button" id="pr-yon-azalt" onclick="_prSetYon('azalt')" style="flex:1;padding:12px;font-size:15px;font-weight:700;border-radius:10px;cursor:pointer;border:2px solid #ccc;background:#fff">➖ Azalt</button>
+      </div>
+      <div class="frow">
+        <label>Miktar</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input id="pr-miktar" type="number" min="0" step="any" placeholder="0" oninput="_prRenderPreview()" style="flex:1">
+          <span id="pr-birim" style="font-weight:700;color:#444;min-width:40px"></span>
+        </div>
+      </div>
+      <div id="pr-stok-row" style="margin-top:8px;display:none">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="pr-stok" onchange="_prRenderPreview()">
+          <span>Artışta önce stoktan karşıla <small id="pr-stok-info" style="color:#0a7c3a"></small></span>
+        </label>
+      </div>
+      <div class="frow" style="margin-top:8px">
+        <label>Sebep (opsiyonel)</label>
+        <input id="pr-sebep" type="text" maxlength="200" placeholder="ör. Proje revizyonu R05">
+      </div>
+      <div id="pr-preview" style="margin-top:12px;padding:10px 12px;border-radius:8px;font-size:13px;background:#f5f5f5;border:1px solid #ddd;color:#555">Miktar gir.</div>
+    </div>
+    <div class="modal-f">
+      <button class="btn sec" onclick="closeProcRevize()">İptal</button>
+      <button class="btn ok" id="pr-save" onclick="saveProcRevize()" disabled>💾 Kaydet</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="stockMoveModal">
   <div class="modal" style="max-width:520px">
     <div class="modal-h"><h3 id="smTitle">Stok Hareketi</h3><button class="x" onclick="closeStockMove()">✕</button></div>
@@ -1393,6 +1429,21 @@ const PROC_KAT = [
   {k:'diger',     l:'Diğer',        color:'#64748b'}
 ];
 const PROC_KAT_LABEL = Object.fromEntries(PROC_KAT.map(x=>[x.k,x.l]));
+// v238: Standart satış boyları (m) — katalog ekleme ve ± revizyon ortak kullanır
+//  IPE/HEA/HEB/UNP 12 m · Kutu profil, boru, lama, köşebent 6 m
+const PROC_STD_BOY = {
+  'IPE': 12, 'HEA': 12, 'HEB': 12, 'UNP': 12,
+  'KUTUPROFIL': 6, 'KUTUPROFİL': 6, 'KUTU': 6,
+  'BORU': 6,
+  'LAMA': 6, 'KOSEBENT': 6, 'KÖŞEBENT': 6
+};
+// Kalemin standart boyu (yalnızca 'm' birimli profiller; yoksa 0) — saveProcCatalog ile aynı eşleştirme
+function _procStdBoy(it, cat){
+  if(!it || (it.birim || '') !== 'm') return 0;
+  const tag = (cat?.kategori || '').toUpperCase().replace(/\s+/g,'');
+  const pre = (cat?.urun || it.malzeme || '').toUpperCase().replace(/\s+/g,'').slice(0,3);
+  return PROC_STD_BOY[tag] || PROC_STD_BOY[pre] || 0;
+}
 const PROC_KAT_COLOR = Object.fromEntries(PROC_KAT.map(x=>[x.k,x.color]));
 let _procFilterKat = 'all'; // Filtre durumu (all veya kategori key)
 
@@ -3956,6 +4007,7 @@ function renderProcDetail(it, c){
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn sec sm" onclick="openProcDeliv('${it.id}')">+ Teslimat</button>
         <button class="btn sec sm price-edit-only" onclick="editProcItem('${it.id}')" title="Fiyat, birim, KDV, tevkifat düzenle">✏️ Fiyat</button>
+        <button class="btn sec sm proj-edit-only" onclick="openProcRevize('${it.id}')" title="Miktarı artır/azalt (proje revizyonu)">± Revize</button>
         <button class="btn sm proj-edit-only" onclick="transferProcToStock('${it.id}')" style="background:#0a7c3a;color:#fff;border:0" title="Bu kalemi projeden çıkar, stoğa aktar">📦 Stoğa Aktar</button>
         <button class="btn err sm proj-edit-only" onclick="deleteProcItem('${it.id}')">🗑 Sil</button>
       </div>
@@ -4983,12 +5035,7 @@ async function saveProcCatalog(){
   //  - IPE / HEA / HEB / UNP profilleri 12 metre boylarda satılır
   //  - KUTU PROFİL ve BORU 6 metre boylarda satılır
   // Talep formundaki miktar bu boyların katlarına yukarı yuvarlanır
-  const STD_BOY = {
-    'IPE': 12, 'HEA': 12, 'HEB': 12, 'UNP': 12,
-    'KUTUPROFIL': 6, 'KUTUPROFİL': 6, 'KUTU': 6,
-    'BORU': 6,
-    'LAMA': 6, 'KOSEBENT': 6, 'KÖŞEBENT': 6
-  };
+  const STD_BOY = PROC_STD_BOY; // v238: tek kaynak (revizyon da aynı tabloyu kullanır)
   let roundedCount = 0;
   let totalAddedToStock = 0;
   let failedAddToStock = 0;
@@ -5149,29 +5196,41 @@ async function _autoAssignProcurementTasks(projectId, kalemSayisi){
 // v233: Sipariş iptalinde stok iadesi — kalem eklenirken düşülen stok_dusum miktarını stoğa geri yükler.
 // Düşümle aynı eşleştirme: catalog_id → stockItems; yoksa ürün adı tam eşleşme.
 // SAÇ: stok_dusum ADET cinsinden saklanır, stok m² cinsindendir → adet × (en×boy/1e6) m² iade edilir.
-function _procStokIadeHedef(it){
-  const sd = parseFloat(it.stok_dusum||0);
-  if(!(sd > 0)) return null;
+// v237: Eşleştirme + birim dönüşümü ayrı yardımcıya çıkarıldı (revizyon stok_dusum=0 kalemlerde de kullanır).
+// adetMiktar: kalem biriminde miktar (SAÇ'ta adet) → stokBirimMiktar: stok kaydı biriminde (SAÇ m² stokta m²).
+// Dönüş: { cat, stokBirimMiktar, birimTxt, isSac, m2PerAdet, byName, sacEbatYok? }
+function _procStokEslesme(it, adetMiktar){
   let cat = it.catalog_id ? stockItems.find(x => x.id === it.catalog_id) : null;
+  let byName = false;
   if(!cat && it.malzeme){
     const nm = String(it.malzeme).toUpperCase().replace(/\s+/g,'').trim();
     cat = stockItems.find(x => String(x.urun||'').toUpperCase().replace(/\s+/g,'').trim() === nm) || null;
+    byName = !!cat;
   }
+  const m = parseFloat(adetMiktar) || 0;
   const isSac = /^(SAÇ|SAC)/i.test(it.malzeme||'') || /^(SAÇ|SAC)/i.test(cat?.kategori||'');
-  let miktar = sd, birimTxt = it.birim || '';
+  let stokBirimMiktar = m, birimTxt = it.birim || '', m2PerAdet = 0;
   if(isSac){
     const eb = /(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)/.exec(it.ebat||'');
     const en = eb ? parseFloat(eb[1]) : 0, boy = eb ? parseFloat(eb[2]) : 0;
     if(en > 0 && boy > 0 && cat && (cat.birim === 'm²' || cat.birim === 'm')){
-      miktar = sd * (en * boy) / 1e6;
-      birimTxt = `${cat.birim} (${fmtNum(sd,0)} adet)`;
+      m2PerAdet = (en * boy) / 1e6;
+      stokBirimMiktar = m * (en * boy) / 1e6;
+      birimTxt = `${cat.birim} (${fmtNum(m,0)} adet)`;
     } else if(!(cat && cat.birim === 'adet')){
-      return { cat: null, miktar: sd, birimTxt, sacEbatYok: true };
+      return { cat: null, stokBirimMiktar: m, birimTxt, isSac, m2PerAdet: 0, byName: false, sacEbatYok: true };
     }
   } else if(cat && cat.birim){
     birimTxt = cat.birim;
   }
-  return { cat, miktar, birimTxt };
+  return { cat, stokBirimMiktar, birimTxt, isSac, m2PerAdet, byName };
+}
+function _procStokIadeHedef(it){
+  const sd = parseFloat(it.stok_dusum||0);
+  if(!(sd > 0)) return null;
+  const e = _procStokEslesme(it, sd);
+  if(e.sacEbatYok) return { cat: null, miktar: sd, birimTxt: e.birimTxt, sacEbatYok: true };
+  return { cat: e.cat, miktar: e.stokBirimMiktar, birimTxt: e.birimTxt };
 }
 // Stoğa iade: boş/uygun slota ekler (ölçülü birimde parça olarak, sayılabilirde adet/boy1 artırılır)
 async function _restoreToStock(cat, miktar, projectId, note){
@@ -5370,6 +5429,311 @@ async function saveProcEdit(){
   // GİZLİLİK: Fiyat rakamı bildirime yazılmaz — sadece "fiyat güncellendi" mesajı gider
   // Rakamı görmek isteyen yetkili kişi projeye tıklayıp içeride görür (RLS ile filtrelenir)
   try { const proj = projects.find(p=>p.id===_procProjectId); await notify(`🛒 ${me.full_name} "${proj?.no||''}" projesinde ${it.malzeme} için fiyat bilgisini güncelledi`, '🛒', 'satinalma', 'project', _procProjectId); } catch(e){}
+}
+
+/* --- v237: ± Miktar revizyonu (stok koordineli) ---
+   İlke: satın almayı en aza indir → artışta önce stok, azalışta önce açık sipariş, kalan stoğa iade. */
+const _PROC_REVIZE_ROLES = ['yonetici','teklifproje','satinalma','muhasebe'];
+function _prR3(v){ return Math.round((+v || 0) * 1000) / 1000; }
+// SAF hesap (DOM/DB yok). st: {miktar, stok_dusum, original_ihtiyac, gelen} — hepsi kalem biriminde (SAÇ'ta adet).
+// stokMevcut: kalem biriminde kullanılabilir stok. opts: {stoktanKullan, tamAdet}
+function _procRevizePlan(st, yon, delta, stokMevcut, opts){
+  opts = opts || {};
+  const sip = parseFloat(st.miktar) || 0;
+  const sd = parseFloat(st.stok_dusum) || 0;
+  const gelen = parseFloat(st.gelen) || 0;
+  const ihtiyac = (parseFloat(st.original_ihtiyac) || 0) || (sip + sd);
+  const d = parseFloat(delta);
+  const base = { yon, delta: d, eskiMiktar: sip, eskiStok: sd, gelen, stoktan: 0, siparise: 0, siparistenDus: 0, stogaIade: 0, fazlaStoga: 0, boy: 0 };
+  if(!(d > 0)) return { ...base, ok: false, errorCode: 'bos' };
+  if(opts.tamAdet && Math.abs(d - Math.round(d)) > 1e-9) return { ...base, ok: false, errorCode: 'tamAdet' };
+  // v238: Standart boy yuvarlaması (katalog eklemeyle aynı kural) — sipariş tam boy katı kalır, artan kısım stoğa
+  const boy = parseFloat(opts.boy) || 0;
+  const ceilBoy = x => boy > 0 ? Math.ceil(_prR3(x) / boy - 1e-9) * boy : x;
+  if(yon === 'artir'){
+    const mevcut = Math.max(0, parseFloat(stokMevcut) || 0);
+    let stoktan = opts.stoktanKullan ? _prR3(Math.min(d, mevcut)) : 0;
+    const ham = _prR3(d - stoktan);                         // yuvarlamasız siparişe gidecek
+    const siparise = ham > 0 ? _prR3(ceilBoy(sip + ham) - sip) : 0;
+    let fazlaStoga = _prR3(Math.max(0, siparise - ham));    // yuvarlama fazlası
+    // Boy fazlası önce stok kullanımından mahsup: zaten boy alınacaksa stoğa dokunma (düş-ekle döngüsü olmasın)
+    const mahsup = _prR3(Math.min(stoktan, fazlaStoga));
+    stoktan = _prR3(stoktan - mahsup); fazlaStoga = _prR3(fazlaStoga - mahsup);
+    return { ...base, ok: true, boy, stoktan, siparise, fazlaStoga,
+      yeniMiktar: _prR3(sip + siparise), yeniStok: _prR3(sd + stoktan), yeniIhtiyac: _prR3(ihtiyac + d) };
+  }
+  if(yon === 'azalt'){
+    const acik = Math.max(0, sip - gelen); // teslim alınmamış sipariş (fazla teslimatta 0)
+    const maxAzalis = _prR3(acik + sd);
+    if(d > maxAzalis + 1e-9) return { ...base, ok: false, errorCode: 'max', maxAzalis };
+    const ham = _prR3(Math.min(d, acik));                   // yuvarlamasız siparişten düşülecek
+    let stogaIade = _prR3(d - ham);
+    // Kalan sipariş tam boy katına yukarı yuvarlanır → sadece tam boylar siparişten düşer
+    const kalanSiparis = ham > 0 ? _prR3(Math.max(gelen, ceilBoy(sip - ham))) : sip;
+    const siparistenDus = _prR3(sip - kalanSiparis);
+    let fazlaStoga = _prR3(Math.max(0, ham - siparistenDus)); // siparişten düşülemeyen boy artığı
+    // Artık önce eldeki stok ayırmasından iade edilir (gerçek malzeme); sadece kalanı stoğa "fazla" olarak eklenir
+    const ekIade = _prR3(Math.min(fazlaStoga, sd - stogaIade));
+    stogaIade = _prR3(stogaIade + ekIade); fazlaStoga = _prR3(fazlaStoga - ekIade);
+    return { ...base, ok: true, boy, maxAzalis, siparistenDus, stogaIade, fazlaStoga,
+      yeniMiktar: _prR3(kalanSiparis), yeniStok: _prR3(sd - stogaIade), yeniIhtiyac: _prR3(Math.max(0, ihtiyac - d)) };
+  }
+  return { ...base, ok: false, errorCode: 'yon' };
+}
+// Stok mevcudu kalem biriminde — saveProcCatalog ile aynı mantık: _stockAvailable(cat); SAÇ m² stokta floor(avail / m²PerAdet)
+function _procRevizeStokMevcut(e){
+  if(!e || !e.cat || e.sacEbatYok) return 0;
+  const avail = _stockAvailable(e.cat);
+  if(!(avail > 0)) return 0;
+  if(e.isSac && e.m2PerAdet > 0) return Math.floor(avail / e.m2PerAdet);
+  return avail;
+}
+let _prState = null; // {id, yon, stokMevcut, eslesme, busy}
+async function openProcRevize(itemId){
+  if(!me || !_PROC_REVIZE_ROLES.includes(me.role)){ toast('Bu işlem için yetkin yok','err'); return; }
+  const it = procItems.find(x=>x.id===itemId); if(!it){ toast('Kalem bulunamadı','err'); return; }
+  try { await loadStockItems(); } catch(e){}
+  const e = _procStokEslesme(it, 0);
+  const stokMevcut = _procRevizeStokMevcut(e);
+  _prState = { id: itemId, yon: 'artir', stokMevcut, eslesme: e, busy: false };
+  const c = _procCalc(it);
+  const sip = parseFloat(it.miktar) || 0, sd = parseFloat(it.stok_dusum) || 0;
+  const iht = (parseFloat(it.original_ihtiyac) || 0) || (sip + sd);
+  const b = esc(it.birim || '');
+  document.getElementById('pr-title').textContent = `± Miktar Revizyonu — ${it.malzeme || ''}${it.ebat ? ' ' + it.ebat : ''}`;
+  document.getElementById('pr-info').innerHTML =
+    `İhtiyaç: <strong>${fmtNum(iht)} ${b}</strong> · Stoktan: <strong>${fmtNum(sd)} ${b}</strong> · Sipariş: <strong>${fmtNum(sip)} ${b}</strong> · Gelen: <strong>${fmtNum(c.gelen)} ${b}</strong>`;
+  document.getElementById('pr-birim').textContent = it.birim || '';
+  document.getElementById('pr-miktar').value = '';
+  document.getElementById('pr-miktar').step = (e.isSac && (it.birim||'') === 'adet') ? '1' : 'any';
+  document.getElementById('pr-sebep').value = '';
+  document.getElementById('pr-stok').checked = stokMevcut > 0;
+  _prStokInfoYaz(it);
+  _prSetYon('artir');
+  document.getElementById('procRevizeModal').classList.add('show');
+  setTimeout(() => { try { document.getElementById('pr-miktar').focus(); } catch(e){} }, 50);
+}
+function _prStokInfoYaz(it){
+  const e = _prState?.eslesme, mev = _prState?.stokMevcut || 0;
+  let t = '';
+  if(mev > 0 && e?.cat){
+    t = `(stokta ${fmtNum(mev)} ${it?.birim || ''}`;
+    if(e.m2PerAdet > 0) t += ` ≈ ${fmtNum(_stockAvailable(e.cat))} ${e.cat.birim}`;
+    t += ')';
+  }
+  document.getElementById('pr-stok-info').textContent = t;
+}
+function closeProcRevize(){ document.getElementById('procRevizeModal').classList.remove('show'); _prState = null; }
+function _prSetYon(yon){
+  if(!_prState) return;
+  _prState.yon = yon;
+  const a = document.getElementById('pr-yon-artir'), z = document.getElementById('pr-yon-azalt');
+  a.style.background = yon === 'artir' ? '#e6f6ec' : '#fff';
+  a.style.borderColor = yon === 'artir' ? '#0a7c3a' : '#ccc';
+  a.style.color = yon === 'artir' ? '#0a7c3a' : '#444';
+  z.style.background = yon === 'azalt' ? '#fdecec' : '#fff';
+  z.style.borderColor = yon === 'azalt' ? '#c33' : '#ccc';
+  z.style.color = yon === 'azalt' ? '#c33' : '#444';
+  document.getElementById('pr-stok-row').style.display = (yon === 'artir' && _prState.stokMevcut > 0) ? '' : 'none';
+  _prRenderPreview();
+}
+function _prCurrentPlan(){
+  if(!_prState) return null;
+  const it = procItems.find(x=>x.id===_prState.id); if(!it) return null;
+  const delta = parseFloat(document.getElementById('pr-miktar').value);
+  const stoktanKullan = _prState.yon === 'artir' && _prState.stokMevcut > 0 && document.getElementById('pr-stok').checked;
+  const tamAdet = !!_prState.eslesme?.isSac && (it.birim || '') === 'adet';
+  const boy = _procStdBoy(it, _prState.eslesme?.cat); // v238
+  return _procRevizePlan(
+    { miktar: it.miktar, stok_dusum: it.stok_dusum, original_ihtiyac: it.original_ihtiyac, gelen: _procCalc(it).gelen },
+    _prState.yon, delta, _prState.stokMevcut, { stoktanKullan, tamAdet, boy });
+}
+function _prRenderPreview(){
+  const box = document.getElementById('pr-preview'), btn = document.getElementById('pr-save');
+  if(!_prState){ btn.disabled = true; return; }
+  const it = procItems.find(x=>x.id===_prState.id);
+  const p = _prCurrentPlan();
+  const b = esc(it?.birim || '');
+  const m2 = _prState.eslesme?.m2PerAdet || 0;
+  const m2Txt = v => (m2 > 0 && v > 0) ? ` (≈${fmtNum(v * m2)} ${esc(_prState.eslesme.cat?.birim || 'm²')})` : '';
+  const setBox = (bg, bd, col, html) => { box.style.background = bg; box.style.borderColor = bd; box.style.color = col; box.innerHTML = html; };
+  if(!p || !p.ok){
+    btn.disabled = true;
+    if(!p || p.errorCode === 'bos'){ setBox('#f5f5f5', '#ddd', '#555', 'Miktar gir.'); return; }
+    let msg = 'Geçersiz giriş';
+    if(p.errorCode === 'max') msg = `En fazla ${fmtNum(p.maxAzalis)} ${b} azaltılabilir${p.gelen > 0 ? ` (${fmtNum(p.gelen)} ${b} teslim alınmış)` : ''}`;
+    else if(p.errorCode === 'tamAdet') msg = 'SAÇ için tam adet gir';
+    setBox('#fdecec', '#f5b5b5', '#c33', `⛔ ${msg}`);
+    return;
+  }
+  const parts = [];
+  if(p.yon === 'artir'){
+    if(p.stoktan > 0) parts.push(`Stoktan +${fmtNum(p.stoktan)} ${b}${m2Txt(p.stoktan)} karşılanacak`);
+    if(p.siparise > 0) parts.push(`Siparişe +${fmtNum(p.siparise)} ${b} eklenecek`);
+  } else {
+    if(p.siparistenDus > 0) parts.push(`Siparişten −${fmtNum(p.siparistenDus)} ${b} düşülecek`);
+    if(p.stogaIade > 0) parts.push(`Stoğa ${fmtNum(p.stogaIade)} ${b}${m2Txt(p.stogaIade)} iade edilecek`);
+  }
+  // v238: boy yuvarlaması bilgisi
+  if(p.fazlaStoga > 0) parts.push(`${p.boy} m boy yuvarlaması: +${fmtNum(p.fazlaStoga)} ${b} stoğa`);
+  if(!parts.length) parts.push('Değişiklik mevcut boy fazlasıyla karşılanıyor');
+  let html = `${parts.join(' · ')} → <strong>Yeni sipariş: ${fmtNum(p.yeniMiktar)} ${b}</strong>`;
+  if(p.yon === 'azalt' && p.stogaIade > 0 && !_prState.eslesme?.cat){
+    html += `<div style="margin-top:6px;color:#b45309">⚠ Stok kaydı bulunamadı — iade otomatik yapılamayacak, stoğu elle kontrol et</div>`;
+  }
+  if(p.yeniMiktar === 0 && p.yeniStok === 0 && p.gelen === 0){
+    html += `<div style="margin-top:6px;color:#555">ℹ Kalem sıfırlanacak — kaydederken listeden silmek isteyip istemediğin sorulacak</div>`;
+  }
+  setBox('#eaf7ee', '#9ad3ac', '#1b5e20', html);
+  btn.disabled = !!_prState.busy;
+}
+async function saveProcRevize(){
+  if(!_prState || _prState.busy) return;
+  if(!me || !_PROC_REVIZE_ROLES.includes(me.role)){ toast('Bu işlem için yetkin yok','err'); return; }
+  const it = procItems.find(x=>x.id===_prState.id); if(!it){ toast('Kalem bulunamadı','err'); return; }
+  const shown = _prCurrentPlan();
+  if(!shown || !shown.ok){ toast('Önizlemedeki hatayı düzelt','err'); return; }
+  const btn = document.getElementById('pr-save');
+  const btnTxt = btn.textContent;
+  _prState.busy = true; btn.disabled = true; btn.textContent = '⏳ Kaydediliyor...';
+  const st = _prState;
+  let kapat = false;
+  try {
+    // Stok başkası tarafından değişmiş olabilir — stok işlemi varsa tazele ve planı yeniden hesapla
+    if(shown.stoktan > 0 || shown.stogaIade > 0){
+      try { await loadStockItems(); } catch(e){}
+      st.eslesme = _procStokEslesme(it, 0);
+      st.stokMevcut = _procRevizeStokMevcut(st.eslesme);
+    }
+    const plan = _prCurrentPlan();
+    if(!plan || !plan.ok || plan.stoktan !== shown.stoktan || plan.siparise !== shown.siparise
+       || plan.siparistenDus !== shown.siparistenDus || plan.stogaIade !== shown.stogaIade){
+      toast('Stok durumu değişti — önizlemeyi kontrol edip tekrar kaydet','err');
+      _prStokInfoYaz(it);
+      document.getElementById('pr-stok-row').style.display = (st.yon === 'artir' && st.stokMevcut > 0) ? '' : 'none';
+      return;
+    }
+    const sebep = (document.getElementById('pr-sebep').value || '').trim();
+    const proj = projects.find(p=>p.id===it.project_id);
+    const birim = it.birim || '';
+    const e = st.eslesme;
+    const _freshCat = () => (e.cat ? (stockItems.find(x=>x.id===e.cat.id) || e.cat) : null);
+    let stokIslem = null; // {tip:'deduct'|'restore', catId, miktar} — update başarısızsa telafi için
+    let iadeOk = false;
+    // 1) Önce stok işlemi
+    if(plan.yon === 'artir' && plan.stoktan > 0){
+      const cat = _freshCat();
+      if(!cat){ toast('Stok kaydı bulunamadı — revizyon kaydedilmedi','err'); return; }
+      const stokMik = _procStokEslesme(it, plan.stoktan).stokBirimMiktar;
+      try { await _deductFromStock(cat, stokMik, it.project_id); }
+      catch(err){ console.warn('revize stok düşüm fail:', err); toast('Stoktan düşüm yapılamadı — revizyon kaydedilmedi: ' + errTr(err),'err'); return; }
+      stokIslem = { tip: 'deduct', catId: cat.id, miktar: stokMik };
+    }
+    if(plan.yon === 'azalt' && plan.stogaIade > 0){
+      try {
+        const cat = _freshCat();
+        if(!cat) throw new Error('stok kaydı bulunamadı');
+        const stokMik = _procStokEslesme(it, plan.stogaIade).stokBirimMiktar;
+        await _restoreToStock(cat, stokMik, it.project_id, `Proje revizyonu — stok iadesi (${proj?.no||''} ${it.malzeme||''})`.trim());
+        stokIslem = { tip: 'restore', catId: cat.id, miktar: stokMik };
+        iadeOk = true;
+      } catch(err){
+        console.warn('Revizyon stok iadesi başarısız:', it.malzeme, err);
+        toast('Stok iadesi yapılamadı — stok kaydını elle kontrol et','err');
+      }
+    }
+    // 1b) v238: Boy yuvarlaması fazlası → stoğa (katalog eklemeyle aynı davranış)
+    let fazlaIslem = null, fazlaOk = false;
+    if(plan.fazlaStoga > 0){
+      try {
+        if(stokIslem) await loadStockItems(); // aynı stok kaydı az önce değişti — bayat slotlarla üzerine yazma
+        const cat = _freshCat();
+        if(!cat) throw new Error('stok kaydı bulunamadı');
+        await _addToStock(cat, plan.fazlaStoga, it.project_id, `Yuvarlama fazlası (revizyon) — ${proj?.no||''} ${proj?.customer||''}`.trim());
+        fazlaIslem = { catId: cat.id, miktar: plan.fazlaStoga };
+        fazlaOk = true;
+      } catch(err){
+        console.warn('revize yuvarlama fazlası stoğa eklenemedi:', err);
+        toast(`Boy fazlası (${fmtNum(plan.fazlaStoga)} ${birim}) stoğa eklenemedi — stoğu elle kontrol et`,'err');
+      }
+    }
+    // 2) Sonra kalem güncellemesi
+    const upd = { miktar: plan.yeniMiktar, stok_dusum: plan.yeniStok, original_ihtiyac: plan.yeniIhtiyac, updated_at: new Date().toISOString() };
+    if(plan.yon === 'artir' && !it.catalog_id && e.cat && e.byName) upd.catalog_id = e.cat.id;
+    const { error } = await sb.from('procurement_items').update(upd).eq('id', it.id);
+    if(error){
+      // Yarım kayıt kalmasın — stok işlemini geri al (best-effort)
+      if(stokIslem){
+        try {
+          await loadStockItems();
+          const c2 = stockItems.find(x=>x.id===stokIslem.catId);
+          if(!c2) throw new Error('stok kaydı bulunamadı');
+          if(stokIslem.tip === 'deduct') await _restoreToStock(c2, stokIslem.miktar, it.project_id, `Revizyon kaydedilemedi — stok düşümü geri alındı (${proj?.no||''} ${it.malzeme||''})`.trim());
+          else await _deductFromStock(c2, stokIslem.miktar, it.project_id);
+        } catch(e2){ console.warn('revize telafi fail:', e2); toast('Stok işlemi geri alınamadı — stok kaydını elle kontrol et','err'); }
+        try { await loadStockItems(); } catch(e3){}
+      }
+      // v238: yuvarlama fazlası eklendiyse onu da geri al
+      if(fazlaIslem){
+        try {
+          await loadStockItems();
+          const c3 = stockItems.find(x=>x.id===fazlaIslem.catId);
+          if(!c3) throw new Error('stok kaydı bulunamadı');
+          await _deductFromStock(c3, fazlaIslem.miktar, it.project_id);
+        } catch(e7){ console.warn('revize fazla telafi fail:', e7); toast('Boy fazlası stoktan geri alınamadı — stoğu elle kontrol et','err'); }
+        try { await loadStockItems(); } catch(e8){}
+      }
+      toast('Revizyon kaydedilemedi: ' + errTr(error),'err');
+      return;
+    }
+    // 3) Kalem tamamen sıfırlandıysa silme teklifi (deleteProcItem KULLANILMAZ — çift iade riski)
+    let silindi = false;
+    if(plan.yeniMiktar === 0 && plan.yeniStok === 0 && plan.gelen === 0){
+      if(confirm('Kalem sıfırlandı. Listeden silinsin mi?')){
+        const { error: dErr } = await sb.from('procurement_items').delete().eq('id', it.id);
+        if(dErr) toast('Silme hatası: ' + errTr(dErr),'err');
+        else {
+          silindi = true;
+          try { await logAudit('proc_item_delete','procurement_item',it.id,it.malzeme,{ sebep: 'Revizyon sonrası sıfırlandı', revizyon: true }); } catch(e4){}
+        }
+      }
+    }
+    // 4) İz & bildirim (fiyat yazılmaz, not_text'e dokunulmaz)
+    const _fz = plan.fazlaStoga > 0 ? `${plan.boy}m boy fazlası ${fmtNum(plan.fazlaStoga)} stoğa${fazlaOk ? '' : ' (yapılamadı)'}` : '';
+    const ozet = plan.yon === 'artir'
+      ? [plan.stoktan > 0 ? `stoktan ${fmtNum(plan.stoktan)}` : '', plan.siparise > 0 ? `sipariş +${fmtNum(plan.siparise)}` : '', _fz].filter(Boolean).join(', ')
+      : [plan.siparistenDus > 0 ? `sipariş −${fmtNum(plan.siparistenDus)}` : '', plan.stogaIade > 0 ? `stoğa iade ${fmtNum(plan.stogaIade)}${iadeOk ? '' : ' (yapılamadı)'}` : '', _fz].filter(Boolean).join(', ');
+    try {
+      await logAudit('proc_item_revise','procurement_item',it.id,`${it.malzeme} ${it.ebat||''}`, {
+        yon: plan.yon, delta: plan.delta, stoktan: plan.stoktan, siparise: plan.siparise,
+        siparistenDus: plan.siparistenDus, stogaIade: plan.stogaIade,
+        eskiMiktar: plan.eskiMiktar, yeniMiktar: plan.yeniMiktar, eskiStok: plan.eskiStok, yeniStok: plan.yeniStok,
+        sebep, iade_basarili: plan.stogaIade > 0 ? iadeOk : null, silindi,
+        boy: plan.boy || null, fazlaStoga: plan.fazlaStoga || 0, fazla_basarili: plan.fazlaStoga > 0 ? fazlaOk : null
+      });
+    } catch(e5){}
+    // v238: Sessiz revizyon — talep henüz satın almaya geçmediyse (fiyat girilmemiş + teslimat yok) bildirim gitmez, sadece audit
+    const _siparisSureci = (parseFloat(it.birim_fiyat) || 0) > 0 || (plan.gelen || 0) > 0 || _procDelvOf(it.id).length > 0;
+    if(_siparisSureci){
+      try {
+        await notify(`± ${me.full_name} "${proj?.no||''}" ${it.malzeme}${it.ebat?' ('+it.ebat+')':''}: ${plan.yon==='artir'?'+':'−'}${fmtNum(plan.delta)} ${birim} revize etti (${ozet})${sebep?' — '+sebep:''}`, '±', 'satinalma', 'project', it.project_id);
+      } catch(e6){}
+    }
+    toast('Revizyon kaydedildi','ok');
+    kapat = true;
+  } catch(err){
+    console.error('saveProcRevize:', err);
+    toast('Revizyon hatası: ' + errTr(err),'err');
+  } finally {
+    st.busy = false;
+    btn.textContent = btnTxt;
+    if(kapat) closeProcRevize();
+    else if(_prState === st) _prRenderPreview();
+  }
+  if(kapat){
+    try { await loadStockItems(); } catch(e){}
+    await loadProcurement(_procProjectId);
+  }
 }
 
 /* --- Teslimat --- */
@@ -8732,7 +9096,7 @@ async function setupWebPush(){
 }
 
 // Sürüm bilgisi — her commit'te buraya bumplayalım. SW cache adıyla eş.
-const APP_VERSION = 'v236'; // ⚠️ yanlış alarm fix: stoktan karşılanan kısım ihtiyaç karşılaştırmasına dahil + v235 kalıcı sıralama
+const APP_VERSION = 'v238'; // ± revizyon: standart boy yuvarlaması (12/6 m, artık önce stok ayırmasından mahsup) + sipariş öncesi sessiz revizyon
 
 // v224: iOS Safari'de klavye açılınca sohbet yazma alanı klavyenin altında kalıyordu.
 // visualViewport gerçek görünür yüksekliği verir; chat container'ı ona göre daraltıyoruz.
